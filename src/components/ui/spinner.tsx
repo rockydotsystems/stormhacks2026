@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleNotchIcon } from "@phosphor-icons/react";
+import { CircleNotchIcon } from "@phosphor-icons/react/dist/csr/CircleNotch";
 import type React from "react";
 import { cn } from "@/lib/utils";
 

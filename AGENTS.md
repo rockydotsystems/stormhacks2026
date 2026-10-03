@@ -10,6 +10,9 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## Development environment
 
+Use lowercase Conventional Commit messages, including the type, optional scope,
+and description (for example, `perf(dev): avoid compiling unused icons`).
+
 Use the pinned Nix flake and direnv (`direnv allow`) or `nix develop`.
 Node 24, pnpm 12.0.0, and nixfmt are approved project tooling. Format Nix
 with `nix fmt`; retain Prettier for the existing application and documentation.

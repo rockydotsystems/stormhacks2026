@@ -324,7 +324,7 @@ To add a feature, follow `notes`: add contracts, schema, service, controller, ho
 pnpm dlx shadcn@latest add @coss/dialog
 ```
 
-`components.json` configures the Coss registry, import aliases, and Phosphor icon preference. Coss registry sources can still contain Lucide imports; replace those with matching [Phosphor](https://phosphoricons.com/) icons after adding a component. Use `@phosphor-icons/react` in Client Components and `@phosphor-icons/react/ssr` in Server Components. Decorative icons should have `aria-hidden="true"`; icon-only buttons need an accessible label.
+`components.json` configures the Coss registry, import aliases, and Phosphor icon preference. Coss registry sources can still contain Lucide imports; replace those with matching [Phosphor](https://phosphoricons.com/) icons after adding a component. Import individual icons from `@phosphor-icons/react/dist/csr/<Name>` in Client Components and `@phosphor-icons/react/dist/ssr/<Name>` in Server Components (for example, `PlusIcon` from `@phosphor-icons/react/dist/csr/Plus`). Direct imports avoid compiling thousands of unused icons during development. Decorative icons should have `aria-hidden="true"`; icon-only buttons need an accessible label.
 
 The Coss neutral surface system and **teal primary brand** are defined in `src/app/globals.css`. Use semantic classes such as `bg-primary`, `text-primary-foreground`, and `text-muted-foreground` rather than palette overrides. Light mode uses teal-700 with white text; the `.dark` theme uses teal-400 with teal-950 text. Apply `.dark` to the root element to opt into dark mode. System font fallbacks are retained; no font downloads are required.
 

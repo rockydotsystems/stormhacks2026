@@ -1,4 +1,4 @@
-import { RocketLaunchIcon } from "@phosphor-icons/react/ssr";
+import { RocketLaunchIcon } from "@phosphor-icons/react/dist/ssr/RocketLaunch";
 import { Starter } from "@/features/auth/components/starter";
 
 export default function Home() {
