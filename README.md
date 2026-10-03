@@ -166,10 +166,42 @@ Before a live deploy:
 Local Hyperdrive uses the Compose database on `127.0.0.1:5432`, without a remote
 connection or Cloudflare credentials. Override it with
 `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` when needed. Neither
-the all-zero ID nor local credentials identify a production resource. No live
-deployment, production migration, or remote resource provisioning is automated.
+the all-zero ID nor local credentials identify a production resource. No
+production migration or remote resource provisioning is automated.
 vinext is under active development; build success and dry-run do not prove a
 real WorkOS callback or deployed database integration.
+
+### GitHub Actions with Blacksmith
+
+`.github/workflows/deploy.yml` deploys on pushes to `main` and supports manual
+runs from **Actions → Deploy Worker → Run workflow**. Manual runs must select
+`main`; other branches are skipped. Deployments are serialized without cancelling
+an in-progress deployment.
+
+Before publishing the workflow:
+
+1. Install the [Blacksmith GitHub integration](https://app.blacksmith.sh) for
+   `rockydotsystems` and enable access to this repository. The workflow uses
+   `blacksmith-2vcpu-ubuntu-2404` runners.
+2. Create a GitHub **production** environment. Restrict its deployment branches
+   to `main` and configure required reviewers if you want an approval gate.
+3. Add `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as environment secrets.
+   Use an **Edit Cloudflare Workers** API token scoped to the intended account
+   and the permissions required by its bindings.
+4. Complete the live-deploy prerequisites above: replace the Hyperdrive
+   placeholder in `wrangler.jsonc`, migrate the hosted database, and provision
+   the WorkOS Worker secrets and dashboard URLs. Runtime auth secrets stay in
+   Cloudflare, not the workflow or build environment.
+
+The job installs the locked dependencies with Node 24 and the pnpm version in
+`package.json`, runs `pnpm check`, then `pnpm deploy:check`. Only after those
+pass does it deploy that same build through `scripts/deploy.mjs`, preserving the
+Hyperdrive placeholder guard and generated `dist/server/wrangler.json` config.
+Cloudflare credentials are exposed only to the final deployment step. pnpm's
+dependency cache uses Blacksmith's colocated cache through `actions/setup-node`.
+
+Adding the workflow does not publish it or configure remote resources. Once the
+prerequisites are ready, publishing it to `main` triggers the first deployment.
 
 ## Architecture
 
