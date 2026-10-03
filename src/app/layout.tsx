@@ -7,7 +7,8 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "StormHacks 2026",
-  description: "A feature-first hackathon starter.",
+  description:
+    "A focused workspace for conversations, connected tools, and documents.",
 };
 
 export default async function RootLayout({

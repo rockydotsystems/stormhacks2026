@@ -35,6 +35,11 @@ shell does not itself enable that host integration. Plain direnv's built-in
 `use flake` also works, without nix-direnv caching. No shell hook starts services,
 installs dependencies, or runs migrations.
 
+The dev shell and `nix run` source commands default `NODE_EXTRA_CA_CERTS` to
+the pinned Nix CA bundle, preserving an existing override. This lets the local
+Worker verify HTTPS connections to WorkOS without a manual environment prefix.
+The browser still uses `http://localhost:3000`; TLS verification is not disabled.
+
 ### Nix commands
 
 Source commands run from the repository root and reuse `package.json` scripts.
@@ -140,9 +145,10 @@ Before a live deploy:
    and `CLOUDFLARE_ACCOUNT_ID` in your CI credential environment.
 2. Configure a hosted PostgreSQL database and a Hyperdrive connection in your
    Cloudflare account. Disable Hyperdrive query caching for user-owned notes so
-   a create followed by list does not return a stale cached result. Replace the
-   all-zero local-only Hyperdrive ID in `wrangler.jsonc` with your real ID. The
-   deployment script rejects the placeholder before contacting Cloudflare.
+   a create followed by list does not return a stale cached result. Set the
+   Hyperdrive ID in `wrangler.jsonc` for the intended account (the hackathon
+   binding is documented below). The deployment script rejects an all-zero
+   placeholder before contacting Cloudflare.
 3. Apply the committed Drizzle migration to that database from a trusted machine
    using its direct `DATABASE_URL`. Do not run migrations in Worker requests.
 4. Store runtime auth configuration with Wrangler's secure interactive prompts:
@@ -166,10 +172,109 @@ Before a live deploy:
 Local Hyperdrive uses the Compose database on `127.0.0.1:5432`, without a remote
 connection or Cloudflare credentials. Override it with
 `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` when needed. Neither
-the all-zero ID nor local credentials identify a production resource. No live
-deployment, production migration, or remote resource provisioning is automated.
+the all-zero ID nor local credentials identify a production resource. No
+production migration or remote resource provisioning is automated.
 vinext is under active development; build success and dry-run do not prove a
 real WorkOS callback or deployed database integration.
+
+### PlanetScale Postgres and Drizzle
+
+The hackathon database is PlanetScale **Postgres**, accessed by the Worker through
+Hyperdrive `stormhacks2026-postgres` (`bf80c69856e7404faf3d55e5b5d29a82`). Query
+caching is disabled and the origin connection limit is 20. This binding belongs
+to the configured hackathon Cloudflare account; forks must supply their own ID.
+The existing Drizzle PostgreSQL schema and Postgres.js driver are retained.
+
+Run migrations directly against PlanetScale, not through Hyperdrive:
+
+```sh
+pnpm db:migrate
+```
+
+The command reads the direct `DATABASE_URL` from your ignored `.env.local`.
+Use `sslmode=verify-full` for certificate-verified TLS. For Postgres.js, omit
+PlanetScale's `sslrootcert=system` URL parameter: the driver forwards it as an
+unsupported server setting. Node's trusted CA roots are used with `verify-full`;
+do not disable certificate verification. The committed migration creates the
+`notes` table and its owner/time index.
+
+Local Workers still use the Compose connection in `localConnectionString`.
+Changing `.env.local` changes the migration target, not the Worker binding.
+Never point `TEST_DATABASE_URL` at the hosted hackathon database.
+
+GitHub's `production` environment contains the Cloudflare deployment credentials
+and allows only the `main` branch. CI does not receive the direct database URL or
+run hosted migrations. WorkOS runtime secrets must be configured separately.
+
+Local provisioning credentials are in ignored `.env.cloudflare.local`, separate
+from the migration URL in `.env.local`. Load the Cloudflare file explicitly into
+your command environment when provisioning; neither file belongs in version
+control or build artifacts.
+
+For teardown, remove the named Hyperdrive configuration, the PlanetScale database
+in its dashboard, any deployed `stormhacks2026` Worker, and the GitHub production
+credentials. Deleting Hyperdrive does not delete the PlanetScale database.
+
+### GitHub Actions with Blacksmith
+
+`.github/workflows/deploy.yml` deploys on pushes to `main` and supports manual
+runs from **Actions → Deploy Worker → Run workflow**. Manual runs must select
+`main`; other branches are skipped. Deployments are serialized without cancelling
+an in-progress deployment.
+
+Before publishing the workflow:
+
+1. Install the [Blacksmith GitHub integration](https://app.blacksmith.sh) for
+   `rockydotsystems` and enable access to this repository. The workflow uses
+   `blacksmith-2vcpu-ubuntu-2404` runners.
+2. Create a GitHub **production** environment. Restrict its deployment branches
+   to `main` and configure required reviewers if you want an approval gate.
+3. Add `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as environment secrets.
+   Use an **Edit Cloudflare Workers** API token scoped to the intended account
+   and the permissions required by its bindings.
+4. Complete the live-deploy prerequisites above: replace the Hyperdrive
+   placeholder in `wrangler.jsonc`, migrate the hosted database, and provision
+   the WorkOS Worker secrets and dashboard URLs. Runtime auth secrets stay in
+   Cloudflare, not the workflow or build environment.
+
+The job installs the locked dependencies with Node 24 and the pnpm version in
+`package.json`, runs `pnpm check`, then `pnpm deploy:check`. Only after those
+pass does it deploy that same build through `scripts/deploy.mjs`, preserving the
+Hyperdrive placeholder guard and generated `dist/server/wrangler.json` config.
+Cloudflare credentials are exposed only to the final deployment step. pnpm's
+dependency cache uses Blacksmith's colocated cache through `actions/setup-node`.
+
+Adding the workflow does not publish it or configure remote resources. Once the
+prerequisites are ready, publishing it to `main` triggers the first deployment.
+
+### Public domains
+
+The Worker serves `https://whydidwechoosethis.tech` through the custom domain in
+`wrangler.jsonc`; deployment manages its DNS record and certificate.
+`wdwct.tech` has a proxied, originless `AAAA` record pointing to `100::` and a
+Cloudflare Single Redirect to the primary HTTPS domain. The redirect returns
+301 and preserves the path and query string. Only these apex hostnames are
+configured; `www` aliases are not included.
+
+The redirect ruleset payload is `cloudflare/wdwct-redirect.json`. It is managed
+separately from Worker deployment. To provision it on a fresh zone without an
+existing `http_request_dynamic_redirect` entry point, load your Cloudflare
+credentials and run:
+
+```sh
+cf rulesets account-rulesets create --zone wdwct.tech --body @cloudflare/wdwct-redirect.json
+```
+
+If a redirect entry point already exists, add or update only this rule rather
+than replacing unrelated rules. Keep the secondary DNS record proxied so the
+redirect executes at Cloudflare's edge. During teardown, remove the redirect
+rule/owned ruleset and secondary DNS record, as well as the Worker's custom
+domain and its generated certificate. Do not delete either zone or unrelated
+DNS records.
+
+For WorkOS, the canonical redirect URI is
+`https://whydidwechoosethis.tech/callback`; initiate login at `/login` and sign
+out to the canonical origin. Deployment alone does not configure WorkOS.
 
 ## Architecture
 
@@ -219,7 +324,7 @@ To add a feature, follow `notes`: add contracts, schema, service, controller, ho
 pnpm dlx shadcn@latest add @coss/dialog
 ```
 
-`components.json` configures the Coss registry, import aliases, and Phosphor icon preference. Coss registry sources can still contain Lucide imports; replace those with matching [Phosphor](https://phosphoricons.com/) icons after adding a component. Use `@phosphor-icons/react` in Client Components and `@phosphor-icons/react/ssr` in Server Components. Decorative icons should have `aria-hidden="true"`; icon-only buttons need an accessible label.
+`components.json` configures the Coss registry, import aliases, and Phosphor icon preference. Coss registry sources can still contain Lucide imports; replace those with matching [Phosphor](https://phosphoricons.com/) icons after adding a component. Import individual icons from `@phosphor-icons/react/dist/csr/<Name>` in Client Components and `@phosphor-icons/react/dist/ssr/<Name>` in Server Components (for example, `PlusIcon` from `@phosphor-icons/react/dist/csr/Plus`). Direct imports avoid compiling thousands of unused icons during development. Decorative icons should have `aria-hidden="true"`; icon-only buttons need an accessible label.
 
 The Coss neutral surface system and **teal primary brand** are defined in `src/app/globals.css`. Use semantic classes such as `bg-primary`, `text-primary-foreground`, and `text-muted-foreground` rather than palette overrides. Light mode uses teal-700 with white text; the `.dark` theme uses teal-400 with teal-950 text. Apply `.dark` to the root element to opt into dark mode. System font fallbacks are retained; no font downloads are required.
 

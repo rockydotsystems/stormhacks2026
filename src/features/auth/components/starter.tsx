@@ -1,6 +1,7 @@
 "use client";
 
-import { SignInIcon, SignOutIcon } from "@phosphor-icons/react";
+import { SignInIcon } from "@phosphor-icons/react/dist/csr/SignIn";
+import { SignOutIcon } from "@phosphor-icons/react/dist/csr/SignOut";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {

@@ -1,6 +1,6 @@
 "use client";
 
-import { PlusIcon } from "@phosphor-icons/react";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
