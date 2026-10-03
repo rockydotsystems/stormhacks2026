@@ -10,8 +10,8 @@
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",
-      // Local-only placeholder. Replace with your account's Hyperdrive ID before deploying.
-      "id": "00000000000000000000000000000000",
+      // PlanetScale Postgres; query caching is disabled for read-after-write consistency.
+      "id": "bf80c69856e7404faf3d55e5b5d29a82",
       "localConnectionString": "postgres://stormhacks:stormhacks@127.0.0.1:5432/stormhacks",
     },
   ],

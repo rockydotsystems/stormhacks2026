@@ -140,9 +140,10 @@ Before a live deploy:
    and `CLOUDFLARE_ACCOUNT_ID` in your CI credential environment.
 2. Configure a hosted PostgreSQL database and a Hyperdrive connection in your
    Cloudflare account. Disable Hyperdrive query caching for user-owned notes so
-   a create followed by list does not return a stale cached result. Replace the
-   all-zero local-only Hyperdrive ID in `wrangler.jsonc` with your real ID. The
-   deployment script rejects the placeholder before contacting Cloudflare.
+   a create followed by list does not return a stale cached result. Set the
+   Hyperdrive ID in `wrangler.jsonc` for the intended account (the hackathon
+   binding is documented below). The deployment script rejects an all-zero
+   placeholder before contacting Cloudflare.
 3. Apply the committed Drizzle migration to that database from a trusted machine
    using its direct `DATABASE_URL`. Do not run migrations in Worker requests.
 4. Store runtime auth configuration with Wrangler's secure interactive prompts:
@@ -170,6 +171,44 @@ the all-zero ID nor local credentials identify a production resource. No
 production migration or remote resource provisioning is automated.
 vinext is under active development; build success and dry-run do not prove a
 real WorkOS callback or deployed database integration.
+
+### PlanetScale Postgres and Drizzle
+
+The hackathon database is PlanetScale **Postgres**, accessed by the Worker through
+Hyperdrive `stormhacks2026-postgres` (`bf80c69856e7404faf3d55e5b5d29a82`). Query
+caching is disabled and the origin connection limit is 20. This binding belongs
+to the configured hackathon Cloudflare account; forks must supply their own ID.
+The existing Drizzle PostgreSQL schema and Postgres.js driver are retained.
+
+Run migrations directly against PlanetScale, not through Hyperdrive:
+
+```sh
+pnpm db:migrate
+```
+
+The command reads the direct `DATABASE_URL` from your ignored `.env.local`.
+Use `sslmode=verify-full` for certificate-verified TLS. For Postgres.js, omit
+PlanetScale's `sslrootcert=system` URL parameter: the driver forwards it as an
+unsupported server setting. Node's trusted CA roots are used with `verify-full`;
+do not disable certificate verification. The committed migration creates the
+`notes` table and its owner/time index.
+
+Local Workers still use the Compose connection in `localConnectionString`.
+Changing `.env.local` changes the migration target, not the Worker binding.
+Never point `TEST_DATABASE_URL` at the hosted hackathon database.
+
+GitHub's `production` environment contains the Cloudflare deployment credentials
+and allows only the `main` branch. CI does not receive the direct database URL or
+run hosted migrations. WorkOS runtime secrets must be configured separately.
+
+Local provisioning credentials are in ignored `.env.cloudflare.local`, separate
+from the migration URL in `.env.local`. Load the Cloudflare file explicitly into
+your command environment when provisioning; neither file belongs in version
+control or build artifacts.
+
+For teardown, remove the named Hyperdrive configuration, the PlanetScale database
+in its dashboard, any deployed `stormhacks2026` Worker, and the GitHub production
+credentials. Deleting Hyperdrive does not delete the PlanetScale database.
 
 ### GitHub Actions with Blacksmith
 
