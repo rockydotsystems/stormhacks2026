@@ -169,12 +169,20 @@ export function Workspace() {
           <LightningIcon weight="fill" className="size-4" aria-hidden="true" />
         </span>
         <span className="text-sm font-semibold tracking-tight">
-          StormHacks
+          WhyDidWeChooseThis
           <span className="ml-1.5 text-xs font-normal text-muted-foreground">
             workspace
           </span>
         </span>
       </div>
+      <Button
+        render={<Link href="/" />}
+        variant="ghost"
+        className="mb-2 w-full justify-start text-xs"
+      >
+        <ArrowDownIcon className="rotate-90" aria-hidden="true" /> Back to
+        documents
+      </Button>
       <Button
         variant="outline"
         className="mb-5 w-full justify-start bg-background/70"
