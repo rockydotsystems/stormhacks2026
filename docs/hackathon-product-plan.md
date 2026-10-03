@@ -28,14 +28,17 @@ For the hackathon, focus on one engineering team, one project, one bound plan, a
 
 ## Primary workflow
 
-1. **Draft together.** A planning workspace puts agent conversation on the left and a living document/canvas on the right. Users describe the project, ask questions, and refine the plan through direct edits, comments, and highlights. Agent-applied edits remain visible, with change history and links back to the discussion that motivated them.
-2. **Grill the plan.** An adversarial agent challenges omissions, ambiguity, contradictions, unapproved assumptions, failure modes, and unresolved decisions. It asks consequential questions rather than generating a generic checklist. Suggested answers are proposals, not silently accepted decisions.
-3. **Resolve or explicitly leave open.** Collaborators revise the document, record decisions, and identify remaining unknowns. The plan should distinguish hard requirements and architectural constraints from preferences and implementation freedom.
-4. **Bind a version.** A human deliberately marks a specific version as the agreement for implementation. Binding is an explicit approval action, not an automatic consequence of an agent finishing. Subsequent edits create a draft amendment; they do not silently rewrite the bound agreement.
-5. **Review a linked GitHub PR.** The review agent compares the PR with the bound version and posts explainable, non-blocking advisory findings on GitHub. Each actionable finding identifies the discrepancy, cites an exact plan passage and relevant PR evidence, and explains its consequence.
-6. **Resolve the discrepancy.** The team revises the PR, amends and re-binds the plan, or acknowledges an intentional exception. The resolution records who chose it and why. A later review makes clear which bound version it used.
+1. **Create the plan.** A user supplies minimal metadata, such as a name and linked GitHub repository. The workspace starts with a blank canvas on the right and agent/chat on the left; creating a document does not require writing the plan first.
+2. **Start a planning session.** The conversational agent adaptively grills the user like a rigorous technical lead about pain, users, goals, scope, constraints, tradeoffs, dependencies, risks, failure cases, and unresolved choices. It follows the answers rather than a fixed questionnaire and progressively drafts stable document blocks while conversation continues. Challenge is part of creation, not a separate end-stage grilling agent. Proposed wording and suggested decisions require human acceptance.
+3. **Refine together.** Users highlight precise text ranges and leave comments. The agent responds with proposals that replace whole stable blocks, or insert/delete blocks, rather than silently patching arbitrary text. Humans accept, reject, or request revision. Teammates can join, chat, comment, and review. Each proposal preserves the request, rationale, patch, author, and timestamp, with links back to its discussion. Substantive prose changes use this proposal path; minor direct operations may come later. The plan distinguishes hard requirements and architectural constraints from preferences, open decisions, and implementation freedom.
+4. **Run a readiness review.** A lightweight completeness check identifies omissions and unresolved questions before binding. Users resolve them or explicitly record what remains open. This is not another planning session or an agent approval of the agreement.
+5. **Bind a version.** A human deliberately binds an immutable snapshot as the agreement for implementation. Each document retains one mutable draft and immutable bound versions. Draft edits do not mutate the active enforced version; a new bind atomically becomes active. Binding is an explicit human action, not an automatic consequence of an agent finishing.
+6. **Review a real GitHub PR.** Webhooks enqueue asynchronous review against the exact active bound version selected for that review. The reviewer agent posts explainable, evidence-based, non-blocking advisory findings with exact plan citations and relevant PR evidence. Initially, one repository explicitly maps to one binding document; the product does not guess among plans.
+7. **Resolve and repeat.** The team revises implementation, amends and re-binds the plan, or acknowledges an intentional exception tied to the PR and version. If intent was missed or changed, users return to the workspace, start a new revision of the single draft, discuss the amendment, and bind it. Future reviews use the new active version; historical findings continue citing the version actually reviewed. The resolution records who chose it and why.
 
 Future ticket integration follows the same intent loop: revise the ticket, amend the agreement, or record an exception. Linear is not required to demonstrate the first complete loop.
+
+Use **planning session** for conversational creation/challenge, **readiness review** for pre-binding completeness, and **reviewer agent** for GitHub enforcement. The [technical specification](hackathon-technical-spec.md) describes the supporting boundaries and invariants.
 
 ## MVP scope
 
@@ -43,15 +46,16 @@ The MVP is one credible, end-to-end intent loop, not two disconnected mockups.
 
 ### Planning workspace
 
-- One project plan or ADR with a conversation beside a readable, editable living document.
-- A narrow collaborative path: comments/highlights, agent-applied document edits, visible revision history, and discussion-to-change links. Collaboration need not mean production-grade simultaneous editing.
-- A grilling pass with actionable questions and suggested amendments that the human can accept or reject.
-- Clear draft and bound states, with a stable bound version and an explicit amendment/re-binding path.
+- Minimal metadata creation followed by a planning session beside a living block canvas.
+- A Notion-like ordered document with stable block IDs, initially supporting headings, paragraphs, lists, and code blocks.
+- A narrow collaborative path: teammate chat, text-range comments/highlights, whole-block agent proposals with accept/reject/revise, visible revision history, and discussion-to-change links. No CRDT or freeform multi-writer editing in MVP.
+- Adaptive questions and proposed wording throughout creation, followed by a lightweight readiness review.
+- Clear draft and bound states, one mutable draft, immutable bound versions, and an explicit amendment/re-binding path.
 
 ### GitHub advisory review
 
-- A real GitHub connection that can read a selected PR and post a real advisory review comment. A manually initiated review is sufficient for the hackathon.
-- An explicit association between the PR and its bound plan; do not guess which agreement governs a repository.
+- A real GitHub connection receiving PR webhooks and asynchronously publishing/updating advisory review on GitHub. Manual re-review may supplement, but does not replace, webhook-driven review.
+- An explicit repository-to-document association and a captured active bound version for each review; do not guess which agreement governs a repository.
 - A concise review summary with high-signal findings, exact document citations, PR evidence, and suggested resolution choices.
 - A visible resolution trail and a re-review showing the effect of a fix or approved amendment.
 
@@ -62,8 +66,9 @@ An observer can follow a decision from conversation to document change to bound 
 ## Explicitly deferred
 
 - Linear and other ticket integrations; broader chat, document, and repository integrations.
-- Production-grade real-time co-editing, enterprise permissions, SSO, and multi-team governance.
-- Automatic discovery of every relevant plan, cross-project dependency analysis, and repository-wide intent coverage.
+- CRDT multi-writer editing, substantive direct/freeform prose editing, sophisticated permissions, enterprise SSO policy, and multi-team governance. Coarse organization membership and roles are sufficient for MVP.
+- Elaborate Notion block types/databases, beyond headings, paragraphs, lists, and code blocks.
+- Semantic multi-document routing, automatic discovery of every relevant plan, cross-project dependency analysis, and repository-wide intent coverage.
 - Autonomous code repair, autonomous plan approval, or automatic acceptance of exceptions.
 - Mandatory merge gates, configurable blocking thresholds, and sophisticated severity policy. Longer-term configuration may support them; **the MVP is advisory only**.
 - Policing every undocumented helper, library choice, variable name, or local implementation technique.
@@ -91,7 +96,7 @@ These categories describe the relationship between implementation and intent, no
 - **Evidence before assertion.** Show the bound version, exact quoted passage, relevant PR evidence, and reasoning. If context is unavailable or a requirement cannot be verified from the PR, say so rather than asserting noncompliance.
 - **Review the agreed slice of work.** Account for the linked PR's scope and staged delivery. A single PR need not satisfy an entire project plan.
 - **Spend attention on consequential choices.** Prefer a few strong findings over a wall of speculative objections. Undocumented does not mean forbidden; ordinary implementation details are not architectural drift.
-- **Expose uncertainty.** Separate explicit conflicts from questions and suggested amendments. Grilling should reduce ambiguity before binding; review should surface any ambiguity that remains.
+- **Expose uncertainty.** Separate explicit conflicts from questions and suggested amendments. The planning session should reduce ambiguity, and the readiness review should identify remaining gaps before binding; GitHub review should surface ambiguity that remains.
 - **Keep resolution human and traceable.** Revising the PR preserves the agreement. Amending and re-binding changes the agreement explicitly. An acknowledged exception records a scoped departure without rewriting the rule for everyone else.
 - **Do not move the goalposts.** A review names the bound version it used. Draft edits do not retroactively change that review, and an amendment prompts an explicit re-review against the newly bound version.
 
@@ -99,20 +104,20 @@ These categories describe the relationship between implementation and intent, no
 
 **Scenario:** a team is building internal incident search. The technical lead wants faster incident discovery without sending confidential incident content outside the company's approved boundary.
 
-1. **Start with an incomplete plan.** In the workspace, the lead asks the agent to draft a lightweight incident-search ADR. The first draft explains the user benefit but leaves data handling vague. A teammate highlights the search-design section and asks where incident content will go.
-2. **Make grilling earn its place.** The grilling agent asks whether external search or embedding providers may receive incident text, and what happens if indexing fails. The team resolves the privacy question and records a visible document edit linked to the discussion. It leaves nonessential search-tuning choices to the implementer.
-3. **Bind the agreement.** The lead binds version 1, including the exact constraint: “Incident text must remain inside company-managed infrastructure; external embedding APIs must not receive incident content.” The workspace clearly shows that this is the approved version.
+1. **Create metadata and start on a blank canvas.** The lead names the incident-search plan and links its GitHub repository. In the planning session, the agent questions the user benefit, intended users, scope, and data handling while progressively proposing blocks. A teammate joins, chats, and highlights the proposed search-design text to ask where incident content will go.
+2. **Make challenge earn its place.** The same planning-session agent asks whether external search or embedding providers may receive incident text, and what happens if indexing fails. The team resolves the privacy question and accepts a whole-block proposal linked to the discussion. It leaves nonessential search-tuning choices to the implementer.
+3. **Review readiness and bind the agreement.** The lightweight readiness review identifies remaining omissions or open choices. The lead then binds version 1, including the exact constraint: “Incident text must remain inside company-managed infrastructure; external embedding APIs must not receive incident content.” The workspace distinguishes the active immutable agreement from its mutable draft.
 4. **Introduce a locally reasonable conflict.** An implementer uses a convenient external embedding API to accelerate the search prototype. Open a real GitHub PR linked to version 1. Include a harmless local implementation choice, such as an internal helper organization, that the reviewer should leave alone.
-5. **Show explainable advisory review.** Trigger the integration. On GitHub, the review agent posts a direct-contradiction finding quoting the privacy constraint and pointing to the code that sends incident text externally. It explains the consequence and offers the three resolution paths. The PR remains mergeable; this is not a surprise gate.
-6. **Close the loop.** For the main demo, revise the PR to use a company-managed alternative and re-run review. Show that the contradiction is resolved against the same bound version, with the discussion and resolution still visible. Briefly show that a legitimate change of direction could instead become a draft amendment requiring human re-binding, or a documented intentional exception.
+5. **Show explainable advisory review.** The PR webhook queues review. On GitHub, the reviewer agent posts a direct-contradiction finding quoting the privacy constraint and pointing to the code that sends incident text externally. It names version 1, explains the consequence, and offers the three resolution paths. The PR remains mergeable; this is not a surprise gate.
+6. **Close the loop.** For the main demo, revise the PR to use a company-managed alternative; its webhook triggers re-review. Show that the contradiction is resolved against the same bound version, with the discussion and resolution still visible. Briefly show that a legitimate change of direction could instead become a discussed draft amendment requiring human re-binding, or an intentional exception tied to this PR and version. After re-binding, future review cites version 2 without rewriting version 1 findings.
 
 The closing message: **the product caught an unapproved decision, not a stylistic preference—and the team resolved it without losing the reason for the original agreement.**
 
 ## High-level build priorities
 
-1. Establish the document, discussion, and bound-version experience.
-2. Make grilling visibly improve a specific plan rather than merely produce commentary.
-3. Complete the real GitHub review and human-resolution loop early enough to rehearse it.
+1. Establish metadata creation, the block canvas, discussion, proposal decisions, and immutable binding.
+2. Make the planning session visibly improve a specific plan, with a lightweight readiness review before binding.
+3. Complete the real webhook-driven GitHub review and human-resolution loop early enough to rehearse it.
 4. Polish citations, state clarity, and the demo narrative before adding integrations or policy controls.
 
 The hackathon tradeoff is deliberate: depth in one complete workflow beats breadth across many incomplete surfaces.
