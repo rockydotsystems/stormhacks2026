@@ -242,6 +242,35 @@ dependency cache uses Blacksmith's colocated cache through `actions/setup-node`.
 Adding the workflow does not publish it or configure remote resources. Once the
 prerequisites are ready, publishing it to `main` triggers the first deployment.
 
+### Public domains
+
+The Worker serves `https://whydidwechoosethis.tech` through the custom domain in
+`wrangler.jsonc`; deployment manages its DNS record and certificate.
+`wdwct.tech` has a proxied, originless `AAAA` record pointing to `100::` and a
+Cloudflare Single Redirect to the primary HTTPS domain. The redirect returns
+301 and preserves the path and query string. Only these apex hostnames are
+configured; `www` aliases are not included.
+
+The redirect ruleset payload is `cloudflare/wdwct-redirect.json`. It is managed
+separately from Worker deployment. To provision it on a fresh zone without an
+existing `http_request_dynamic_redirect` entry point, load your Cloudflare
+credentials and run:
+
+```sh
+cf rulesets account-rulesets create --zone wdwct.tech --body @cloudflare/wdwct-redirect.json
+```
+
+If a redirect entry point already exists, add or update only this rule rather
+than replacing unrelated rules. Keep the secondary DNS record proxied so the
+redirect executes at Cloudflare's edge. During teardown, remove the redirect
+rule/owned ruleset and secondary DNS record, as well as the Worker's custom
+domain and its generated certificate. Do not delete either zone or unrelated
+DNS records.
+
+For WorkOS, the canonical redirect URI is
+`https://whydidwechoosethis.tech/callback`; initiate login at `/login` and sign
+out to the canonical origin. Deployment alone does not configure WorkOS.
+
 ## Architecture
 
 ```text

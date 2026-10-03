@@ -1,0 +1,23 @@
+{
+  "name": "StormHacks canonical domain redirect",
+  "kind": "zone",
+  "phase": "http_request_dynamic_redirect",
+  "rules": [
+    {
+      "ref": "stormhacks_canonical_domain",
+      "description": "Redirect the short domain to the primary HTTPS domain",
+      "expression": "http.host eq \"wdwct.tech\"",
+      "action": "redirect",
+      "action_parameters": {
+        "from_value": {
+          "target_url": {
+            "expression": "concat(\"https://whydidwechoosethis.tech\", http.request.uri.path)"
+          },
+          "status_code": 301,
+          "preserve_query_string": true
+        }
+      },
+      "enabled": true
+    }
+  ]
+}
