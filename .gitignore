@@ -33,6 +33,12 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example
+!.envrc
+
+# Nix and direnv
+.direnv/
+/result
+/result-*
 
 # local Amp runtime and review artifacts
 .amp/

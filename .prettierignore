@@ -3,4 +3,7 @@ node_modules
 pnpm-lock.yaml
 drizzle/meta
 .amp
+.direnv
+result
+result-*
 next-env.d.ts

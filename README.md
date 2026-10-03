@@ -4,6 +4,83 @@ A feature-first hackathon starter using Next.js 16.3.8 (latest stable when scaff
 
 ## Local setup
 
+### Managed environment (Nix)
+
+The pinned flake provides Node 24, pnpm 12.0.0, jj, direnv, nix-direnv,
+nixfmt, Docker/Compose clients, and PostgreSQL 18 tools. It declares x86_64 and
+aarch64 Linux/macOS; only x86_64 Linux has been verified locally. Docker still
+needs a running daemon (Docker Desktop on macOS).
+
+Install Nix with `nix-command` and `flakes` enabled, then enter from the repository root:
+
+```sh
+direnv allow
+# Or, without a shell hook:
+nix develop
+
+pnpm install --frozen-lockfile
+cp .env.example .env.local
+pnpm db:up
+pnpm db:migrate
+pnpm dev
+```
+
+Enable direnv in your host shell for automatic loading: `eval "$(direnv hook bash)"`
+in Bash's interactive configuration, `eval "$(direnv hook zsh)"` in `.zshrc`, or
+`direnv hook fish | source` in Fish's configuration. For cached loading, enable
+your host's nix-direnv integration (on Home Manager, `programs.direnv.enable = true`
+and `programs.direnv.nix-direnv.enable = true`). Including nix-direnv in the dev
+shell does not itself enable that host integration. Plain direnv's built-in
+`use flake` also works, without nix-direnv caching. No shell hook starts services,
+installs dependencies, or runs migrations.
+
+### Nix commands
+
+Source commands run from the repository root and reuse `package.json` scripts.
+They forward arguments and preserve command failures. Run `install` first.
+
+| Command                                          | Purpose                                                   |
+| ------------------------------------------------ | --------------------------------------------------------- |
+| `nix run .#install`                              | Install locked dependencies                               |
+| `nix run .#dev -- --port 3000`                   | Start the development server                              |
+| `nix run .#build`                                | Build the source checkout                                 |
+| `nix run .#test -- src/features/auth`            | Run tests, optionally filtered                            |
+| `nix run .#lint`                                 | Run ESLint                                                |
+| `nix run .#typecheck`                            | Generate route types and check TypeScript                 |
+| `nix run .#fmt` / `nix run .#fmt-check`          | Format/check application files and docs with Prettier     |
+| `nix fmt flake.nix nix/*.nix`                    | Format Nix files                                          |
+| `nix run .#check`                                | Run the existing lint/type/test/format suite              |
+| `nix run .#db-up` / `nix run .#db-down`          | Start/stop local Postgres                                 |
+| `nix run .#db-generate` / `nix run .#db-migrate` | Generate/apply migrations                                 |
+| `nix run .#db-studio`                            | Inspect the database with Drizzle Studio                  |
+| `nix flake check`                                | Sandboxed build, source checks, and Nix formatting checks |
+
+`nix build` produces the actual standalone Next.js application in `result`,
+including public and static assets. `nix run .` starts that built production
+server, not the development server. Configure its bind address and port through
+environment variables:
+
+```sh
+HOSTNAME=127.0.0.1 PORT=3000 nix run .
+```
+
+The package does not include local environment files or secrets and can build
+without a database or WorkOS credentials. Supply runtime server configuration
+through exported environment variables; do not expect the packaged server to load
+the checkout's `.env.local`. `NEXT_PUBLIC_*` values are compiled into browser
+bundles at build time; the current redirect URI is consumed by server auth code,
+but future browser use needs an explicitly configured rebuild. Use writable
+checkout builds for development; the Nix store is immutable and is not a writable
+runtime cache for future ISR/image-cache features.
+
+After changing `pnpm-lock.yaml`, regenerate the dependency hash in
+`nix/package.nix`: temporarily set `hash = ""`, run
+`nix build .#default.pnpmDeps --no-link`, and copy the reported `got: sha256-…`
+value into `hash`. Dependency retrieval is hash-pinned; application builds install
+from that cache offline. Keep `flake.lock` committed; input updates are deliberate.
+
+### Without Nix
+
 Requires Node.js 22.12+ and pnpm 12.0.0, plus Docker with the Compose plugin (Docker Desktop includes it).
 
 ```sh
