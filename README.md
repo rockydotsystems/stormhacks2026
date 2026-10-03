@@ -35,6 +35,11 @@ shell does not itself enable that host integration. Plain direnv's built-in
 `use flake` also works, without nix-direnv caching. No shell hook starts services,
 installs dependencies, or runs migrations.
 
+The dev shell and `nix run` source commands default `NODE_EXTRA_CA_CERTS` to
+the pinned Nix CA bundle, preserving an existing override. This lets the local
+Worker verify HTTPS connections to WorkOS without a manual environment prefix.
+The browser still uses `http://localhost:3000`; TLS verification is not disabled.
+
 ### Nix commands
 
 Source commands run from the repository root and reuse `package.json` scripts.

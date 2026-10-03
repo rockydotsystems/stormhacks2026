@@ -19,6 +19,9 @@
           pkgs = import nixpkgs { inherit system; };
           nodejs = pkgs.nodejs_24;
           pnpm = import ./nix/pnpm.nix { inherit pkgs nodejs; };
+          caEnvironment = ''
+            export NODE_EXTRA_CA_CERTS="''${NODE_EXTRA_CA_CERTS:-${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt}"
+          '';
           src = pkgs.lib.fileset.toSource {
             root = ./.;
             fileset = pkgs.lib.fileset.unions [
@@ -60,6 +63,7 @@
                   pkgs.nixfmt
                 ];
                 text = ''
+                  ${caEnvironment}
                   if [[ ! -f package.json || ! -f flake.nix || ! -d src/features ]]; then
                     echo "Run this command from the StormHacks repository root." >&2
                     exit 1
@@ -110,6 +114,7 @@
               pkgs.postgresql_18
             ];
             NEXT_TELEMETRY_DISABLED = "1";
+            shellHook = caEnvironment;
           };
         }
       );
