@@ -25,6 +25,7 @@
               ./src
               ./public
               ./tests
+              ./scripts
               ./package.json
               ./pnpm-lock.yaml
               ./pnpm-workspace.yaml
@@ -33,6 +34,8 @@
               ./postcss.config.mjs
               ./eslint.config.mjs
               ./vitest.config.ts
+              ./vite.config.ts
+              ./wrangler.jsonc
               ./.prettierignore
             ];
           };
@@ -70,6 +73,10 @@
             install = "pnpm install --frozen-lockfile";
             dev = "pnpm dev";
             build = "pnpm build";
+            start = "pnpm start";
+            deploy = "pnpm run deploy";
+            deploy-check = "pnpm deploy:check";
+            worker-types = "pnpm worker:types";
             test = "pnpm test";
             lint = "pnpm lint";
             typecheck = "pnpm typecheck";
@@ -114,17 +121,7 @@
       packages = forAllSystems (system: {
         default = environments.${system}.package;
       });
-      apps = forAllSystems (
-        system:
-        environments.${system}.apps
-        // {
-          default = {
-            type = "app";
-            meta.description = "Run the packaged StormHacks production server";
-            program = nixpkgs.lib.getExe environments.${system}.package;
-          };
-        }
-      );
+      apps = forAllSystems (system: environments.${system}.apps);
       checks = forAllSystems (
         system:
         let

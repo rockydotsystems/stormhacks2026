@@ -4,7 +4,7 @@ import { AuthController } from "@/features/auth/server/auth.controller";
 import { AuthService } from "@/features/auth/server/auth.service";
 import { NotesController } from "@/features/notes/server/notes.controller";
 import { NotesService } from "@/features/notes/server/notes.service";
-import { getDatabase, type Database } from "@/server/db";
+import { createDatabase, type Database } from "@/server/db";
 
 export type Dependencies = {
   db: Database;
@@ -20,7 +20,9 @@ export const container = createContainer<Dependencies>({
 });
 
 container.register({
-  db: asFunction(getDatabase).singleton(),
+  db: asFunction(createDatabase)
+    .scoped()
+    .disposer((db) => db.$client.end({ timeout: 1 })),
   authService: asClass(AuthService).scoped(),
   authController: asClass(AuthController).scoped(),
   notesService: asClass(NotesService).scoped(),

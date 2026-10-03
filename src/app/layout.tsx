@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import { connection } from "next/server";
 import { Providers } from "@/app/providers";
 import { isAuthConfigured } from "@/features/auth/server/config";
@@ -9,7 +10,11 @@ export const metadata: Metadata = {
   description: "A feature-first hackathon starter.",
 };
 
-export default async function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
   // Read server configuration at request time, not during static builds.
   await connection();
   return (

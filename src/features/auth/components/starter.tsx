@@ -27,7 +27,7 @@ export function Starter() {
             Connect WorkOS to get started
           </CardTitle>
           <CardDescription className="leading-6">
-            Add your WorkOS credentials to <code>.env.local</code> and restart
+            Add your WorkOS credentials to <code>.dev.vars</code> and restart
             the dev server. See the README for database setup and authentication
             settings.
           </CardDescription>

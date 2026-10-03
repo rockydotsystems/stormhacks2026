@@ -1,0 +1,6 @@
+# Runtime secrets for local Workers development. Copy to .dev.vars, never commit it.
+WORKOS_API_KEY=
+WORKOS_CLIENT_ID=
+# Generate with: openssl rand -base64 32
+WORKOS_COOKIE_PASSWORD=
+NEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback

@@ -15,6 +15,19 @@ Node 24, pnpm 12.0.0, and nixfmt are approved project tooling. Format Nix
 with `nix fmt`; retain Prettier for the existing application and documentation.
 Run source apps from the repository root; see README for build and check commands.
 
+## Runtime and deployment
+
+Use vinext/Vite for the Next-compatible App Router and Cloudflare Workers for
+deployment. `pnpm dev`, `pnpm build`, and `pnpm start` target workerd; do not
+switch back to `next dev`/`next build` or restore standalone Node packaging.
+Keep Next.js for AuthKit peers/types/ESLint. Consult installed vinext and
+Cloudflare plugin documentation as well as the relevant Next API guide.
+Run `pnpm check` and `pnpm deploy:check` before completing runtime changes.
+`pnpm run deploy` publishes; do not run it without explicit deployment approval.
+Postgres clients must be request-scoped and disposed; Hyperdrive owns the pool.
+The all-zero Hyperdrive ID is local-only and must be replaced before deployment.
+Use `.dev.vars` for local Worker secrets, `.env.local` for migration credentials.
+
 Canonical repository: https://github.com/rockydotsystems/stormhacks2026
 For this organization-owned project, try the private skill catalog for co.codes
 repository `0xhckr/agents-rockydotsystems`, ref `main`, path `index.json`, using

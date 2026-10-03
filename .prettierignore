@@ -7,3 +7,7 @@ drizzle/meta
 result
 result-*
 next-env.d.ts
+dist
+.wrangler
+.vinext
+worker-configuration.d.ts

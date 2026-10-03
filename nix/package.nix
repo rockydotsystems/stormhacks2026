@@ -9,7 +9,7 @@ let
     pname = "stormhacks2026";
     inherit src pnpm;
     fetcherVersion = 4;
-    hash = "sha256-9rFDHW03FmUvgvpwj6mvAcYlkHA5hHyQVSe8EcfTxtk=";
+    hash = "sha256-UIHOs5yhO1DPiyZiOl4nSsHc5P+dYfWw+kBZ/j8M0mg=";
   };
 in
 pkgs.stdenvNoCC.mkDerivation {
@@ -20,9 +20,9 @@ pkgs.stdenvNoCC.mkDerivation {
     nodejs
     pnpm
     pkgs.pnpmConfigHook
-    pkgs.makeWrapper
   ];
   NEXT_TELEMETRY_DISABLED = "1";
+  WRANGLER_SEND_METRICS = "false";
   buildPhase = ''
     runHook preBuild
     pnpm build
@@ -30,20 +30,21 @@ pkgs.stdenvNoCC.mkDerivation {
   '';
   installPhase = ''
     runHook preInstall
-    mkdir -p "$out/lib/stormhacks2026" "$out/bin"
-    cp -r .next/standalone/. "$out/lib/stormhacks2026/"
-    cp -r public "$out/lib/stormhacks2026/"
-    cp -r .next/static "$out/lib/stormhacks2026/.next/"
-    makeWrapper ${nodejs}/bin/node "$out/bin/stormhacks2026" \
-      --add-flags "$out/lib/stormhacks2026/server.js" \
-      --set-default HOSTNAME 127.0.0.1 \
-      --set-default NEXT_TELEMETRY_DISABLED 1
+    mkdir -p "$out"
+    cp -r dist/. "$out/"
+    node --input-type=module - "$out/server/wrangler.json" <<'JS'
+    import fs from "node:fs";
+    const path = process.argv[2];
+    const config = JSON.parse(fs.readFileSync(path, "utf8"));
+    delete config.configPath;
+    delete config.userConfigPath;
+    fs.writeFileSync(path, JSON.stringify(config, null, 2));
+    JS
     runHook postInstall
   '';
   passthru = { inherit pnpmDeps; };
   meta = {
-    description = "StormHacks 2026 Next.js application";
-    mainProgram = "stormhacks2026";
+    description = "StormHacks 2026 Cloudflare Worker and static assets";
     platforms = [
       "x86_64-linux"
       "aarch64-linux"

@@ -1,6 +1,6 @@
 # StormHacks 2026
 
-A feature-first hackathon starter using Next.js 16.3.8 (latest stable when scaffolded), React 19, TypeScript, Tailwind CSS 4, PostgreSQL 18, Drizzle, TanStack React Query, WorkOS AuthKit, and Awilix.
+A feature-first hackathon starter using vinext 1.0.1 (Next.js-compatible App Router on Vite), Cloudflare Workers, React 19, TypeScript, Tailwind CSS 4, PostgreSQL 18, Drizzle, TanStack React Query, WorkOS AuthKit, and Awilix. Next.js remains installed for AuthKit peer dependencies, types, and ESLint—not for development, builds, or deployment.
 
 ## Local setup
 
@@ -20,6 +20,7 @@ nix develop
 
 pnpm install --frozen-lockfile
 cp .env.example .env.local
+cp .dev.vars.example .dev.vars
 pnpm db:up
 pnpm db:migrate
 pnpm dev
@@ -46,32 +47,30 @@ They forward arguments and preserve command failures. Run `install` first.
 | `nix run .#build`                                | Build the source checkout                                 |
 | `nix run .#test -- src/features/auth`            | Run tests, optionally filtered                            |
 | `nix run .#lint`                                 | Run ESLint                                                |
-| `nix run .#typecheck`                            | Generate route types and check TypeScript                 |
+| `nix run .#typecheck`                            | Generate Worker binding types and check TypeScript        |
 | `nix run .#fmt` / `nix run .#fmt-check`          | Format/check application files and docs with Prettier     |
 | `nix fmt flake.nix nix/*.nix`                    | Format Nix files                                          |
 | `nix run .#check`                                | Run the existing lint/type/test/format suite              |
 | `nix run .#db-up` / `nix run .#db-down`          | Start/stop local Postgres                                 |
 | `nix run .#db-generate` / `nix run .#db-migrate` | Generate/apply migrations                                 |
 | `nix run .#db-studio`                            | Inspect the database with Drizzle Studio                  |
+| `nix run .#start -- --port 3000`                 | Preview the built Worker locally                          |
+| `nix run .#deploy-check`                         | Build and dry-run Workers deployment                      |
+| `nix run .#deploy`                               | Build and deploy (requires configured account/resources)  |
+| `nix run .#worker-types`                         | Regenerate Worker binding types                           |
 | `nix flake check`                                | Sandboxed build, source checks, and Nix formatting checks |
 
-`nix build` produces the actual standalone Next.js application in `result`,
-including public and static assets. `nix run .` starts that built production
-server, not the development server. Configure its bind address and port through
-environment variables:
-
-```sh
-HOSTNAME=127.0.0.1 PORT=3000 nix run .
-```
+`nix build` produces a Cloudflare deployment artifact: `result/server` contains
+the Worker/modules and generated Wrangler config; `result/client` contains its
+static assets. The deliverable is no longer a standalone Node server, so there is
+no default `nix run .` app. Use `nix run .#dev` for development or build the source
+checkout and run `nix run .#start` for a production Worker preview.
 
 The package does not include local environment files or secrets and can build
-without a database or WorkOS credentials. Supply runtime server configuration
-through exported environment variables; do not expect the packaged server to load
-the checkout's `.env.local`. `NEXT_PUBLIC_*` values are compiled into browser
-bundles at build time; the current redirect URI is consumed by server auth code,
-but future browser use needs an explicitly configured rebuild. Use writable
-checkout builds for development; the Nix store is immutable and is not a writable
-runtime cache for future ISR/image-cache features.
+without a database or WorkOS credentials. Runtime secrets belong in Workers
+secrets or local `.dev.vars`, never in the Nix store. Future browser use of
+`NEXT_PUBLIC_*` values requires a build configured for that origin. Local previews
+use workerd via Wrangler, not Node's production server.
 
 After changing `pnpm-lock.yaml`, regenerate the dependency hash in
 `nix/package.nix`: temporarily set `hash = ""`, run
@@ -86,6 +85,7 @@ Requires Node.js 22.12+ and pnpm 12.0.0, plus Docker with the Compose plugin (Do
 ```sh
 pnpm install --frozen-lockfile
 cp .env.example .env.local
+cp .dev.vars.example .dev.vars
 pnpm db:up
 pnpm db:migrate
 pnpm dev
@@ -94,14 +94,14 @@ pnpm dev
 The local dev server uses port 3000. In an Amp orb, use a supervised service and the portal URL it returns instead of exposing a sandbox host directly:
 
 ```sh
-amp orb service start web --command 'pnpm dev --hostname 0.0.0.0' --port 3000 --portal
+amp orb service start web --command 'pnpm dev --host 0.0.0.0' --port 3000 --portal
 ```
 
 The homepage works without WorkOS credentials and shows setup instructions. Protected APIs return 503 until auth is configured; there is no development auth bypass. Once configured, anonymous API requests return 401 JSON instead of redirecting to a login page.
 
 ## WorkOS authentication
 
-Use a WorkOS **staging** environment. Set these in `.env.local`:
+Use a WorkOS **staging** environment. Set these in `.dev.vars` for the local Worker runtime (keep `.env.local` for Drizzle's direct database URL):
 
 - `WORKOS_API_KEY`: your staging API key.
 - `WORKOS_CLIENT_ID`: your application's client ID.
@@ -118,7 +118,58 @@ In the WorkOS Dashboard, configure these application URLs for your development o
 
 For orb previews, replace the local origin in all three dashboard settings and the redirect environment variable with your portal origin. Restart the dev service after changing environment variables. Only the redirect URI is public; never prefix API keys or cookie passwords with `NEXT_PUBLIC_`.
 
-Next.js `src/proxy.ts` runs AuthKit session handling. Controllers explicitly require authentication before reading or writing data. The AuthKit provider handles session expiry; `/api/auth/session` exposes only public user identity fields, not tokens. Logout is a POST endpoint, not a server action. A full sign-in/callback/sign-out test needs valid credentials and dashboard settings.
+vinext runs `src/proxy.ts` for AuthKit session handling. Controllers explicitly require authentication before reading or writing data. The AuthKit provider handles session expiry; `/api/auth/session` exposes only public user identity fields, not tokens. Logout is a POST endpoint, not a server action. A full sign-in/callback/sign-out test needs valid credentials and dashboard settings.
+
+## Cloudflare Workers deployment
+
+`vite.config.ts` runs vinext's RSC environment in workerd through the stable
+Cloudflare Vite plugin v1 and Wrangler v4 integration. `wrangler.jsonc` is the
+source configuration; `dist/server/wrangler.json` is generated by the build.
+Always deploy the generated config so the bundled Worker and client assets stay
+together. No Pages project, OpenNext adapter, or Node server is used.
+
+```sh
+pnpm build
+pnpm start --port 3000      # Local preview of the built Worker
+pnpm deploy:check          # Build + Wrangler dry-run, no remote deployment
+```
+
+Before a live deploy:
+
+1. Authenticate with `pnpm exec wrangler login`, or provide `CLOUDFLARE_API_TOKEN`
+   and `CLOUDFLARE_ACCOUNT_ID` in your CI credential environment.
+2. Configure a hosted PostgreSQL database and a Hyperdrive connection in your
+   Cloudflare account. Disable Hyperdrive query caching for user-owned notes so
+   a create followed by list does not return a stale cached result. Replace the
+   all-zero local-only Hyperdrive ID in `wrangler.jsonc` with your real ID. The
+   deployment script rejects the placeholder before contacting Cloudflare.
+3. Apply the committed Drizzle migration to that database from a trusted machine
+   using its direct `DATABASE_URL`. Do not run migrations in Worker requests.
+4. Store runtime auth configuration with Wrangler's secure interactive prompts:
+
+   ```sh
+   pnpm exec wrangler secret put WORKOS_API_KEY
+   pnpm exec wrangler secret put WORKOS_CLIENT_ID
+   pnpm exec wrangler secret put WORKOS_COOKIE_PASSWORD
+   pnpm exec wrangler secret put NEXT_PUBLIC_WORKOS_REDIRECT_URI
+   ```
+
+   Set the redirect URI to your Worker/custom-domain origin plus `/callback`, and
+   update the WorkOS redirect, initiate-login, and sign-out dashboard URLs to
+   match. The default Worker name is `stormhacks2026` on `workers.dev`; no account
+   ID or custom domain is assumed. Secrets can create the Worker before its first
+   code deployment; configure them in the intended account only.
+
+5. Run `pnpm run deploy` (use `run`: `pnpm deploy` is pnpm's workspace deployment
+   command). Then verify sign-in, create/list notes, and sign-out at the real URL.
+
+Local Hyperdrive uses the Compose database on `127.0.0.1:5432`, without a remote
+connection or Cloudflare credentials. Override it with
+`CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` when needed. Neither
+the all-zero ID nor local credentials identify a production resource. No live
+deployment, production migration, or remote resource provisioning is automated.
+vinext is under active development; build success and dry-run do not prove a
+real WorkOS callback or deployed database integration.
 
 ## Architecture
 
@@ -141,21 +192,21 @@ src/
       server/               # Drizzle schema, service, controller, tests
       contracts.ts          # Zod request schema and response DTOs
   lib/api-client.ts         # Browser JSON API client
-  server/                   # Server-only DB pool, DI container, HTTP errors
+  server/                   # Request-scoped DB clients, DI container, HTTP errors
 drizzle/                    # Committed SQL migrations and schema snapshots
 ```
 
 The example notes feature demonstrates this flow:
 
 ```text
-React component → React Query → /api/notes → NotesController → NotesService → Drizzle → Postgres
+React component → React Query → /api/notes → NotesController → NotesService → Drizzle → Hyperdrive → Postgres
 ```
 
 - **Components** handle UI and local state. React Query handles remote state, caching, mutations, and invalidation. No browser code accesses the database; no server actions manage application data.
 - **Contracts** are safe to import on both sides. Use Zod at the API boundary and JSON-friendly DTOs (dates are strings).
 - **Controllers** authenticate, validate requests, call services, and construct HTTP responses. Return 400 for invalid input, 401 for anonymous requests, and generic 500 errors for unexpected failures.
 - **Services** own business rules and Drizzle queries. User-owned operations take the authenticated user ID explicitly, never a client-supplied owner ID.
-- **Awilix** uses explicit registrations, PROXY injection, and strict lifetime checks. `handleApi` creates/disposes a scope per request. Services and controllers are scoped; the database pool is shared. Do not put request identity or mutable user state in singleton services.
+- **Awilix** uses explicit registrations, PROXY injection, and strict lifetime checks. `handleApi` creates/disposes a scope per request. Services, controllers, and database clients are scoped. A database client is created lazily and closed on disposal, including API failures. Hyperdrive owns the remote pool; never reuse Worker sockets between requests or put user state in singleton services.
 - **Server-only boundaries** prevent DB, auth, and DI code from leaking into client bundles. Drizzle schema files omit `server-only` so the migration CLI can read them; browser code imports contracts, not schemas.
 
 To add a feature, follow `notes`: add contracts, schema, service, controller, hooks, and components; register its service/controller in `src/server/container.ts`; add a thin `src/app/api/<feature>/route.ts` using `handleApi`. Keep domain code inside its feature rather than global controller/service folders.
