@@ -83,6 +83,20 @@ React component → React Query → /api/notes → NotesController → NotesServ
 
 To add a feature, follow `notes`: add contracts, schema, service, controller, hooks, and components; register its service/controller in `src/server/container.ts`; add a thin `src/app/api/<feature>/route.ts` using `handleApi`. Keep domain code inside its feature rather than global controller/service folders.
 
+## UI system
+
+[Coss UI](https://coss.com/ui/docs) supplies local Base UI primitives in `src/components/ui`. Button, Card, Label, Textarea, and Spinner are installed; add other components on demand:
+
+```sh
+pnpm dlx shadcn@latest add @coss/dialog
+```
+
+`components.json` configures the Coss registry, import aliases, and Phosphor icon preference. Coss registry sources can still contain Lucide imports; replace those with matching [Phosphor](https://phosphoricons.com/) icons after adding a component. Use `@phosphor-icons/react` in Client Components and `@phosphor-icons/react/ssr` in Server Components. Decorative icons should have `aria-hidden="true"`; icon-only buttons need an accessible label.
+
+The Coss neutral surface system and **teal primary brand** are defined in `src/app/globals.css`. Use semantic classes such as `bg-primary`, `text-primary-foreground`, and `text-muted-foreground` rather than palette overrides. Light mode uses teal-700 with white text; the `.dark` theme uses teal-400 with teal-950 text. Apply `.dark` to the root element to opt into dark mode. System font fallbacks are retained; no font downloads are required.
+
+Both upstream agent skills are included in `.agents/skills`: `using-coss-ui` (component references and rules) and `using-coss-particles` (the full particle catalog). Imported from [cosscom/coss](https://github.com/cosscom/coss/tree/dd49ec9c2c268ae751724ddc64b343cb3a7e773b/apps/ui/skills), under MIT, with project-specific icon/theme guidance and the particle index moved into a reference file for progressive loading.
+
 ## Database workflow
 
 Docker Compose binds Postgres to loopback and persists data in a named volume. Its hardcoded credentials are **local development defaults only**. Use a managed database, private networking, and separate secrets in production.

@@ -1,6 +1,10 @@
 "use client";
 
+import { PlusIcon } from "@phosphor-icons/react";
 import { useState, type FormEvent } from "react";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useCreateNote, useNotes } from "@/features/notes/client/queries";
 
 export function NotesPanel({ userId }: { userId: string }) {
@@ -19,57 +23,56 @@ export function NotesPanel({ userId }: { userId: string }) {
   }
 
   return (
-    <section aria-labelledby="notes-heading" className="space-y-6">
+    <section aria-labelledby="notes-heading" className="flex flex-col gap-6">
       <div>
         <h2 id="notes-heading" className="text-xl font-semibold">
           Your notes
         </h2>
-        <p className="mt-2 text-sm text-zinc-600">
+        <p className="mt-2 text-sm text-muted-foreground">
           A small example feature. Only you can see the notes you create.
         </p>
       </div>
-      <form onSubmit={onSubmit} className="space-y-3">
-        <label htmlFor="note-content" className="block text-sm font-medium">
-          New note
-        </label>
-        <textarea
+      <form onSubmit={onSubmit} className="flex flex-col items-start gap-3">
+        <Label htmlFor="note-content">New note</Label>
+        <Textarea
           id="note-content"
           value={content}
           onChange={(event) => setContent(event.target.value)}
           required
           maxLength={2000}
           rows={3}
-          className="w-full rounded-lg border border-zinc-300 p-3"
           placeholder="Write down an idea for the hackathon…"
         />
-        <button
+        <Button
+          type="submit"
+          loading={createNote.isPending}
           disabled={createNote.isPending || !content.trim()}
-          className="rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
         >
+          <PlusIcon aria-hidden="true" />
           {createNote.isPending ? "Saving…" : "Save note"}
-        </button>
+        </Button>
         {createNote.error ? (
-          <p role="alert" className="text-sm text-red-700">
+          <p role="alert" className="text-sm text-destructive-foreground">
             {createNote.error.message}
           </p>
         ) : null}
       </form>
       {notes.isPending ? <p role="status">Loading notes…</p> : null}
       {notes.error ? (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-destructive-foreground">
           {notes.error.message}
         </p>
       ) : null}
       {notes.data?.length === 0 ? (
-        <p className="text-sm text-zinc-600">
+        <p className="text-sm text-muted-foreground">
           No notes yet. Add your first idea above.
         </p>
       ) : null}
-      <ul className="space-y-3" aria-label="Saved notes">
+      <ul className="flex flex-col gap-3" aria-label="Saved notes">
         {notes.data?.map((note) => (
           <li
             key={note.id}
-            className="whitespace-pre-wrap break-words rounded-lg border border-zinc-200 p-4 text-sm"
+            className="whitespace-pre-wrap break-words rounded-lg border p-4 text-sm"
           >
             {note.content}
           </li>

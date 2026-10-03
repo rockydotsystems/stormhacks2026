@@ -15,7 +15,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
-        <Providers authConfigured={isAuthConfigured()}>{children}</Providers>
+        <div className="isolate flex flex-1 flex-col">
+          <Providers authConfigured={isAuthConfigured()}>{children}</Providers>
+        </div>
       </body>
     </html>
   );

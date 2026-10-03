@@ -1,5 +1,15 @@
 "use client";
 
+import { SignInIcon, SignOutIcon } from "@phosphor-icons/react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardDescription,
+  CardHeader,
+  CardPanel,
+  CardTitle,
+} from "@/components/ui/card";
 import { useSession } from "@/features/auth/client/queries";
 import { NotesPanel } from "@/features/notes/components/notes-panel";
 
@@ -11,51 +21,51 @@ export function Starter() {
 
   if (!session.data.configured) {
     return (
-      <section
-        className="rounded-xl border border-zinc-200 bg-zinc-50 p-6"
-        aria-labelledby="setup-heading"
-      >
-        <h2 id="setup-heading" className="text-lg font-semibold">
-          Connect WorkOS to get started
-        </h2>
-        <p className="mt-2 text-sm leading-6 text-zinc-600">
-          Add your WorkOS credentials to <code>.env.local</code> and restart the
-          dev server. See the README for database setup and authentication
-          settings.
-        </p>
-        <p className="mt-4 text-sm text-zinc-600">
-          Protected APIs stay locked until authentication is configured.
-        </p>
-      </section>
+      <Card render={<section />} aria-labelledby="setup-heading">
+        <CardHeader>
+          <CardTitle render={<h2 id="setup-heading" />}>
+            Connect WorkOS to get started
+          </CardTitle>
+          <CardDescription className="leading-6">
+            Add your WorkOS credentials to <code>.env.local</code> and restart
+            the dev server. See the README for database setup and authentication
+            settings.
+          </CardDescription>
+        </CardHeader>
+        <CardPanel>
+          <p className="text-sm text-muted-foreground">
+            Protected APIs stay locked until authentication is configured.
+          </p>
+        </CardPanel>
+      </Card>
     );
   }
 
   if (!session.data.user) {
     return (
-      <section className="space-y-4">
-        <p className="text-zinc-600">
+      <section className="flex flex-col items-start gap-4">
+        <p className="text-muted-foreground">
           Sign in to try the example notes feature.
         </p>
-        <a
-          href="/login"
-          className="inline-flex rounded-lg bg-zinc-900 px-5 py-3 text-sm font-medium text-white"
-        >
+        <Button size="lg" render={<Link href="/login" />}>
+          <SignInIcon aria-hidden="true" />
           Sign in with WorkOS
-        </a>
+        </Button>
       </section>
     );
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 pb-5">
-        <p className="break-all text-sm text-zinc-600">
+    <div className="flex flex-col gap-8">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-5">
+        <p className="break-all text-sm text-muted-foreground">
           Signed in as {session.data.user.email}
         </p>
         <form action="/api/auth/logout" method="post">
-          <button className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium">
+          <Button type="submit" variant="outline">
+            <SignOutIcon aria-hidden="true" />
             Sign out
-          </button>
+          </Button>
         </form>
       </div>
       <NotesPanel userId={session.data.user.id} />
