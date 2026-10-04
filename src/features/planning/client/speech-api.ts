@@ -13,12 +13,16 @@ async function failure(response: Response, fallback: string): Promise<Error> {
   return new Error(message);
 }
 
-export async function transcribeAudio(audio: Blob): Promise<string> {
+export async function transcribeAudio(
+  audio: Blob,
+  signal?: AbortSignal,
+): Promise<string> {
   const form = new FormData();
   form.set("audio", audio, "speech");
   const response = await fetch("/api/planning/speech/transcribe", {
     method: "POST",
     body: form,
+    signal,
   });
   if (!response.ok) {
     throw await failure(response, "Transcription failed. Please try again.");
@@ -30,11 +34,15 @@ export async function transcribeAudio(audio: Blob): Promise<string> {
   return body.text.trim();
 }
 
-export async function synthesizeSpeech(text: string): Promise<Blob> {
+export async function synthesizeSpeech(
+  text: string,
+  signal?: AbortSignal,
+): Promise<Blob> {
   const response = await fetch("/api/planning/speech/synthesize", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),
+    signal,
   });
   if (!response.ok) {
     throw await failure(response, "Speech playback failed.");

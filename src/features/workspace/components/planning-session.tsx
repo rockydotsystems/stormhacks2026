@@ -33,6 +33,7 @@ import { ChecklistStrip } from "@/features/planning/components/checklist-strip";
 import { TurnAlert } from "@/features/planning/components/turn-alert";
 import { QuestionPrompt } from "@/features/planning/components/question-prompt";
 import { ReasoningBlock } from "@/features/planning/components/reasoning-block";
+import { VoiceConversation } from "@/features/planning/components/voice-conversation";
 import type { Question } from "@/features/planning/contracts";
 
 const starters = [
@@ -70,6 +71,7 @@ export function PlanningSession({
   const sendMessage = useSendMessage();
   const [ui, dispatch] = useReducer(turnReducer, initialTurnUi);
   const [draft, setDraft] = useState("");
+  const [voiceOpen, setVoiceOpen] = useState(false);
   // The assistant message whose questions the user closed to answer in the chat instead.
   const [closedFor, setClosedFor] = useState<string | null>(null);
   const end = useRef<HTMLDivElement>(null);
@@ -83,16 +85,19 @@ export function PlanningSession({
   const lastAssistant = messages.findLast((m) => m.role === "assistant");
   const busy = isBusy(ui);
   const popupOpen =
-    questions.length > 0 && lastAssistant?.id !== closedFor && !busy;
+    questions.length > 0 &&
+    lastAssistant?.id !== closedFor &&
+    !busy &&
+    !voiceOpen;
   const loading = binding.isPending || (conversationId && detail.isPending);
   const loadError = binding.error ?? detail.error;
   const workingDocument = conversation?.workingDocument;
   const hasDocument = Boolean(workingDocument?.content.trim());
 
   async function run(turn: PendingTurn) {
-    if (!conversationId) return;
+    if (!conversationId) return null;
     try {
-      await sendMessage.mutateAsync({
+      const final = await sendMessage.mutateAsync({
         conversationId,
         input: {
           text: turn.text,
@@ -107,6 +112,12 @@ export function PlanningSession({
         },
       });
       dispatch({ type: "succeeded" });
+      return [
+        final.assistantMessage.content,
+        ...(final.assistantMessage.questions ?? []).map(
+          (question) => question.text,
+        ),
+      ].join("\n\n");
     } catch (caught) {
       const error = caught instanceof PlanningApiError ? caught : null;
       dispatch({
@@ -114,19 +125,20 @@ export function PlanningSession({
         kind: error?.kind ?? "other",
         message: error?.message ?? "Something went wrong. Please try again.",
       });
+      return null;
     }
   }
 
-  function send(text: string) {
-    if (busy || !conversationId || !text.trim()) return;
+  async function send(text: string, via: "text" | "voice" = "text") {
+    if (busy || !conversationId || !text.trim()) return null;
     const turn: PendingTurn = {
       clientMessageId: crypto.randomUUID(),
       text,
-      via: "text",
+      via,
       speak: false,
     };
     dispatch({ type: "send", turn });
-    void run(turn);
+    return run(turn);
   }
 
   function retry() {
@@ -153,12 +165,19 @@ export function PlanningSession({
       ? allTopicsCovered(conversation.checklist)
       : false;
   useEffect(() => {
-    if (!coveredAll || busy || !conversationId || ui.status !== "idle") return;
+    if (
+      !coveredAll ||
+      busy ||
+      voiceOpen ||
+      !conversationId ||
+      ui.status !== "idle"
+    )
+      return;
     if (autoFired.current === conversationId) return;
     autoFired.current = conversationId;
     send(GENERATE_TEXT);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [coveredAll, busy, conversationId, ui.status]);
+  }, [coveredAll, busy, voiceOpen, conversationId, ui.status]);
 
   useEffect(() => {
     end.current?.scrollIntoView({ block: "nearest" });
@@ -366,7 +385,7 @@ export function PlanningSession({
             }
             value={draft}
             maxLength={8000}
-            disabled={busy || !conversationId}
+            disabled={busy || voiceOpen || !conversationId}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
               if (
@@ -380,6 +399,12 @@ export function PlanningSession({
             }}
           />
           <div>
+            <VoiceConversation
+              disabled={busy || !conversationId || ui.status === "error"}
+              open={voiceOpen}
+              onOpenChange={setVoiceOpen}
+              onTurn={(text) => send(text, "voice")}
+            />
             <Button
               type="submit"
               size="icon-sm"
