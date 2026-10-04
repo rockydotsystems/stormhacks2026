@@ -10,9 +10,15 @@ account or organization automatically.
 2. Open **GitHub connections** in the account menu, or `/settings/github`.
 3. Install the GitHub App on a GitHub account or organization. Select only the
    repositories you want to share, then return to the settings page.
-4. Enter that GitHub account's name and select **Connect GitHub account**.
-5. Authorize GitHub. Repositories readable by both the app and your GitHub user
+4. Select **Connect GitHub** and authorize GitHub. No account name is required.
+5. Choose a personal account or organization from GitHub's installation list and
+   select **Link selected account**. Repositories readable by both the app and your GitHub user
    become available in the existing project repository picker.
+
+GitHub is optional: a workspace does not need a GitHub organization or any
+GitHub connection. If no installations are available, install the app on a
+personal account or organization and authorize again. Suspended installations
+and installations linked to another workspace are disabled in the picker.
 
 An installation belongs to one local organization. Any local member can connect
 or refresh it; the current data layer has no administrator roles. A user with
@@ -79,6 +85,12 @@ repository or project rows. Apply committed migrations using the existing direct
 database migration workflow before deploying. Do not migrate from a Worker
 request. GitHub credentials are runtime-only; GitHub Actions does not need copies.
 
+Migration `0009_github_installation_selection.sql` adds short-lived encrypted
+installation-selection sessions and removes the obsolete OAuth account-name
+field. Apply it before deploying the picker. Encryption uses a domain-separated
+key derived from the existing `GITHUB_CLIENT_SECRET`; no new secret is needed.
+Rotating that secret invalidates pending selections, not existing connections.
+
 ## Security and delivery behavior
 
 - OAuth uses PKCE S256 and a random HttpOnly, SameSite=Lax state cookie (Secure
@@ -86,8 +98,14 @@ request. GitHub credentials are runtime-only; GitHub Actions does not need copie
   and local organization, and is atomically consumed before exchanging the code.
   Membership is rechecked on callback and inside the connection transaction.
 - The callback ignores client-supplied installation IDs and redirect targets.
-  GitHub's authenticated installation list proves access to the named account.
-  User access and refresh tokens are never persisted, returned, or logged.
+  GitHub's authenticated installation list supplies the picker choices. Selection
+  re-fetches that list and repositories before linking, and rechecks membership.
+  OAuth credentials are encrypted with AES-256-GCM in a ten-minute selection
+  session, bound to the random handle, WorkOS user, and workspace. Successful
+  linking atomically deletes that session. Expired sessions are unusable and are
+  cleaned up on subsequent authorization starts. Refresh tokens are discarded;
+  user tokens are never returned to the browser or logged. Restarting
+  authorization invalidates previous selections. No long-term user token is kept.
 - Read-only installation tokens are short-lived and request-local. Database
   clients use the existing scoped Hyperdrive lifecycle.
 - Webhooks verify HMAC-SHA256 over raw bytes before JSON parsing. Bodies are

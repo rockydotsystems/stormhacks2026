@@ -10,6 +10,16 @@ import type { Dependencies } from "@/server/container";
 import { ApiError } from "@/server/errors";
 
 const cookieName = "github_oauth_state";
+const selectionCookie = "github_installation_selection";
+function readSelection(request: Request) {
+  const value = request.headers
+    .get("cookie")
+    ?.split(";")
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(`${selectionCookie}=`))
+    ?.slice(selectionCookie.length + 1);
+  return value && /^[A-Za-z0-9_-]{43}$/.test(value) ? value : null;
+}
 const json = (value: unknown, status = 200) =>
   NextResponse.json(value, {
     status,
@@ -22,8 +32,8 @@ function requireOrigin(request: Request) {
       "Use this application's GitHub settings to continue.",
     );
 }
-function cookie(response: NextResponse, value: string) {
-  response.cookies.set(cookieName, value, {
+function cookie(response: NextResponse, value: string, name = cookieName) {
+  response.cookies.set(name, value, {
     httpOnly: true,
     secure: appOrigin().startsWith("https:"),
     sameSite: "lax",
@@ -48,7 +58,14 @@ export class GitHubController {
       authService: Pick<Dependencies["authService"], "requireUser">;
       githubService: Pick<
         Dependencies["githubService"],
-        "begin" | "complete" | "consumeState" | "status" | "sync" | "webhook"
+        | "begin"
+        | "complete"
+        | "consumeState"
+        | "status"
+        | "sync"
+        | "webhook"
+        | "choices"
+        | "select"
       >;
     },
   ) {}
@@ -82,13 +99,14 @@ export class GitHubController {
     const parsed = connectGitHubSchema.safeParse(Object.fromEntries(form));
     if (!parsed.success)
       throw new ApiError(400, parsed.error.issues[0].message);
-    const { state, url } = await this.dependencies.githubService.begin(
-      { userId: user.id, organizationId: parsed.data.organizationId },
-      parsed.data.accountLogin,
-    );
+    const { state, url } = await this.dependencies.githubService.begin({
+      userId: user.id,
+      organizationId: parsed.data.organizationId,
+    });
     const response = NextResponse.redirect(url, 303);
     response.headers.set("Cache-Control", "no-store");
     cookie(response, state);
+    cookie(response, "", selectionCookie);
     return response;
   }
 
@@ -111,12 +129,11 @@ export class GitHubController {
         return settingsRedirect("denied");
       }
       if (!code || code.length > 512) return settingsRedirect("restart");
-      const organizationId = await this.dependencies.githubService.complete(
-        user.id,
-        state,
-        code,
-      );
-      return settingsRedirect("connected", organizationId);
+      const { organizationId, selection } =
+        await this.dependencies.githubService.complete(user.id, state, code);
+      const response = settingsRedirect("choose", organizationId);
+      cookie(response, selection, selectionCookie);
+      return response;
     } catch (error) {
       if (error instanceof ApiError)
         return settingsRedirect(
@@ -125,6 +142,72 @@ export class GitHubController {
             : error.status === 403
               ? "access"
               : "failed",
+        );
+      throw error;
+    }
+  }
+
+  async installations(request: Request) {
+    const user = await this.dependencies.authService.requireUser();
+    const organizationId = organizationIdSchema.safeParse(
+      new URL(request.url).searchParams.get("organizationId"),
+    );
+    if (!organizationId.success)
+      throw new ApiError(400, "Choose an organization.");
+    const selection = readSelection(request);
+    if (!selection) return json({ installations: [], authorized: false });
+    const choices = await this.dependencies.githubService.choices(
+      { userId: user.id, organizationId: organizationId.data },
+      selection,
+    );
+    return json({ ...choices, authorized: true });
+  }
+
+  async select(request: Request) {
+    const user = await this.dependencies.authService.requireUser();
+    requireOrigin(request);
+    if (
+      request.headers.get("content-type")?.split(";")[0] !==
+      "application/x-www-form-urlencoded"
+    )
+      throw new ApiError(415, "Submit the GitHub installation form.");
+    const form = new URLSearchParams(
+      (await readLimitedBody(request, 4096)).toString("utf8"),
+    );
+    const parsed = z
+      .object({
+        organizationId: organizationIdSchema,
+        installationId: z
+          .string()
+          .regex(/^[1-9][0-9]*$/)
+          .max(20),
+      })
+      .safeParse(Object.fromEntries(form));
+    if (!parsed.success)
+      throw new ApiError(400, "Choose a GitHub installation.");
+    const selection = readSelection(request);
+    if (!selection) return settingsRedirect("restart");
+    try {
+      await this.dependencies.githubService.select(
+        { userId: user.id, organizationId: parsed.data.organizationId },
+        selection,
+        parsed.data.installationId,
+      );
+      const response = settingsRedirect(
+        "connected",
+        parsed.data.organizationId,
+      );
+      cookie(response, "", selectionCookie);
+      return response;
+    } catch (error) {
+      if (error instanceof ApiError)
+        return settingsRedirect(
+          error.status === 409
+            ? "conflict"
+            : error.status === 403
+              ? "access"
+              : "failed",
+          parsed.data.organizationId,
         );
       throw error;
     }

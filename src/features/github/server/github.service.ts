@@ -6,6 +6,7 @@ import {
   githubInstallations,
   githubOAuthStates,
   githubRepositoryAccess,
+  githubSelections,
 } from "@stormhacks/data/github/schema";
 import { githubRepositories } from "@/features/projects/server/schema";
 import { requireOrganizationMember } from "@/features/organizations/server/membership";
@@ -21,6 +22,7 @@ import {
   type RemoteRepository,
 } from "./github.client";
 import { challenge, hashState, randomState } from "./security";
+import { openToken, sealToken } from "./selection-token";
 
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 const remoteId = z
@@ -52,7 +54,7 @@ export class GitHubService {
   private readonly github = new GitHubClient();
   constructor(private readonly dependencies: Pick<Dependencies, "db">) {}
 
-  async begin(actor: OrganizationActor, accountLogin: string) {
+  async begin(actor: OrganizationActor) {
     await requireOrganizationMember(this.dependencies.db, actor);
     const config = getGitHubConfig();
     const state = randomState();
@@ -68,11 +70,16 @@ export class GitHubService {
       await tx.insert(githubOAuthStates).values({
         hash: hashState(state),
         ...actor,
-        accountLogin,
         verifier,
         redirectUri,
         expiresAt: new Date(Date.now() + 10 * 60 * 1000),
       });
+      await tx
+        .delete(githubSelections)
+        .where(lt(githubSelections.expiresAt, new Date()));
+      await tx
+        .delete(githubSelections)
+        .where(eq(githubSelections.userId, actor.userId));
     });
     const url = new URL("https://github.com/login/oauth/authorize");
     url.search = new URLSearchParams({
@@ -116,14 +123,87 @@ export class GitHubService {
       context.verifier,
       context.redirectUri,
     );
+    const selection = randomState();
+    const hash = hashState(selection);
+    await this.dependencies.db.insert(githubSelections).values({
+      hash,
+      ...actor,
+      encryptedToken: sealToken(
+        token,
+        `${hash}:${userId}:${actor.organizationId}`,
+      ),
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    });
+    return { organizationId: actor.organizationId, selection };
+  }
+
+  private async pending(actor: OrganizationActor, selection: string) {
+    await requireOrganizationMember(this.dependencies.db, actor);
+    const [row] = await this.dependencies.db
+      .select()
+      .from(githubSelections)
+      .where(
+        and(
+          eq(githubSelections.hash, hashState(selection)),
+          eq(githubSelections.userId, actor.userId),
+          eq(githubSelections.organizationId, actor.organizationId),
+          gt(githubSelections.expiresAt, new Date()),
+        ),
+      );
+    if (!row)
+      throw new ApiError(
+        400,
+        "GitHub authorization expired. Connect GitHub again.",
+      );
+    return {
+      row,
+      token: openToken(
+        row.encryptedToken,
+        `${row.hash}:${actor.userId}:${actor.organizationId}`,
+      ),
+    };
+  }
+
+  async choices(actor: OrganizationActor, selection: string) {
+    const { token } = await this.pending(actor, selection);
+    const installations = await this.github.installations(token);
+    const linked = await this.dependencies.db
+      .select()
+      .from(githubInstallations);
+    return {
+      installations: installations
+        .filter((item) => item.app_id === getGitHubConfig().appId)
+        .map((item) => ({
+          id: item.id,
+          accountLogin: item.account.login,
+          accountType: item.account.type,
+          disabledReason: item.suspended_at
+            ? "Suspended in GitHub"
+            : linked.some(
+                  (row) =>
+                    row.id === item.id &&
+                    row.organizationId !== actor.organizationId,
+                )
+              ? "Connected to another workspace"
+              : null,
+        })),
+    };
+  }
+
+  async select(
+    actor: OrganizationActor,
+    selection: string,
+    installationId: string,
+  ) {
+    const { row, token } = await this.pending(actor, selection);
+    const userId = actor.userId;
     const [user, installations] = await Promise.all([
       this.github.user(token),
       this.github.installations(token),
     ]);
     const installation = installations.find(
       (item) =>
-        item.app_id === getGitHubConfig().appId &&
-        item.account.login.toLowerCase() === context.accountLogin.toLowerCase(),
+        item.app_id === getGitHubConfig().appId && item.id === installationId,
     );
     if (!installation || installation.suspended_at)
       throw new ApiError(
@@ -142,6 +222,20 @@ export class GitHubService {
       );
     await this.dependencies.db.transaction(async (tx) => {
       await requireOrganizationMember(tx, actor);
+      const [consumed] = await tx
+        .delete(githubSelections)
+        .where(
+          and(
+            eq(githubSelections.hash, row.hash),
+            gt(githubSelections.expiresAt, new Date()),
+          ),
+        )
+        .returning();
+      if (!consumed)
+        throw new ApiError(
+          400,
+          "GitHub authorization expired. Connect GitHub again.",
+        );
       await tx
         .insert(githubInstallations)
         .values({

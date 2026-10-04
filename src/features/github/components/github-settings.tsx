@@ -1,12 +1,24 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useState } from "react";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectPopup,
+  SelectItem,
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { useGitHubConnection, useGitHubSync } from "../client/queries";
+import {
+  useGitHubConnection,
+  useGitHubSync,
+  useGitHubChoices,
+} from "../client/queries";
 
 const outcomes: Record<string, string> = {
   connected: "GitHub connected. Repositories are ready to link to projects.",
+  choose: "GitHub authorized. Choose the account to share with this workspace.",
   restart:
     "Start the connection here to securely link GitHub to this organization.",
   denied: "GitHub authorization was cancelled. You can try again.",
@@ -27,6 +39,17 @@ export function GitHubSettings({
 }) {
   const connection = useGitHubConnection(userId, organizationId);
   const sync = useGitHubSync(userId, organizationId);
+  const choices = useGitHubChoices(userId, organizationId);
+  const [selection, setSelection] = useState<{
+    organizationId: string;
+    id: string;
+  } | null>(null);
+  const selectedId =
+    selection?.organizationId === organizationId ? selection.id : null;
+  const candidates = choices.data?.installations || [];
+  const selected = candidates.find(
+    (item) => item.id === selectedId && !item.disabledReason,
+  );
   if (!organizationId)
     return <p>Create or choose an organization before connecting GitHub.</p>;
   if (connection.isPending)
@@ -37,11 +60,16 @@ export function GitHubSettings({
   return (
     <div className="space-y-6 max-w-2xl">
       <p className="settings-description">
-        Connect GitHub repositories to the organization selected in the sidebar.
-        WorkOS remains your sign-in provider.
+        Optionally share repositories with the selected workspace. Personal
+        GitHub accounts and GitHub organizations are both supported. WorkOS
+        remains your sign-in provider.
       </p>
       {outcome && Object.hasOwn(outcomes, outcome) && (
-        <p role={outcome === "connected" ? "status" : "alert"}>
+        <p
+          role={
+            outcome === "connected" || outcome === "choose" ? "status" : "alert"
+          }
+        >
           {outcomes[outcome]}
         </p>
       )}
@@ -76,32 +104,86 @@ export function GitHubSettings({
             method="post"
             className="space-y-3"
           >
-            <h2 className="font-medium">2. Connect the GitHub account</h2>
+            <h2 className="font-medium">2. Authorize GitHub</h2>
             <input type="hidden" name="organizationId" value={organizationId} />
-            <Label htmlFor="github-account">
-              GitHub username or organization
-            </Label>
-            <Input
-              id="github-account"
-              name="accountLogin"
-              type="text"
-              placeholder="rockydotsystems"
-              required
-              maxLength={39}
-              pattern="[a-zA-Z0-9][a-zA-Z0-9\-]*"
-              autoComplete="off"
-              aria-describedby="github-account-hint"
-            />
-            <p
-              id="github-account-hint"
-              className="text-sm text-muted-foreground"
-            >
-              Use the account where you installed the app. Only repositories
-              your GitHub user can access are imported. Connect again to
-              authorize newly added repositories.
+            <p className="text-sm text-muted-foreground">
+              GitHub will show the accounts where you installed the app. Only
+              repositories your GitHub user can access are imported.
             </p>
-            <Button type="submit">Connect GitHub account</Button>
+            <Button type="submit">
+              {choices.data?.authorized
+                ? "Authorize GitHub again"
+                : "Connect GitHub"}
+            </Button>
           </form>
+          {choices.isPending && (
+            <p role="status">Checking GitHub authorization…</p>
+          )}
+          {choices.error && <p role="alert">{choices.error.message}</p>}
+          {choices.data?.authorized && (
+            <form
+              action="/api/github/installations"
+              method="post"
+              className="space-y-3"
+            >
+              <h2 className="font-medium">3. Choose a GitHub account</h2>
+              <input
+                type="hidden"
+                name="organizationId"
+                value={organizationId}
+              />
+              <input
+                type="hidden"
+                name="installationId"
+                value={selected?.id || ""}
+              />
+              {candidates.length ? (
+                <>
+                  <Label htmlFor="github-installation">GitHub account</Label>
+                  <Select
+                    value={selected?.id || null}
+                    items={candidates.map((item) => ({
+                      value: item.id,
+                      label: item.accountLogin,
+                    }))}
+                    onValueChange={(id) =>
+                      setSelection(id ? { organizationId, id } : null)
+                    }
+                  >
+                    <SelectTrigger id="github-installation">
+                      <SelectValue placeholder="Choose a GitHub account" />
+                    </SelectTrigger>
+                    <SelectPopup>
+                      {candidates.map((item) => (
+                        <SelectItem
+                          key={item.id}
+                          value={item.id}
+                          disabled={Boolean(item.disabledReason)}
+                        >
+                          {item.accountLogin} ·{" "}
+                          {item.accountType === "User"
+                            ? "Personal account"
+                            : "Organization"}
+                          {item.disabledReason
+                            ? ` — ${item.disabledReason}`
+                            : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectPopup>
+                  </Select>
+                  <Button type="submit" disabled={!selected}>
+                    Link selected account
+                  </Button>
+                </>
+              ) : (
+                <p role="status">
+                  No app installations are available. Install the GitHub App on
+                  your personal account or organization, then authorize GitHub
+                  again.
+                </p>
+              )}
+            </form>
+          )}
         </>
       )}
       {sync.error && <p role="alert">{sync.error.message}</p>}

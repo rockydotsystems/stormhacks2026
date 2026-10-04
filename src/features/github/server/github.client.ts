@@ -29,7 +29,10 @@ export const remoteRepositorySchema = z.object({
 const installationSchema = z.object({
   id,
   app_id: id,
-  account: z.object({ login: z.string().min(1) }),
+  account: z.object({
+    login: z.string().min(1),
+    type: z.enum(["User", "Organization"]),
+  }),
   suspended_at: z.string().nullable(),
 });
 export type RemoteRepository = z.infer<typeof remoteRepositorySchema>;

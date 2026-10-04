@@ -1,6 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
-import type { GitHubConnection } from "../contracts";
+import type { GitHubConnection, GitHubChoices } from "../contracts";
+
+export function useGitHubChoices(userId: string, organizationId: string) {
+  return useQuery({
+    queryKey: ["github-choices", userId, organizationId],
+    enabled: Boolean(organizationId),
+    retry: false,
+    queryFn: () =>
+      apiClient<GitHubChoices>(
+        `/api/github/installations?organizationId=${organizationId}`,
+      ),
+  });
+}
 
 export function useGitHubConnection(
   userId: string | undefined,

@@ -64,6 +64,13 @@
       "when": 1791085709235,
       "tag": "0008_graceful_corsair",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791087764675,
+      "tag": "0009_github_installation_selection",
+      "breakpoints": true
     }
   ]
 }
