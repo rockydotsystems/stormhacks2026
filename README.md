@@ -112,6 +112,23 @@ amp orb service start web --command 'pnpm dev --host 0.0.0.0' --port 3000 --port
 
 The homepage works without WorkOS credentials and shows setup instructions. Protected APIs return 503 until auth is configured; there is no development auth bypass. Once configured, anonymous API requests return 401 JSON instead of redirecting to a login page.
 
+## Workspace navigation
+
+The dashboard uses shareable routes: `/` for Overview, `/projects` for Projects,
+`/projects/:id` for a project, `/documents` for Documents, and `/documents/:id`
+for a document. Navigation, breadcrumbs, and recently viewed items use real links;
+refreshing or using browser back/forward restores the selected page from its URL.
+The shared dashboard layout preserves sidebar state during navigation. Creating
+a project or document opens its resource URL.
+
+Resource links use stable IDs and remain scoped to the selected WorkOS
+organization. Missing or inaccessible items show an unavailable state instead of
+falling back to Overview. Switch to the item's organization to open its link;
+switching organizations from the dashboard returns to Overview so an old project
+or document selection does not leak into the new workspace. Account settings keep
+their existing `/settings/:section` routes. `/workspace` and `/starter` are separate
+demo surfaces.
+
 ## WorkOS authentication
 
 Use a WorkOS **staging** environment. Set these in `.dev.vars` for the local Worker runtime (keep `.env.local` for Drizzle's direct database URL):

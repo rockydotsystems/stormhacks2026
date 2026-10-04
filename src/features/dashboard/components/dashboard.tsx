@@ -24,6 +24,7 @@ import {
   SlidersHorizontalIcon,
 } from "@phosphor-icons/react";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { AccountMenu } from "@/features/account/components/account-menu";
 import type { SettingsSection } from "@/features/account/components/account-settings";
@@ -32,7 +33,13 @@ import { useDefaultDocumentSort } from "@/features/account/preferences";
 const AccountSettings = dynamic(
   () => import("@/features/account/components/account-settings"),
 );
-import { useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -89,6 +96,12 @@ import {
 } from "@/features/dashboard/client/queries";
 import type { Person } from "@/features/dashboard/contracts";
 import { useRecentDocuments } from "@/features/dashboard/client/recent-documents";
+import {
+  dashboardPaths,
+  dashboardRoute,
+  documentPath,
+  projectPath,
+} from "@/features/dashboard/routes";
 import { DocumentEditor } from "./document-editor";
 import { apiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -258,6 +271,12 @@ export function Dashboard({
   githubOutcome?: string;
   mcpEndpoint?: string;
 }) {
+  const router = useRouter();
+  const {
+    view,
+    projectId,
+    documentId: selectedId,
+  } = dashboardRoute(usePathname());
   const session = useSession();
   const [defaultSort] = useDefaultDocumentSort(session.data?.user?.id);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -283,7 +302,6 @@ export function Dashboard({
   const [projectCreateOpen, setProjectCreateOpen] = useState(false);
   const [projectRepositories, setProjectRepositories] = useState<string[]>([]);
   const [creationProject, setCreationProject] = useState("");
-  const [view, setView] = useState("Overview");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<string[]>([]);
   const [project, setProject] = useState<string[]>([]);
@@ -293,16 +311,15 @@ export function Dashboard({
     session.data?.user?.id,
     organization,
   );
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [activeProject, setActiveProject] = useState<string | null>(null);
   const [myReviews, setMyReviews] = useState(false);
-  const selected = decisions.find((decision) => decision.id === selectedId);
   const orgDocuments = decisions.filter(
     (decision) => decision.organization === organization,
   );
+  const selected = orgDocuments.find((decision) => decision.id === selectedId);
+  const activeProject = projectId || selected?.project || null;
   const orgProjects = projectRecords.filter(
     (item) => item.organization === organization,
   );
@@ -339,6 +356,12 @@ export function Dashboard({
     userId: session.data?.user?.id,
   });
 
+  const openedDocumentId = selected?.id;
+  const recordOpenedDocument = useEffectEvent(recordRecent);
+  useEffect(() => {
+    if (openedDocumentId) recordOpenedDocument(openedDocumentId);
+  }, [openedDocumentId, organization]);
+
   async function switchOrganization(organizationId: string) {
     setSwitchError(null);
     setSwitching(true);
@@ -351,7 +374,7 @@ export function Dashboard({
         body: JSON.stringify({ organizationId }),
       });
       if (result.redirectUrl) window.location.assign(result.redirectUrl);
-      else window.location.reload();
+      else window.location.assign(settingsSection ? window.location.href : "/");
     } catch (error) {
       setSwitchError((error as Error).message);
       setSwitching(false);
@@ -367,26 +390,21 @@ export function Dashboard({
     setCreationProject(name);
     setCreateOpen(true);
   }
-  function navigate(nextView: string) {
+  function prepareNavigation() {
     scrollRef.current?.scrollTo({ top: 0 });
-    setView(nextView);
-    setActiveProject(null);
     setMyReviews(false);
-    setSelectedId(null);
     setQuery("");
     setStatus([]);
     setProject([]);
     setMobileOpen(false);
   }
   function openProject(name: string) {
-    navigate("Projects");
-    setActiveProject(name);
+    prepareNavigation();
+    router.push(projectPath(name));
   }
   function openDocument(id: string) {
-    scrollRef.current?.scrollTo({ top: 0 });
-    setSelectedId(id);
-    recordRecent(id);
-    setMobileOpen(false);
+    prepareNavigation();
+    router.push(documentPath(id));
   }
   function resetFilters() {
     setMyReviews(false);
@@ -407,7 +425,6 @@ export function Dashboard({
         description: String(fields.get("description")),
       });
       setCreateOpen(false);
-      openProject(creationProject);
       openDocument(doc.id);
     } catch (error) {
       setFormError((error as Error).message);
@@ -460,7 +477,6 @@ export function Dashboard({
       });
       await switchOrganization(result.id);
       setOrganizationCreateOpen(false);
-      navigate("Overview");
     } catch (error) {
       setFormError((error as Error).message);
     }
@@ -563,10 +579,22 @@ export function Dashboard({
         <>
           <nav aria-label="Workspace" className="sidebar-navigation">
             {[
-              { name: "Overview", icon: HouseIcon },
-              { name: "Projects", icon: FolderIcon },
-              { name: "Documents", icon: FileTextIcon },
-            ].map(({ name, icon: Icon }) => (
+              {
+                name: "Overview",
+                icon: HouseIcon,
+                href: dashboardPaths.Overview,
+              },
+              {
+                name: "Projects",
+                icon: FolderIcon,
+                href: dashboardPaths.Projects,
+              },
+              {
+                name: "Documents",
+                icon: FileTextIcon,
+                href: dashboardPaths.Documents,
+              },
+            ].map(({ name, icon: Icon, href }) => (
               <Button
                 key={name}
                 variant="ghost"
@@ -574,11 +602,11 @@ export function Dashboard({
                   "sidebar-item",
                   view === name && "sidebar-item-active",
                 )}
-                onClick={() => navigate(name)}
+                render={<Link href={href} onNavigate={prepareNavigation} />}
                 aria-label={name}
                 title={name}
                 aria-current={
-                  view === name && !selected && !activeProject
+                  view === name && !selectedId && !projectId
                     ? "page"
                     : undefined
                 }
@@ -602,7 +630,15 @@ export function Dashboard({
                     "sidebar-item",
                     activeProject === name && "sidebar-item-active",
                   )}
-                  onClick={() => openProject(name)}
+                  render={
+                    <Link
+                      href={projectPath(name)}
+                      onNavigate={prepareNavigation}
+                    />
+                  }
+                  aria-current={
+                    activeProject === name && !selectedId ? "page" : undefined
+                  }
                   aria-label={projectName(name)}
                   title={projectName(name)}
                 >
@@ -633,7 +669,15 @@ export function Dashboard({
                       "sidebar-item",
                       selectedId === decision.id && "sidebar-item-active",
                     )}
-                    onClick={() => openDocument(decision.id)}
+                    render={
+                      <Link
+                        href={documentPath(decision.id)}
+                        onNavigate={prepareNavigation}
+                      />
+                    }
+                    aria-current={
+                      selectedId === decision.id ? "page" : undefined
+                    }
                     title={decision.title}
                     aria-label={decision.title}
                   >
@@ -728,9 +772,12 @@ export function Dashboard({
             <nav aria-label="Breadcrumb">
               <ol className="dashboard-breadcrumb">
                 <li>
-                  <button type="button" onClick={() => navigate("Overview")}>
+                  <Link
+                    href={dashboardPaths.Overview}
+                    onNavigate={prepareNavigation}
+                  >
                     Workspace
-                  </button>
+                  </Link>
                 </li>
                 {activeProject || selected ? (
                   <>
@@ -738,24 +785,24 @@ export function Dashboard({
                       /
                     </li>
                     <li>
-                      <button
-                        type="button"
-                        onClick={() => navigate("Projects")}
+                      <Link
+                        href={dashboardPaths.Projects}
+                        onNavigate={prepareNavigation}
                       >
                         Projects
-                      </button>
+                      </Link>
                     </li>
                     <li className="breadcrumb-divider" aria-hidden="true">
                       /
                     </li>
                     <li>
                       {selected ? (
-                        <button
-                          type="button"
-                          onClick={() => openProject(selected.project)}
+                        <Link
+                          href={projectPath(selected.project)}
+                          onNavigate={prepareNavigation}
                         >
                           {projectName(selected.project)}
-                        </button>
+                        </Link>
                       ) : (
                         <span
                           className="breadcrumb-current"
@@ -892,6 +939,27 @@ export function Dashboard({
                 New organization
               </Button>
             </div>
+          ) : (selectedId && !selected) || (projectId && !currentProject) ? (
+            <div className="documents-empty">
+              <h1>{selectedId ? "Document not found" : "Project not found"}</h1>
+              <p>
+                This item is unavailable in the current organization. Check the
+                link or switch organizations.
+              </p>
+              <Button
+                render={
+                  <Link
+                    href={
+                      selectedId
+                        ? dashboardPaths.Documents
+                        : dashboardPaths.Projects
+                    }
+                  />
+                }
+              >
+                {selectedId ? "Browse documents" : "Browse projects"}
+              </Button>
+            </div>
           ) : selected ? (
             <DocumentEditor
               key={`${organization}:${selected.id}`}
@@ -985,7 +1053,12 @@ export function Dashboard({
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => navigate("Projects")}
+                          render={
+                            <Link
+                              href={dashboardPaths.Projects}
+                              onNavigate={prepareNavigation}
+                            />
+                          }
                         >
                           View all
                           <ArrowUpRightIcon aria-hidden="true" />
@@ -995,15 +1068,14 @@ export function Dashboard({
                     <div className="project-grid">
                       {(view === "Overview" ? frequentProjects : projects).map(
                         (name) => (
-                          <button
+                          <Link
                             key={name}
-                            type="button"
+                            href={projectPath(name)}
                             className={cn(
                               "project-card",
                               activeProject === name && "project-selected",
                             )}
-
-                            onClick={() => openProject(name)}
+                            onNavigate={prepareNavigation}
                           >
                             <div
                               className={cn(
@@ -1046,7 +1118,7 @@ export function Dashboard({
                               </span>
                               <ArrowUpRightIcon aria-hidden="true" />
                             </div>
-                          </button>
+                          </Link>
                         ),
                       )}
                     </div>
@@ -1071,7 +1143,12 @@ export function Dashboard({
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => navigate("Documents")}
+                          render={
+                            <Link
+                              href={dashboardPaths.Documents}
+                              onNavigate={prepareNavigation}
+                            />
+                          }
                         >
                           View all documents
                           <ArrowUpRightIcon aria-hidden="true" />
@@ -1142,10 +1219,10 @@ export function Dashboard({
                       {(view === "Overview" ? recentDocuments : filtered).map(
                         (decision) => (
                           <div className="document-row" key={decision.id}>
-                            <button
-                              type="button"
+                            <Link
+                              href={documentPath(decision.id)}
                               className="document-title-cell"
-                              onClick={() => openDocument(decision.id)}
+                              onNavigate={prepareNavigation}
                             >
                               <FileTextIcon aria-hidden="true" />
                               <span>
@@ -1154,7 +1231,7 @@ export function Dashboard({
                                   {decision.description || "No description yet"}
                                 </small>
                               </span>
-                            </button>
+                            </Link>
                             <div className="document-status-cell">
                               <Status status={decision.status} />
                             </div>
@@ -1219,10 +1296,18 @@ export function Dashboard({
                           </p>
                           <Button
                             variant="outline"
+                            render={
+                              view === "Overview" && orgDocuments.length ? (
+                                <Link
+                                  href={dashboardPaths.Documents}
+                                  onNavigate={prepareNavigation}
+                                />
+                              ) : undefined
+                            }
                             onClick={
                               view === "Overview"
                                 ? orgDocuments.length
-                                  ? () => navigate("Documents")
+                                  ? undefined
                                   : startDocument
                                 : projectIsEmpty
                                   ? startDocument

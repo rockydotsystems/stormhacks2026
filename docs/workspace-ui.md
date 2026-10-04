@@ -37,7 +37,14 @@ latter is a deployment dry run, not publication.
 `/` opens the WhyDidWeChooseThis.Tech dashboard. The original conversation and
 document workspace is at `/workspace`, and authentication remains at `/starter`.
 
-The three primary destinations are Overview, Projects, and Documents. Overview
+The three primary destinations are Overview (`/`), Projects (`/projects`), and
+Documents (`/documents`). Projects open at `/projects/:id` and documents at
+`/documents/:id`, using stable IDs rather than names. Real navigation links support
+copied URLs, new tabs, refreshes, and browser back/forward. The shared dashboard
+layout preserves sidebar state between these routes. Missing or inaccessible IDs
+show an unavailable state scoped to the selected organization.
+
+Overview
 shows commonly visited projects and recently viewed documents. Projects group
 related decisions and associated repositories; Documents searches across all
 projects. Project shortcuts and recent documents appear in the sidebar.
@@ -103,7 +110,8 @@ user and organization.
 
 The organization switcher lists active WorkOS memberships. Creating an organization
 creates it in WorkOS and adds the authenticated creator with the WorkOS default role.
-Switching refreshes the AuthKit session and reloads the current page. The retained
+Switching refreshes the AuthKit session and returns the dashboard to Overview;
+account settings reload in place. The retained
 team management implementation uses the same selected organization as project and document data. SSO/MFA
 requirements return the user to hosted sign-in. All data operations verify active
 WorkOS membership, so revoked or pending memberships cannot use stale local grants.
@@ -123,4 +131,9 @@ hidden; direct visits to `/settings/team` redirect to `/settings/profile`. Confi
 Verify project creation with multiple repositories, its empty state, creating a
 document with inherited repositories, combined document filters, and organization
 isolation. At narrow widths, check navigation, dialog dismissal, and chip wrapping.
+Verify distinct URLs for the three primary destinations, project and document
+deep links after reload, browser back/forward, breadcrumbs, recently viewed links,
+new-tab navigation, and creation destinations. Check that sidebar collapse survives
+navigation and that unavailable IDs do not silently show Overview. Switching
+organizations from a resource page should return to `/`.
 Run `pnpm check` and `pnpm deploy:check` before publication.
