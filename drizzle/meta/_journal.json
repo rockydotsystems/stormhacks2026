@@ -57,6 +57,13 @@
       "when": 1791085641597,
       "tag": "0007_workos_organizations",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791085709235,
+      "tag": "0008_graceful_corsair",
+      "breakpoints": true
     }
   ]
 }

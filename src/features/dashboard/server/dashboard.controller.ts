@@ -101,7 +101,7 @@ export class DashboardController {
             id: docs.id,
             projectId: docs.projectId,
             title: sql<string>`coalesce(${docChanges.title}, 'Untitled document')`,
-            description: sql<string>`coalesce(left(${docChanges.content}, 300), '')`,
+            description: sql<string>`coalesce(nullif(left(${docChanges.content}, 300), ''), ${docs.description})`,
             changeId: sql<string>`${docChanges.id}::text`,
             updated:
               sql`coalesce(${docChanges.createdAt}, ${docs.createdAt})`.mapWith(
@@ -203,7 +203,13 @@ export class DashboardController {
     if (input.action === "connectRepository")
       return json(await projectsService.connectRepository(actor, input), 201);
     if (input.action === "createDocument")
-      return json(await docsService.create(actor, input.projectId, input), 201);
+      return json(
+        await docsService.create(actor, input.projectId, {
+          ...input,
+          content: "",
+        }),
+        201,
+      );
     // Project creation and all repository links either succeed together or roll back.
     const project = await db.transaction(async (tx) => {
       const service = new ProjectsService({ db: tx });

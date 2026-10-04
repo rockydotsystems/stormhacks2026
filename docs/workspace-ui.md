@@ -63,14 +63,43 @@ Dashboard records come from authenticated `/api/dashboard` requests. Organizatio
 projects, descriptions, repository associations, and documents persist in Postgres.
 Repository entries are explicit `owner/name` associations, not GitHub installation
 access or fetched repository contents. Project creation and repository links share
-one transaction. Apply migrations through `0007_workos_organizations.sql` before running this UI.
+one transaction. Apply migrations through `0008_graceful_corsair.sql` before running this UI.
 
-Document details load `/api/documents/[id]`. Saving appends a complete snapshot;
+Organizations without projects see a primary Create your first project action in
+Overview and Projects. Projects group one or more repositories around a feature
+or initiative. Once a project exists, users create a named document with an
+optional description and inherited repository context. The description is stored
+as metadata, separately from the initially empty document body.
+
+A new document opens into a full-width conversation. The agent asks about the
+named plan immediately. The document canvas appears beside the conversation only
+once an agent proposal has been accepted. Documents have no direct editing mode
+or manual save action; accepting a proposal persists a snapshot immediately.
+Failed updates leave the proposal available to retry. History and review actions
+live below the document title, with breadcrumbs providing navigation. At narrow
+widths, Conversation and Document buttons switch panels and View document opens
+an accepted addition. The composer stays available and panels scroll independently.
+
+Request review is available once the document has content. Users can enter multiple
+reviewer emails and manage the local selection. This is a prototype: no invitations,
+notifications, shared conversations, or approvals are sent or persisted. The review
+dialog says so. Binding is offered after selecting reviewers and still requires
+explicit confirmation; previously bound documents can be amended and rebound.
+The preview does not assert that selected reviewers have agreed.
+
+The conversation uses deterministic follow-up questions about goals, constraints,
+and risks. Proposals organize the user's messages into draft sections. Chat and
+reviewer selections reset when leaving the document. No model calls, durable
+conversation, collaborative proposals, or readiness review are implemented here.
+The original `/workspace` demo remains available as a reference.
+
+Document details load `/api/documents/[id]`. Acceptance appends a complete snapshot;
 binding publishes the saved snapshot as an immutable version. Published versions
 remain readable after new drafts. The list shows Bound only when its latest snapshot
-is the latest published version; otherwise it shows Draft. Reviewers are not invented.
-Descriptions are excerpts of the latest document body. Recently viewed document IDs
-are stored on the device, scoped by authenticated user and organization.
+is the latest published version; otherwise it shows Draft. List descriptions use a
+body excerpt once drafted, and fall back to the initial metadata description.
+Recently viewed document IDs are stored on the device, scoped by authenticated
+user and organization.
 
 The organization switcher lists active WorkOS memberships. Creating an organization
 creates it in WorkOS and adds the authenticated creator with the WorkOS default role.
@@ -81,7 +110,7 @@ WorkOS membership, so revoked or pending memberships cannot use stale local gran
 
 Postgres mirrors WorkOS IDs/names for foreign keys; it does not provision independent
 organizations or memberships. The legacy membership table remains for historical
-data only. Migration 0004 preserves existing UUID-owned data and immutable history.
+data and planning foreign keys only. Migration 0007 preserves existing UUID-owned data and immutable history.
 Legacy organizations need a separately reviewed mapping to a WorkOS organization;
 they are never adopted by matching names or automatically granted to WorkOS users.
 The local development database had no legacy organization records at migration time.

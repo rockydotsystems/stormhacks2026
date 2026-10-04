@@ -23,6 +23,7 @@ export const docs = pgTable(
       .notNull()
       .references(() => organizations.id),
     projectId: uuid("project_id").notNull(),
+    description: text("description").notNull().default(""),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),

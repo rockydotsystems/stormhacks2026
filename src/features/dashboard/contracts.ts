@@ -40,7 +40,7 @@ export const dashboardActionSchema = z.discriminatedUnion("action", [
     organizationId,
     projectId: z.uuid(),
     title: z.string().trim().min(1).max(180),
-    content: z.string().max(1000),
+    description: z.string().trim().max(1000).default(""),
   }),
 ]);
 export type DashboardAction = z.input<typeof dashboardActionSchema>;

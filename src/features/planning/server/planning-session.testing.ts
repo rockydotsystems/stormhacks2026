@@ -75,6 +75,7 @@ export class FakeDocs implements DocsPort {
       organizationId: actor.organizationId,
       createdAt: new Date().toISOString(),
       projectId,
+      description: "",
     };
   }
 

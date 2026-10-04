@@ -108,7 +108,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             organizationId,
             projectId: project.id,
             title: "Use Postgres",
-            content: "Initial context",
+            description: "Initial context",
             userId: "forged-owner",
           }),
         )
@@ -136,6 +136,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           doc.id,
         );
       let detail = (await (await read()).json()) as DocumentData;
+      expect(detail.changes[0].content).toBe("");
       await controller.updateDocument(
         request({
           action: "publish",
@@ -159,7 +160,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       expect(
         detail.changes.map((row: { immutable: boolean }) => row.immutable),
       ).toEqual([true, false]);
-      expect(detail.changes[0].content).toBe("Initial context");
+      expect(detail.changes[0].content).toBe("");
       expect(detail.versions[0].label).toBe("v1");
       expect(
         ((await (await list(organizationId)).json()) as DashboardData)
@@ -212,7 +213,6 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             organizationId,
             projectId: project.id,
             title: "Temporary draft",
-            content: "",
           }),
         )
       ).json()) as { id: string };

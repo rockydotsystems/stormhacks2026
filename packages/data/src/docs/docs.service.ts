@@ -45,13 +45,21 @@ export class DocsService {
     return doc;
   }
 
-  async create(actor: OrganizationActor, projectId: string, input: Snapshot) {
+  async create(
+    actor: OrganizationActor,
+    projectId: string,
+    input: Snapshot & { description?: string },
+  ) {
     const snapshot = snapshotSchema.parse(input);
     return this.dependencies.db.transaction(async (tx) => {
       await requireProject(tx, actor, projectId, true);
       const [doc] = await tx
         .insert(docs)
-        .values({ organizationId: actor.organizationId, projectId })
+        .values({
+          organizationId: actor.organizationId,
+          projectId,
+          description: input.description || "",
+        })
         .returning();
       await tx
         .insert(docChanges)

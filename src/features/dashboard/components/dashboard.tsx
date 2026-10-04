@@ -398,7 +398,7 @@ export function Dashboard({
         organizationId: organization,
         projectId: creationProject,
         title: String(fields.get("title")),
-        content: String(fields.get("description")),
+        description: String(fields.get("description")),
       });
       setCreateOpen(false);
       openProject(creationProject);
@@ -416,6 +416,10 @@ export function Dashboard({
     event.preventDefault();
     setFormError(null);
     const fields = new FormData(event.currentTarget);
+    if (!projectRepositories.length) {
+      setFormError("Choose at least one repository for this project.");
+      return;
+    }
     try {
       const result = await mutation.mutateAsync({
         action: "createProject",
@@ -775,7 +779,13 @@ export function Dashboard({
             </nav>
           )}
         </header>
-        <div className="dashboard-scroll" ref={scrollRef}>
+        <div
+          className={cn(
+            "dashboard-scroll",
+            selected && !settingsSection && "dashboard-document-workspace",
+          )}
+          ref={scrollRef}
+        >
           {settingsSection ? (
             <AccountSettings
               section={settingsSection}
@@ -833,90 +843,48 @@ export function Dashboard({
               </Button>
             </div>
           ) : selected ? (
-            <div className="decision-detail">
-              <Button
-                variant="ghost"
-                className="back-button"
-                onClick={() => setSelectedId(null)}
-              >
-                <ArrowLeftIcon aria-hidden="true" />
-                Back to{" "}
-                {activeProject
-                  ? projectName(activeProject)
-                  : view.toLowerCase()}
-              </Button>
-              <div className="detail-meta">
-                <span>{projectName(selected.project)}</span>
-                <Status status={selected.status} />
-              </div>
-              <h1>{selected.title}</h1>
-              <p className="detail-description">
-                {selected.description ||
-                  "Start a planning session to develop this decision with your team."}
-              </p>
-              <dl className="detail-properties">
-                <div>
-                  <dt>Created by</dt>
-                  <dd>
-                    <PersonAvatar person={people[selected.creator]} />
-                    {people[selected.creator].name}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Reviewers</dt>
-                  <dd>
-                    {selected.reviewers.length
-                      ? selected.reviewers.map((id) => (
-                          <PersonAvatar key={id} person={people[id]} />
-                        ))
-                      : "No reviewers requested"}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Status</dt>
-                  <dd>
-                    {selected.status === "Bound"
-                      ? "Immutable agreement"
-                      : "Mutable draft"}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Repositories</dt>
-                  <dd className="repository-details">
-                    {selectedRepositories.length
-                      ? selectedRepositories.map((repository) => (
-                          <span key={repository}>{repository}</span>
-                        ))
-                      : "No repositories linked"}
-                  </dd>
-                </div>
-              </dl>
-              <DocumentEditor
-                key={`${organization}:${selected.id}`}
-                id={selected.id}
-                organizationId={organization}
-                userId={session.data!.user!.id}
-              />
-            </div>
+            <DocumentEditor
+              key={`${organization}:${selected.id}`}
+              id={selected.id}
+              organizationId={organization}
+              userId={session.data!.user!.id}
+              creator={people[selected.creator]}
+              repositories={selectedRepositories}
+            />
           ) : (
             <div className="dashboard-content">
               <div className="dashboard-heading">
                 <h1>{activeProject ? projectName(activeProject) : view}</h1>
-                <Button
-                  disabled={mutation.isPending}
-                  onClick={
-                    view === "Projects" && !activeProject
-                      ? startProject
-                      : startDocument
-                  }
-                  className="new-document-button"
-                >
-                  <PlusIcon aria-hidden="true" />
-                  {view === "Projects" && !activeProject
-                    ? "New project"
-                    : "New document"}
-                </Button>
+                {projects.length > 0 && (
+                  <Button
+                    disabled={mutation.isPending}
+                    onClick={
+                      view === "Projects" && !activeProject
+                        ? startProject
+                        : startDocument
+                    }
+                    className="new-document-button"
+                  >
+                    <PlusIcon aria-hidden="true" />
+                    {view === "Projects" && !activeProject
+                      ? "New project"
+                      : "New document"}
+                  </Button>
+                )}
               </div>
+              {!projects.length && (
+                <div className="first-project-empty">
+                  <FolderIcon aria-hidden="true" />
+                  <h2>Create your first project</h2>
+                  <p>
+                    Group the repositories that belong to one feature or
+                    initiative. Then plan the work together.
+                  </p>
+                  <Button onClick={startProject}>
+                    <PlusIcon aria-hidden="true" /> Create your first project
+                  </Button>
+                </div>
+              )}
               {currentProject && (
                 <div className="project-context">
                   {currentProject.description && (
@@ -949,287 +917,303 @@ export function Dashboard({
                   </div>
                 </div>
               )}
-              {(view === "Overview" ||
-                (view === "Projects" && !activeProject)) && (
-                <section
-                  className="projects-section"
-                  aria-labelledby="projects-heading"
-                >
-                  <div className="overview-section-heading">
-                    <h2
-                      id="projects-heading"
-                      className={view === "Overview" ? "" : "sr-only"}
-                    >
-                      Projects
-                    </h2>
-                    {view === "Overview" && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => navigate("Projects")}
+              {projects.length > 0 &&
+                (view === "Overview" ||
+                  (view === "Projects" && !activeProject)) && (
+                  <section
+                    className="projects-section"
+                    aria-labelledby="projects-heading"
+                  >
+                    <div className="overview-section-heading">
+                      <h2
+                        id="projects-heading"
+                        className={view === "Overview" ? "" : "sr-only"}
                       >
-                        View all
-                        <ArrowUpRightIcon aria-hidden="true" />
-                      </Button>
-                    )}
-                  </div>
-                  <div className="project-grid">
-                    {(view === "Overview" ? frequentProjects : projects).map(
-                      (name) => (
-                        <button
-                          key={name}
-                          type="button"
-                          className={cn(
-                            "project-card",
-                            activeProject === name && "project-selected",
-                          )}
-
-                          onClick={() => openProject(name)}
-                        >
-                          <div
-                            className={cn(
-                              "folder-art",
-                              `folder-tone-${projects.indexOf(name) % 3}`,
-                            )}
-                            aria-hidden="true"
-                          >
-                            <div className="folder-back" />
-                            <div className="folder-paper paper-back">
-                              <i />
-                              <i />
-                              <i />
-                            </div>
-                            <div className="folder-paper paper-front">
-                              <i />
-                              <i />
-                              <i />
-                            </div>
-                            <div className="folder-flap">
-                              <span className="folder-seam" />
-                            </div>
-                          </div>
-                          <div className="project-card-label">
-                            <span>
-                              <strong>{projectName(name)}</strong>
-                              <small className="project-description">
-                                {
-                                  orgProjects.find((item) => item.id === name)
-                                    ?.description
-                                }
-                              </small>
-                              <small className="project-document-count">
-                                {documentCount(
-                                  orgDocuments.filter(
-                                    (decision) => decision.project === name,
-                                  ).length,
-                                )}
-                              </small>
-                            </span>
-                            <ArrowUpRightIcon aria-hidden="true" />
-                          </div>
-                        </button>
-                      ),
-                    )}
-                  </div>
-                </section>
-              )}
-              {(view === "Overview" ||
-                view === "Documents" ||
-                activeProject) && (
-                <section
-                  className="documents-section"
-                  aria-labelledby="documents-heading"
-                >
-                  <div className="overview-section-heading">
-                    <h2
-                      id="documents-heading"
-                      className={view === "Overview" ? "" : "sr-only"}
-                    >
-                      {view === "Overview" ? "Recently viewed" : "Documents"}
-                    </h2>
-                    {view === "Overview" && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => navigate("Documents")}
-                      >
-                        View all documents
-                        <ArrowUpRightIcon aria-hidden="true" />
-                      </Button>
-                    )}
-                  </div>
-                  {view !== "Overview" && (
-                    <div className="document-toolbar">
-                      <div className="document-search">
-                        <MagnifyingGlassIcon aria-hidden="true" />
-                        <Input
-                          type="search"
-                          aria-label="Search documents"
-                          placeholder="Search documents…"
-                          value={query}
-                          onChange={(event) => setQuery(event.target.value)}
-                        />
-                      </div>
-                      <div className="document-filters">
+                        Projects
+                      </h2>
+                      {view === "Overview" && (
                         <Button
-                          variant={myReviews ? "secondary" : "outline"}
-                          className="filter-button"
-                          disabled
-                          title="Review requests are not available yet"
-                          aria-pressed={myReviews}
-                          onClick={() => setMyReviews(!myReviews)}
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => navigate("Projects")}
                         >
-                          <CheckCircleIcon aria-hidden="true" />
-                          My reviews
+                          View all
+                          <ArrowUpRightIcon aria-hidden="true" />
                         </Button>
-                        <MultiFilter
-                          compact
-                          label="Status"
-                          values={status}
-                          options={statuses}
-                          onChange={setStatus}
-                        />
-                        {!activeProject && (
+                      )}
+                    </div>
+                    <div className="project-grid">
+                      {(view === "Overview" ? frequentProjects : projects).map(
+                        (name) => (
+                          <button
+                            key={name}
+                            type="button"
+                            className={cn(
+                              "project-card",
+                              activeProject === name && "project-selected",
+                            )}
+
+                            onClick={() => openProject(name)}
+                          >
+                            <div
+                              className={cn(
+                                "folder-art",
+                                `folder-tone-${projects.indexOf(name) % 3}`,
+                              )}
+                              aria-hidden="true"
+                            >
+                              <div className="folder-back" />
+                              <div className="folder-paper paper-back">
+                                <i />
+                                <i />
+                                <i />
+                              </div>
+                              <div className="folder-paper paper-front">
+                                <i />
+                                <i />
+                                <i />
+                              </div>
+                              <div className="folder-flap">
+                                <span className="folder-seam" />
+                              </div>
+                            </div>
+                            <div className="project-card-label">
+                              <span>
+                                <strong>{projectName(name)}</strong>
+                                <small className="project-description">
+                                  {
+                                    orgProjects.find((item) => item.id === name)
+                                      ?.description
+                                  }
+                                </small>
+                                <small className="project-document-count">
+                                  {documentCount(
+                                    orgDocuments.filter(
+                                      (decision) => decision.project === name,
+                                    ).length,
+                                  )}
+                                </small>
+                              </span>
+                              <ArrowUpRightIcon aria-hidden="true" />
+                            </div>
+                          </button>
+                        ),
+                      )}
+                    </div>
+                  </section>
+                )}
+              {projects.length > 0 &&
+                (view === "Overview" ||
+                  view === "Documents" ||
+                  activeProject) && (
+                  <section
+                    className="documents-section"
+                    aria-labelledby="documents-heading"
+                  >
+                    <div className="overview-section-heading">
+                      <h2
+                        id="documents-heading"
+                        className={view === "Overview" ? "" : "sr-only"}
+                      >
+                        {view === "Overview" ? "Recently viewed" : "Documents"}
+                      </h2>
+                      {view === "Overview" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => navigate("Documents")}
+                        >
+                          View all documents
+                          <ArrowUpRightIcon aria-hidden="true" />
+                        </Button>
+                      )}
+                    </div>
+                    {view !== "Overview" && (
+                      <div className="document-toolbar">
+                        <div className="document-search">
+                          <MagnifyingGlassIcon aria-hidden="true" />
+                          <Input
+                            type="search"
+                            aria-label="Search documents"
+                            placeholder="Search documents…"
+                            value={query}
+                            onChange={(event) => setQuery(event.target.value)}
+                          />
+                        </div>
+                        <div className="document-filters">
+                          <Button
+                            variant={myReviews ? "secondary" : "outline"}
+                            className="filter-button"
+                            disabled
+                            title="Review requests are not available yet"
+                            aria-pressed={myReviews}
+                            onClick={() => setMyReviews(!myReviews)}
+                          >
+                            <CheckCircleIcon aria-hidden="true" />
+                            My reviews
+                          </Button>
                           <MultiFilter
                             compact
-                            label="Project"
-                            values={project}
-                            options={projects}
-                            labelFor={(id) => projectName(id)}
-                            onChange={setProject}
+                            label="Status"
+                            values={status}
+                            options={statuses}
+                            onChange={setStatus}
                           />
-                        )}
-                        <FilterMenu
-                          label="Sort"
-                          value={sort}
-                          options={["Last updated", "Name"]}
-                          onChange={setSort}
-                        />
-                      </div>
-                    </div>
-                  )}
-                  <div className="document-list">
-                    <div className="document-table-heading" aria-hidden="true">
-                      <span>Document</span>
-                      <span>Status</span>
-                      <span>Created by</span>
-                      <span>Reviewers</span>
-                      <span>Updated</span>
-                    </div>
-                    {(view === "Overview" ? recentDocuments : filtered).map(
-                      (decision) => (
-                        <div className="document-row" key={decision.id}>
-                          <button
-                            type="button"
-                            className="document-title-cell"
-                            onClick={() => openDocument(decision.id)}
-                          >
-                            <FileTextIcon aria-hidden="true" />
-                            <span>
-                              <strong>{decision.title}</strong>
-                              <small>
-                                {decision.description || "No description yet"}
-                              </small>
-                            </span>
-                          </button>
-                          <div className="document-status-cell">
-                            <Status status={decision.status} />
-                          </div>
-                          <div className="document-creator-cell">
-                            <PersonAvatar person={people[decision.creator]} />
-                            <span>
-                              {people[decision.creator].name.split(" ")[0]}
-                            </span>
-                          </div>
-                          <div
-                            className="document-reviewers-cell"
-                            aria-label={`Requested reviewers: ${decision.reviewers.map((id) => people[id].name).join(", ") || "None"}`}
-                          >
-                            {decision.reviewers.length ? (
-                              <div className="reviewer-stack">
-                                {decision.reviewers.map((id) => (
-                                  <PersonAvatar key={id} person={people[id]} />
-                                ))}
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </div>
-                          <time
-                            className="document-updated-cell"
-                            dateTime={decision.updated}
-                          >
-                            {new Intl.DateTimeFormat("en", {
-                              month: "short",
-                              day: "numeric",
-                              timeZone: "America/Edmonton",
-                            }).format(new Date(decision.updated))}
-                          </time>
+                          {!activeProject && (
+                            <MultiFilter
+                              compact
+                              label="Project"
+                              values={project}
+                              options={projects}
+                              labelFor={(id) => projectName(id)}
+                              onChange={setProject}
+                            />
+                          )}
+                          <FilterMenu
+                            label="Sort"
+                            value={sort}
+                            options={["Last updated", "Name"]}
+                            onChange={setSort}
+                          />
                         </div>
-                      ),
-                    )}
-                    {(view === "Overview"
-                      ? recentDocuments.length
-                      : filtered.length) === 0 && (
-                      <div className="documents-empty">
-                        <FileTextIcon aria-hidden="true" />
-                        <h3>
-                          {view === "Overview"
-                            ? "No recently viewed documents"
-                            : projectIsEmpty
-                              ? "No documents yet"
-                              : "No matching documents"}
-                        </h3>
-                        <p>
-                          {view === "Overview"
-                            ? "Open a document to pick up your work here."
-                            : projectIsEmpty
-                              ? "Create the first decision for this project."
-                              : "Try another search or clear the filters."}
-                        </p>
-                        <Button
-                          variant="outline"
-                          onClick={
-                            view === "Overview"
-                              ? () => navigate("Documents")
-                              : projectIsEmpty
-                                ? startDocument
-                                : resetFilters
-                          }
-                        >
-                          {view === "Overview"
-                            ? "Browse documents"
-                            : projectIsEmpty
-                              ? "New document"
-                              : "Clear search & filters"}
-                        </Button>
                       </div>
                     )}
-                  </div>
-                  <div className="document-list-footer">
-                    <span role="status">
-                      {view === "Overview" ? (
-                        `${recentDocuments.length} recently viewed documents`
-                      ) : (
-                        <>
-                          {filtered.length} of{" "}
-                          {activeProject
-                            ? orgDocuments.filter(
-                                (decision) =>
-                                  decision.project === activeProject,
-                              ).length
-                            : orgDocuments.length}{" "}
-                          documents
-                        </>
+                    <div className="document-list">
+                      <div
+                        className="document-table-heading"
+                        aria-hidden="true"
+                      >
+                        <span>Document</span>
+                        <span>Status</span>
+                        <span>Created by</span>
+                        <span>Reviewers</span>
+                        <span>Updated</span>
+                      </div>
+                      {(view === "Overview" ? recentDocuments : filtered).map(
+                        (decision) => (
+                          <div className="document-row" key={decision.id}>
+                            <button
+                              type="button"
+                              className="document-title-cell"
+                              onClick={() => openDocument(decision.id)}
+                            >
+                              <FileTextIcon aria-hidden="true" />
+                              <span>
+                                <strong>{decision.title}</strong>
+                                <small>
+                                  {decision.description || "No description yet"}
+                                </small>
+                              </span>
+                            </button>
+                            <div className="document-status-cell">
+                              <Status status={decision.status} />
+                            </div>
+                            <div className="document-creator-cell">
+                              <PersonAvatar person={people[decision.creator]} />
+                              <span>
+                                {people[decision.creator].name.split(" ")[0]}
+                              </span>
+                            </div>
+                            <div
+                              className="document-reviewers-cell"
+                              aria-label={`Requested reviewers: ${decision.reviewers.map((id) => people[id].name).join(", ") || "None"}`}
+                            >
+                              {decision.reviewers.length ? (
+                                <div className="reviewer-stack">
+                                  {decision.reviewers.map((id) => (
+                                    <PersonAvatar
+                                      key={id}
+                                      person={people[id]}
+                                    />
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </div>
+                            <time
+                              className="document-updated-cell"
+                              dateTime={decision.updated}
+                            >
+                              {new Intl.DateTimeFormat("en", {
+                                month: "short",
+                                day: "numeric",
+                                timeZone: "America/Edmonton",
+                              }).format(new Date(decision.updated))}
+                            </time>
+                          </div>
+                        ),
                       )}
-                    </span>
-                    <span>
-                      <UsersIcon aria-hidden="true" />
-                      Shared with your team
-                    </span>
-                  </div>
-                </section>
-              )}
+                      {(view === "Overview"
+                        ? recentDocuments.length
+                        : filtered.length) === 0 && (
+                        <div className="documents-empty">
+                          <FileTextIcon aria-hidden="true" />
+                          <h3>
+                            {view === "Overview"
+                              ? orgDocuments.length
+                                ? "No recently viewed documents"
+                                : "Create your first document"
+                              : projectIsEmpty
+                                ? "No documents yet"
+                                : "No matching documents"}
+                          </h3>
+                          <p>
+                            {view === "Overview"
+                              ? orgDocuments.length
+                                ? "Open a document to pick up your work here."
+                                : "Name your plan, choose a project, and talk it through."
+                              : projectIsEmpty
+                                ? "Create the first decision for this project."
+                                : "Try another search or clear the filters."}
+                          </p>
+                          <Button
+                            variant="outline"
+                            onClick={
+                              view === "Overview"
+                                ? orgDocuments.length
+                                  ? () => navigate("Documents")
+                                  : startDocument
+                                : projectIsEmpty
+                                  ? startDocument
+                                  : resetFilters
+                            }
+                          >
+                            {view === "Overview"
+                              ? orgDocuments.length
+                                ? "Browse documents"
+                                : "Create document"
+                              : projectIsEmpty
+                                ? "New document"
+                                : "Clear search & filters"}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                    <div className="document-list-footer">
+                      <span role="status">
+                        {view === "Overview" ? (
+                          `${recentDocuments.length} recently viewed documents`
+                        ) : (
+                          <>
+                            {filtered.length} of{" "}
+                            {activeProject
+                              ? orgDocuments.filter(
+                                  (decision) =>
+                                    decision.project === activeProject,
+                                ).length
+                              : orgDocuments.length}{" "}
+                            documents
+                          </>
+                        )}
+                      </span>
+                      <span>
+                        <UsersIcon aria-hidden="true" />
+                        Shared with your team
+                      </span>
+                    </div>
+                  </section>
+                )}
             </div>
           )}
         </div>
@@ -1282,7 +1266,8 @@ export function Dashboard({
           <DialogHeader>
             <DialogTitle>New document</DialogTitle>
             <DialogDescription>
-              Create a draft in {organizationName}.
+              Name the plan and choose its project. The conversation starts
+              next.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={createDocument}>
@@ -1301,7 +1286,9 @@ export function Dashboard({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="document-description">Description</Label>
+                <Label htmlFor="document-description">
+                  Description (optional)
+                </Label>
                 <Textarea
                   id="document-description"
                   name="description"
@@ -1355,8 +1342,8 @@ export function Dashboard({
           <DialogHeader>
             <DialogTitle>New project</DialogTitle>
             <DialogDescription>
-              Group related decisions and their repositories in{" "}
-              {organizationName}.
+              Group the repositories that make up a feature or initiative. A
+              project can contain a monorepo, or several related repositories.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={connectRepository} className="px-6 pb-4 space-y-2">
