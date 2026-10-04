@@ -45,7 +45,7 @@ export async function slackWebhook(request: Request) {
 }
 
 export async function processSlackJob() {
-  if (!process.env.SLACK_BINDINGS) return;
+  if (!process.env.SLACK_SIGNING_SECRET) return;
   const scope = container.createScope();
   try {
     await new SlackService(scope.cradle).processNext();

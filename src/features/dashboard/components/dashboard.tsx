@@ -617,6 +617,7 @@ export function Dashboard({
                 { section: "team", label: "Team", icon: UsersIcon },
                 { section: "github", label: "GitHub", icon: GitBranchIcon },
                 { section: "linear", label: "Linear", icon: KanbanIcon },
+                { section: "slack", label: "Slack", icon: PlugsConnectedIcon },
               ],
             },
           ].map(({ category, items }) => (
@@ -973,14 +974,15 @@ export function Dashboard({
           ref={scrollRef}
         >
           {settingsSection ? (
-            ["github", "team", "linear"].includes(settingsSection) &&
+            ["github", "team", "linear", "slack"].includes(settingsSection) &&
             session.data?.user &&
             workspace.isPending ? (
               <div className="settings-content">
                 <p role="status">Loading your organizations…</p>
               </div>
-            ) : ["github", "team", "linear"].includes(settingsSection) &&
-              workspace.isError ? (
+            ) : ["github", "team", "linear", "slack"].includes(
+                settingsSection,
+              ) && workspace.isError ? (
               <div className="settings-content" role="alert">
                 <p>{workspace.error.message}</p>
                 <Button

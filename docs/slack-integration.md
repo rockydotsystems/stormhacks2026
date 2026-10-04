@@ -6,10 +6,53 @@ changes. The bot reuses project-history search and grounded answers; it does not
 read personal chats, crawl Slack history, or edit decisions. Each mention is a
 standalone question (thread context is not yet included).
 
-## Quick demo setup
+## Multi-workspace setup (recommended)
+
+1. Configure the Slack app using `docs/slack-app-manifest.json` in Slack's
+   **App Manifest** editor. The manifest contains the bot scopes, Events API URL,
+   and the redirect URL for the configured WorkOS Pipes integration; no secrets.
+   If you use another WorkOS environment, replace its redirect URL with that
+   environment's integration callback.
+2. Enable **Manage Distribution → Activate Public Distribution** after completing
+   Slack's checklist. Workspace admin policies still govern installation; broader
+   commercial distribution should go through Slack Marketplace review.
+3. In the application, choose your organization and open **Settings → Slack**.
+   An organization admin selects **Connect Slack**, authorizes the target Slack
+   workspace through Pipes, and selects **Verify connected workspace** on return.
+4. Each teammate selects **Link my Slack identity** using their Slack member ID.
+   The backend verifies the Slack account's email against their verified WorkOS
+   email. An arbitrary Slack member ID cannot impersonate another app user.
+5. Invite the bot to an unshared channel, reload Slack settings, choose a project,
+   and explicitly confirm sharing its decisions/drafts/rationale with that channel.
+   Each workspace belongs to only one app organization; each app organization
+   connects one workspace. Different app organizations can connect different
+   workspaces without editing environment variables.
+6. Mention the bot from a linked user. The job uses persisted channel/user mappings
+   and the organization's Pipes credential. No global bot token is needed.
+
+`SLACK_APP_ID` and `SLACK_SIGNING_SECRET` are global app settings.
+`SLACK_CLIENT_ID` and `SLACK_CLIENT_SECRET` configure the Pipes provider, not an
+individual customer's token. WorkOS owns the OAuth callback, state, credential
+storage, and refresh; application Postgres stores only workspace identity and
+channel/user mappings. Production CI applies the mapping migration before deploy.
+
+Only organization admins connect/verify workspaces and configure channels.
+Members link only their own identity. Disabling the workspace removes its routing
+and identity mappings but leaves the credential in Pipes; revoke the provider
+connection in WorkOS/Slack if you also want to remove credentials. Unbinding a
+channel or identity cancels queued jobs before retrieval and is checked again
+before posting. Shared/Slack Connect, archived, and non-bot-member channels are
+rejected and rechecked at delivery.
+
+If token vending fails, reconnect through Pipes. If you installed before adding
+the read/email scopes, reinstall with the new scopes. If linking fails, verify
+your application email and use the same email in Slack. The setup currently
+requires these emails to match; it does not infer identities from display names.
+
+## Manual single-workspace fallback
 
 1. Create a Slack app at <https://api.slack.com/apps>, with a bot named
-   `whydidwechoosethis`. Add bot scopes `app_mentions.read` and `chat:write`.
+   `whydidwechoosethis`. Use the bot scopes in `docs/slack-app-manifest.json`.
 2. Install it in your workspace and invite the bot to your demo channel.
 3. Set `SLACK_SIGNING_SECRET` from **Basic Information** and `SLACK_APP_ID`
    (the `A…` ID). For the fastest single-workspace setup, set `SLACK_BOT_TOKEN`
@@ -51,8 +94,8 @@ project ownership are checked before retrieval and again before posting.
 In the WorkOS Dashboard, configure Slack with your Slack app's OAuth credentials,
 the displayed redirect URI, bot scopes, and **Organization** connection ownership.
 An organization admin establishes the shared connection through Pipes Admin (the
-`widgets:pipes:manage` permission is required). This first version does not add an
-in-app connection management UI.
+`widgets:pipes:manage` permission is required). Alternatively, use the application's
+**Settings → Slack** connection flow described above.
 
 Remove `SLACK_BOT_TOKEN` to select Pipes. The backend calls
 `POST /data-integrations/slack/credentials` with `connection_owner: "organization"`,
@@ -83,6 +126,6 @@ For no response, check the channel/user binding, bot membership in the channel,
 WorkOS membership, the shared connection, AI credentials, and bot scopes. If the
 decision is not recorded, the bot says so rather than inventing a reason.
 
-Production hardening beyond this demo: a connection-management UI, automated
-identity linking, channel membership/access policy, dedicated queue throughput,
-rate limits, and job retention/cleanup.
+Production hardening beyond this demo: automated identity linking, channel
+membership/access policy, dedicated queue throughput, rate limits, and job
+retention/cleanup.

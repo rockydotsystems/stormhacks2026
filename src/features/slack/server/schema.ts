@@ -1,4 +1,13 @@
-import { integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  integer,
+  jsonb,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  unique,
+  uuid,
+} from "drizzle-orm/pg-core";
 import type { SlackMention } from "./events";
 
 export const slackJobs = pgTable("slack_jobs", {
@@ -15,3 +24,37 @@ export const slackJobs = pgTable("slack_jobs", {
     .notNull()
     .defaultNow(),
 });
+
+export const slackWorkspaces = pgTable("slack_workspaces", {
+  teamId: text("team_id").primaryKey(),
+  organizationId: text("organization_id").notNull().unique(),
+  name: text("name").notNull(),
+});
+
+export const slackChannels = pgTable(
+  "slack_channels",
+  {
+    teamId: text("team_id")
+      .notNull()
+      .references(() => slackWorkspaces.teamId, { onDelete: "cascade" }),
+    channelId: text("channel_id").notNull(),
+    name: text("name").notNull(),
+    projectId: uuid("project_id").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.teamId, table.channelId] })],
+);
+
+export const slackUsers = pgTable(
+  "slack_users",
+  {
+    teamId: text("team_id")
+      .notNull()
+      .references(() => slackWorkspaces.teamId, { onDelete: "cascade" }),
+    slackUserId: text("slack_user_id").notNull(),
+    userId: text("user_id").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.teamId, table.slackUserId] }),
+    unique().on(table.teamId, table.userId),
+  ],
+);

@@ -1,9 +1,49 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SlackClient } from "./slack.client";
+import { shareableChannel } from "./slack.client";
 
 const actor = { organizationId: "org_123", userId: "user_123" };
 afterEach(() => vi.unstubAllEnvs());
 describe("Slack bot credentials and replies", () => {
+  it("authorizes the acting admin through organization-owned Pipes with a fixed return URL", async () => {
+    vi.stubEnv("WORKOS_API_KEY", "test-key");
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        Response.json({ url: "https://api.workos.com/test-authorize" }),
+      );
+    expect(await new SlackClient(fetcher).authorize(actor)).toBe(
+      "https://api.workos.com/test-authorize",
+    );
+    expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body))).toMatchObject({
+      connection_owner: "organization",
+      organization_id: actor.organizationId,
+      user_id: actor.userId,
+      return_to:
+        "https://whydidwechoosethis.tech/settings/slack?organizationId=org_123",
+    });
+    await expect(
+      new SlackClient(
+        vi
+          .fn<typeof fetch>()
+          .mockResolvedValue(
+            Response.json({ url: "https://attacker.invalid" }),
+          ),
+      ).authorize(actor),
+    ).rejects.toThrow();
+  });
+  it("excludes shared, archived, and nonmember channels", () => {
+    const channel = { id: "C123", name: "demo", is_member: true };
+    expect(shareableChannel(channel)).toBe(true);
+    for (const flag of [
+      "is_shared",
+      "is_ext_shared",
+      "is_org_shared",
+      "is_archived",
+    ] as const)
+      expect(shareableChannel({ ...channel, [flag]: true })).toBe(false);
+    expect(shareableChannel({ ...channel, is_member: false })).toBe(false);
+  });
   it("vends an organization-owned Pipes credential and checks the bot workspace", async () => {
     vi.stubEnv("SLACK_BOT_TOKEN", "");
     vi.stubEnv("WORKOS_API_KEY", "test-key");

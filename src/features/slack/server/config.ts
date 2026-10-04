@@ -12,6 +12,12 @@ const bindingSchema = z.object({
 });
 export type SlackBinding = z.infer<typeof bindingSchema>;
 
+export function slackOrigin() {
+  return new URL(
+    process.env.SLACK_APP_ORIGIN || "https://whydidwechoosethis.tech",
+  ).origin;
+}
+
 export function slackBindings(value = process.env.SLACK_BINDINGS) {
   const bindings = z
     .array(bindingSchema)

@@ -5,10 +5,10 @@ import type { ModelPort } from "@/features/planning/server/model";
 import { requireProject } from "@/features/projects/server/access";
 import { searchProjectHistory } from "@/features/project-chat/server/search";
 import { answerQuestion } from "@/features/project-chat/server/answer";
-import { resolveSlackBinding } from "./config";
+import { resolveBinding } from "./bindings";
 import { mentionQuestion, type SlackMention } from "./events";
 import { slackJobs } from "./schema";
-import { SlackClient } from "./slack.client";
+import { SlackClient, shareableChannel } from "./slack.client";
 
 export class SlackService {
   constructor(
@@ -19,7 +19,8 @@ export class SlackService {
   async enqueue(input: SlackMention) {
     if (input.event.bot_id || input.event.subtype || !mentionQuestion(input))
       return;
-    const context = resolveSlackBinding(
+    const context = await resolveBinding(
+      this.dependencies.db,
       input.team_id,
       input.event.channel,
       input.event.user,
@@ -65,7 +66,8 @@ export class SlackService {
     );
     let sending = false;
     try {
-      const context = resolveSlackBinding(
+      const context = await resolveBinding(
+        db,
         job.input.team_id,
         job.input.event.channel,
         job.input.event.user,
@@ -111,6 +113,26 @@ export class SlackService {
       );
       await requireProject(db, context.actor, job.projectId);
       signal.throwIfAborted();
+      const current = await resolveBinding(
+        db,
+        job.input.team_id,
+        job.input.event.channel,
+        job.input.event.user,
+      );
+      if (
+        !current ||
+        current.actor.userId !== job.userId ||
+        current.actor.organizationId !== job.organizationId ||
+        current.binding.projectId !== job.projectId
+      ) {
+        await db.update(slackJobs).set({ status: "cancelled" }).where(ownedJob);
+        return;
+      }
+      const channel = await this.client.channel(token, job.input.event.channel);
+      if (!shareableChannel(channel)) {
+        await db.update(slackJobs).set({ status: "cancelled" }).where(ownedJob);
+        return;
+      }
       // Sending is deliberately not retried: a timeout can mean Slack already posted the reply.
       const [ready] = await db
         .update(slackJobs)

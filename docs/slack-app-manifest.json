@@ -1,0 +1,36 @@
+{
+  "display_information": {
+    "name": "whydidwechoosethis",
+    "description": "Understand the reasons behind your team's project decisions.",
+    "background_color": "#0f766e"
+  },
+  "features": {
+    "bot_user": {
+      "display_name": "whydidwechoosethis",
+      "always_online": false
+    }
+  },
+  "oauth_config": {
+    "redirect_urls": [
+      "https://api.workos.com/data-integrations/slack/LK206Z2oCesxgwjIfbQEai240/callback"
+    ],
+    "scopes": {
+      "bot": [
+        "app_mentions.read",
+        "chat:write",
+        "channels:read",
+        "groups:read",
+        "users:read",
+        "users:read.email"
+      ]
+    }
+  },
+  "settings": {
+    "event_subscriptions": {
+      "request_url": "https://whydidwechoosethis.tech/api/slack/events",
+      "bot_events": ["app_mention"]
+    },
+    "socket_mode_enabled": false,
+    "org_deploy_enabled": false
+  }
+}

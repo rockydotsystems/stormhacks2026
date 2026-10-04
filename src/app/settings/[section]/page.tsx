@@ -22,6 +22,7 @@ export default async function SettingsPage({
       "team",
       "github",
       "linear",
+      "slack",
       "mcp",
     ].includes(section)
   )

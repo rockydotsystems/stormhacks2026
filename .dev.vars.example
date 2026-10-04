@@ -35,6 +35,8 @@ TYPESAFE_MODEL=
 # Slack decision bot. See docs/slack-integration.md.
 SLACK_SIGNING_SECRET=
 SLACK_APP_ID=
+SLACK_CLIENT_ID=
+SLACK_CLIENT_SECRET=
 # Optional single-workspace demo fallback. Otherwise uses the shared WorkOS Pipes connection.
 SLACK_BOT_TOKEN=
 SLACK_APP_ORIGIN=https://whydidwechoosethis.tech
