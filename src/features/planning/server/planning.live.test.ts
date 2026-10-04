@@ -188,4 +188,53 @@ describe.skipIf(!live)("planning agent, live model", () => {
     expect(result.phase).toBe("grilling");
     expect(result.document).toBeNull();
   }, 300_000);
+
+  it("(f) a vague pitch streams reasoning, then two or three questions with suggestions", async () => {
+    log("\n## (f) Streaming, reasoning and staged questions");
+    const reasoning: string[] = [];
+    const deltas: string[] = [];
+    let final: AgentTurnResult | null = null;
+    const started = Date.now();
+    let firstReasoningMs: number | null = null;
+    for await (const event of service().streamTurn({
+      messages: [
+        {
+          role: "user",
+          content: "I want a tool that helps my team track what we decided.",
+        },
+      ],
+      phase: "grilling",
+      checklist: [],
+      projectName: "Eval project",
+      document: null,
+      today: TODAY,
+    })) {
+      if (event.type === "reasoning") {
+        firstReasoningMs ??= Date.now() - started;
+        reasoning.push(event.text);
+      } else if (event.type === "delta") deltas.push(event.text);
+      else final = event.result;
+    }
+    log(
+      `_${Date.now() - started} ms. First reasoning after ${firstReasoningMs ?? "never"} ms. ${reasoning.length} reasoning chunks, ${deltas.length} reply chunks._`,
+    );
+    log(`\n**Reasoning:** ${reasoning.join("").slice(0, 600)}\n`);
+    log(`**Reply:** ${deltas.join("")}\n`);
+    expect(final).not.toBeNull();
+    const result = final as unknown as AgentTurnResult;
+    log(
+      result.questions
+        .map(
+          (q) => `- Q: ${q.text} (suggestions: ${q.suggestions.join(" / ")})`,
+        )
+        .join("\n"),
+    );
+    expect(result.phase).toBe("grilling");
+    expect(result.questions.length).toBeGreaterThanOrEqual(2);
+    expect(result.questions.length).toBeLessThanOrEqual(3);
+    for (const q of result.questions) {
+      expect(q.suggestions.length).toBeGreaterThanOrEqual(2);
+    }
+    expect(reasoning.join("").length).toBeGreaterThan(0);
+  }, 300_000);
 });

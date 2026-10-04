@@ -162,10 +162,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       ).toEqual([true, false]);
       expect(detail.changes[0].content).toBe("");
       expect(detail.versions[0].label).toBe("v1");
-      expect(
-        ((await (await list(organizationId)).json()) as DashboardData)
-          .documents[0].status,
-      ).toBe("Draft");
+      data = (await (await list(organizationId)).json()) as DashboardData;
+      expect(data.documents[0].status).toBe("Draft");
+      // The description stays the card preview after a draft exists.
+      expect(data.documents[0].description).toBe("Initial context");
       await expect(
         controller.updateDocument(
           request({

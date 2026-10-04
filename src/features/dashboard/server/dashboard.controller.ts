@@ -101,7 +101,7 @@ export class DashboardController {
             id: docs.id,
             projectId: docs.projectId,
             title: sql<string>`coalesce(${docChanges.title}, 'Untitled document')`,
-            description: sql<string>`coalesce(nullif(left(${docChanges.content}, 300), ''), ${docs.description})`,
+            description: sql<string>`coalesce(nullif(${docs.description}, ''), left(${docChanges.content}, 300))`,
             changeId: sql<string>`${docChanges.id}::text`,
             updated:
               sql`coalesce(${docChanges.createdAt}, ${docs.createdAt})`.mapWith(
