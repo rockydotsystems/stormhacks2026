@@ -17,11 +17,12 @@ import {
   useDocumentConversation,
   useVersionSource,
 } from "@/features/planning/client/queries";
+import { pairAnswers, parseAnswers } from "@/features/planning/client/answers";
+import type { Question } from "@/features/planning/contracts";
 import type { MessageDto } from "@/features/planning/session-contracts";
 import type { DocChange } from "@/features/docs/contracts";
-import { cn } from "@/lib/utils";
 import type { DocumentData } from "../contracts";
-import { diffLines, diffStats } from "../lib/diff";
+import { diffLines, diffStats, type DiffLine } from "../lib/diff";
 import {
   historyEntries,
   previousChange,
@@ -37,12 +38,6 @@ function when(iso: string) {
     timeStyle: "short",
   });
 }
-
-const MODE_TEXT = {
-  generated: "Drafted by the agent",
-  edited: "Edited by the agent",
-  reverted: "Restored an earlier change",
-} as const;
 
 /**
  * Read-only history of one document. The sidebar lists versions or the changes inside the
@@ -71,11 +66,18 @@ export function DocumentHistoryDialog({
   const [changeId, setChangeId] = useState<string | null>(null);
 
   const entry = entries.find((item) => item.key === entryKey) ?? entries[0];
-  const changes = entry ? entry.changes.toReversed() : [];
+  // The Changes tab lists every change in the document's history, whatever version it is in.
+  const changes = useMemo(() => data.changes.toReversed(), [data.changes]);
   const change =
     scope === "changes"
       ? (changes.find((item) => item.id === changeId) ?? changes[0] ?? null)
       : null;
+  const versionOf = useMemo(() => {
+    const labels = new Map<string, string>();
+    for (const item of entries)
+      for (const inner of item.changes) labels.set(inner.id, item.label);
+    return labels;
+  }, [entries]);
 
   // What the main pane shows, and what it is compared with.
   const head = scope === "versions" ? (entry?.head ?? null) : change;
@@ -130,12 +132,6 @@ export function DocumentHistoryDialog({
                   <TabsTab value="changes">Changes</TabsTab>
                 </TabsList>
               </Tabs>
-              {scope === "changes" ? (
-                <p className="history-scope">
-                  Changes in <strong>{entry.label}</strong>. Pick another
-                  version under Versions.
-                </p>
-              ) : null}
               <ul className="history-list">
                 {scope === "versions"
                   ? entries.map((item) => (
@@ -184,6 +180,16 @@ export function DocumentHistoryDialog({
                         >
                           <span className="history-item-title">
                             Change {item.number}
+                            <Badge
+                              variant={
+                                versionOf.get(item.id) === "Draft"
+                                  ? "secondary"
+                                  : "success"
+                              }
+                              size="sm"
+                            >
+                              {versionOf.get(item.id) ?? "Draft"}
+                            </Badge>
                           </span>
                           <small>{item.title}</small>
                           <small>{when(item.createdAt)}</small>
@@ -199,7 +205,7 @@ export function DocumentHistoryDialog({
                   {scope === "versions"
                     ? `${entry.label}${entry.version ? "" : " (not published)"}`
                     : change
-                      ? `Change ${change.number} in ${entry.label}`
+                      ? `Change ${change.number}`
                       : "No change selected"}
                 </p>
                 <Tabs
@@ -217,31 +223,14 @@ export function DocumentHistoryDialog({
                 {!head ? (
                   <p className="history-empty">Nothing to show here.</p>
                 ) : view === "raw" ? (
-                  <pre className="history-raw">{head.content}</pre>
+                  <RawPane content={head.content} />
                 ) : view === "diff" ? (
-                  <DiffPane
-                    head={head}
-                    base={base}
-                    baseLabel={
-                      scope === "versions"
-                        ? entry.base
-                          ? "the previous version"
-                          : null
-                        : base
-                          ? `change ${base.number}`
-                          : null
-                    }
-                  />
+                  <DiffPane head={head} base={base} />
                 ) : scope === "versions" ? (
                   <ConversationPane
                     loading={versionSource.isPending}
                     error={versionSource.error}
                     messages={versionSource.data?.messages ?? []}
-                    summary={
-                      versionSource.data
-                        ? summarize(versionSource.data.changes)
-                        : null
-                    }
                     emptyText="No conversation was recorded for the changes in this version."
                   />
                 ) : (
@@ -249,11 +238,6 @@ export function DocumentHistoryDialog({
                     loading={changeSource.isPending && Boolean(change)}
                     error={changeSource.error}
                     messages={changeSource.data?.messages ?? []}
-                    summary={
-                      changeSource.data
-                        ? MODE_TEXT[changeSource.data.mode]
-                        : null
-                    }
                     emptyText="No conversation was recorded for this change. It was saved from the editor."
                   />
                 )}
@@ -266,50 +250,58 @@ export function DocumentHistoryDialog({
   );
 }
 
-function summarize(changes: { mode: keyof typeof MODE_TEXT }[]) {
-  const counts = { generated: 0, edited: 0, reverted: 0 };
-  for (const item of changes) counts[item.mode] += 1;
-  const parts = [
-    counts.generated ? `${counts.generated} drafted` : "",
-    counts.edited ? `${counts.edited} edited` : "",
-    counts.reverted ? `${counts.reverted} restored` : "",
-  ].filter(Boolean);
-  return `${changes.length} ${changes.length === 1 ? "change" : "changes"} by the agent (${parts.join(", ")})`;
+function RawPane({ content }: { content: string }) {
+  const rows = content.replace(/\r\n/g, "\n").split("\n");
+  return (
+    <div className="history-code" aria-label="Document text">
+      {rows.map((text, index) => (
+        <div key={index} className="history-code-line">
+          <span aria-hidden="true">{index + 1}</span>
+          <code>{text || " "}</code>
+        </div>
+      ))}
+    </div>
+  );
 }
 
-function DiffPane({
-  head,
-  base,
-  baseLabel,
-}: {
-  head: DocChange;
-  base: DocChange | null;
-  baseLabel: string | null;
-}) {
-  const diff = useMemo(
-    () => diffLines(base?.content ?? "", head.content),
-    [base, head],
-  );
-  const { added, removed } = diffStats(diff);
+function DiffPane({ head, base }: { head: DocChange; base: DocChange | null }) {
+  const rows = useMemo(() => {
+    const out: (DiffLine & { oldNo: number | null; newNo: number | null })[] =
+      [];
+    let oldNo = 0;
+    let newNo = 0;
+    for (const line of diffLines(base?.content ?? "", head.content)) {
+      if (line.kind !== "added") oldNo += 1;
+      if (line.kind !== "removed") newNo += 1;
+      out.push({
+        ...line,
+        oldNo: line.kind === "added" ? null : oldNo,
+        newNo: line.kind === "removed" ? null : newNo,
+      });
+    }
+    return out;
+  }, [base, head]);
+  const { added, removed } = diffStats(rows);
   return (
     <>
-      <p className="history-compare">
-        {baseLabel ? `Compared with ${baseLabel}.` : "Everything here is new."}{" "}
-        <span className="history-added">+{added}</span>{" "}
+      <p className="history-stats">
+        <span className="history-added">+{added}</span>
         <span className="history-removed">−{removed}</span>
       </p>
       {added === 0 && removed === 0 ? (
         <p className="history-empty">No changes to the text.</p>
       ) : (
-        <div className="history-diff" role="table" aria-label="Text changes">
-          {diff.map((line, index) => (
+        <div className="history-code" role="table" aria-label="Text changes">
+          {rows.map((line, index) => (
             <div
               key={index}
               role="row"
-              className={cn("history-diff-line")}
+              className="history-code-line"
               data-kind={line.kind}
             >
-              <span aria-hidden="true">
+              <span aria-hidden="true">{line.oldNo}</span>
+              <span aria-hidden="true">{line.newNo}</span>
+              <span aria-hidden="true" className="history-sign">
                 {line.kind === "added"
                   ? "+"
                   : line.kind === "removed"
@@ -332,17 +324,16 @@ function DiffPane({
   );
 }
 
+// The conversation as it happened: your messages and the agent's replies, in order.
 function ConversationPane({
   loading,
   error,
   messages,
-  summary,
   emptyText,
 }: {
   loading: boolean;
   error: Error | null;
   messages: MessageDto[];
-  summary: string | null;
   emptyText: string;
 }) {
   if (loading)
@@ -363,27 +354,43 @@ function ConversationPane({
   }
   if (messages.length === 0)
     return <p className="history-empty">{emptyText}</p>;
-  const mine = messages.filter((message) => message.role === "user").length;
+  // Answers to the agent's questions refer to them by number, so look back for the questions.
+  function questionsBefore(index: number): Question[] {
+    for (let i = index - 1; i >= 0; i -= 1) {
+      if (messages[i].role === "assistant") return messages[i].questions ?? [];
+    }
+    return [];
+  }
   return (
-    <>
-      <p className="history-compare">
-        {summary ? `${summary}. ` : ""}
-        {mine} from you, {messages.length - mine} from the agent.
-      </p>
-      <ol className="history-messages">
-        {messages.map((message) => (
-          <li key={message.id} data-role={message.role}>
-            <span>
-              {message.role === "user" ? "You" : "Agent"}
-              {message.via === "voice" ? " (voice)" : ""}
-            </span>
-            <p>{message.content}</p>
-            {message.producedChangeId ? (
-              <small>Saved a change to the document.</small>
-            ) : null}
-          </li>
-        ))}
-      </ol>
-    </>
+    <div className="history-messages">
+      {messages.map((message, index) => {
+        const answers =
+          message.role === "user" ? parseAnswers(message.content) : null;
+        const pairs = answers
+          ? pairAnswers(questionsBefore(index), answers)
+          : [];
+        return (
+          <div
+            key={message.id}
+            className={`planning-message planning-message-${message.role}`}
+          >
+            {pairs.length > 0 ? (
+              <ul className="planning-answers" aria-label="Answers">
+                {pairs.map((pair) => (
+                  <li key={pair.question}>
+                    <span>{pair.question}</span>
+                    <strong data-skipped={pair.skipped || undefined}>
+                      {pair.skipped ? "Skipped" : pair.answer}
+                    </strong>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>{message.content}</p>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }
