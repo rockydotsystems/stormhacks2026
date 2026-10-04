@@ -1,6 +1,6 @@
-ALTER TABLE "docs" ADD COLUMN "title" text;--> statement-breakpoint
-ALTER TABLE "docs" ADD COLUMN "deleted_at" timestamp with time zone;--> statement-breakpoint
-ALTER TABLE "projects" ADD COLUMN "deleted_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "docs" ADD COLUMN IF NOT EXISTS "title" text;--> statement-breakpoint
+ALTER TABLE "docs" ADD COLUMN IF NOT EXISTS "deleted_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "projects" ADD COLUMN IF NOT EXISTS "deleted_at" timestamp with time zone;--> statement-breakpoint
 CREATE OR REPLACE FUNCTION guard_doc_identity() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF NEW.id IS DISTINCT FROM OLD.id
