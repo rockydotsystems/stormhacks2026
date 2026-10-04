@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, lazy, useMemo, useState } from "react";
 import {
   Dialog,
   DialogDescription,
@@ -22,7 +22,7 @@ import type { Question } from "@/features/planning/contracts";
 import type { MessageDto } from "@/features/planning/session-contracts";
 import type { DocChange } from "@/features/docs/contracts";
 import type { DocumentData } from "../contracts";
-import { diffLines, diffStats, type DiffLine } from "../lib/diff";
+import { diffLines, diffStats } from "../lib/diff";
 import {
   historyEntries,
   previousChange,
@@ -250,38 +250,36 @@ export function DocumentHistoryDialog({
   );
 }
 
-function RawPane({ content }: { content: string }) {
-  const rows = content.replace(/\r\n/g, "\n").split("\n");
+// The viewer brings in a syntax highlighter, so it loads only when the dialog needs it.
+const DiffView = lazy(() =>
+  import("./history-code").then((module) => ({ default: module.DiffView })),
+);
+const RawView = lazy(() =>
+  import("./history-code").then((module) => ({ default: module.RawView })),
+);
+
+function CodeFallback() {
   return (
-    <div className="history-code" aria-label="Document text">
-      {rows.map((text, index) => (
-        <div key={index} className="history-code-line">
-          <span aria-hidden="true">{index + 1}</span>
-          <code>{text || " "}</code>
-        </div>
-      ))}
+    <div className="history-empty" role="status">
+      <Spinner className="size-3.5" />
     </div>
   );
 }
 
+function RawPane({ content }: { content: string }) {
+  return (
+    <Suspense fallback={<CodeFallback />}>
+      <RawView content={content} />
+    </Suspense>
+  );
+}
+
 function DiffPane({ head, base }: { head: DocChange; base: DocChange | null }) {
-  const rows = useMemo(() => {
-    const out: (DiffLine & { oldNo: number | null; newNo: number | null })[] =
-      [];
-    let oldNo = 0;
-    let newNo = 0;
-    for (const line of diffLines(base?.content ?? "", head.content)) {
-      if (line.kind !== "added") oldNo += 1;
-      if (line.kind !== "removed") newNo += 1;
-      out.push({
-        ...line,
-        oldNo: line.kind === "added" ? null : oldNo,
-        newNo: line.kind === "removed" ? null : newNo,
-      });
-    }
-    return out;
-  }, [base, head]);
-  const { added, removed } = diffStats(rows);
+  const before = base?.content ?? "";
+  const { added, removed } = useMemo(
+    () => diffStats(diffLines(before, head.content)),
+    [before, head.content],
+  );
   return (
     <>
       <p className="history-stats">
@@ -291,34 +289,9 @@ function DiffPane({ head, base }: { head: DocChange; base: DocChange | null }) {
       {added === 0 && removed === 0 ? (
         <p className="history-empty">No changes to the text.</p>
       ) : (
-        <div className="history-code" role="table" aria-label="Text changes">
-          {rows.map((line, index) => (
-            <div
-              key={index}
-              role="row"
-              className="history-code-line"
-              data-kind={line.kind}
-            >
-              <span aria-hidden="true">{line.oldNo}</span>
-              <span aria-hidden="true">{line.newNo}</span>
-              <span aria-hidden="true" className="history-sign">
-                {line.kind === "added"
-                  ? "+"
-                  : line.kind === "removed"
-                    ? "−"
-                    : ""}
-              </span>
-              <code role="cell">{line.text || " "}</code>
-              <span className="sr-only">
-                {line.kind === "added"
-                  ? "Added"
-                  : line.kind === "removed"
-                    ? "Removed"
-                    : "Unchanged"}
-              </span>
-            </div>
-          ))}
-        </div>
+        <Suspense fallback={<CodeFallback />}>
+          <DiffView before={before} after={head.content} />
+        </Suspense>
       )}
     </>
   );

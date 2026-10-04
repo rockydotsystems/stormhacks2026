@@ -2235,48 +2235,6 @@ a {
   color: var(--muted-foreground);
   text-align: center;
 }
-.history-code {
-  padding: 0.8em 0;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
-  font: 12px/1.6 var(--font-mono, ui-monospace, monospace);
-}
-.history-code-line {
-  display: grid;
-  grid-template-columns: 3rem minmax(0, 1fr);
-}
-.history-code-line[data-kind] {
-  grid-template-columns: 2.75rem 2.75rem 1.5rem minmax(0, 1fr);
-}
-.history-code-line > span:not(.sr-only) {
-  padding-right: 8px;
-  text-align: right;
-  color: var(--muted-foreground);
-  font-variant-numeric: tabular-nums;
-  user-select: none;
-}
-.history-code-line > .history-sign {
-  padding: 0;
-  text-align: center;
-}
-.history-code-line code {
-  font: inherit;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.history-code-line[data-kind="added"] {
-  background: color-mix(in srgb, var(--success) 14%, transparent);
-}
-.history-code-line[data-kind="added"] > .history-sign {
-  color: var(--success-foreground);
-}
-.history-code-line[data-kind="removed"] {
-  background: color-mix(in srgb, var(--destructive) 14%, transparent);
-}
-.history-code-line[data-kind="removed"] > .history-sign {
-  color: var(--destructive-foreground);
-}
 .history-messages > .planning-message:first-child {
   margin-top: 0;
 }
