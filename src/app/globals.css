@@ -179,7 +179,8 @@ a {
   top: 16px;
 }
 .dashboard-sidebar {
-  width: 244px;
+  --sidebar-expanded-width: 244px;
+  width: var(--sidebar-expanded-width);
   flex-shrink: 0;
   position: sticky;
   top: 8px;
@@ -210,37 +211,126 @@ a {
   min-width: 0;
   overflow: hidden;
 }
+.dashboard-sidebar .sidebar-label,
+.dashboard-sidebar .sidebar-count,
+.dashboard-sidebar .account-identity,
+.dashboard-sidebar .org-switcher > svg,
+.dashboard-sidebar .profile-button > svg {
+  opacity: 1;
+  visibility: visible;
+  white-space: nowrap;
+}
 .dashboard-sidebar[data-collapsed="true"] .sidebar-label,
 .dashboard-sidebar[data-collapsed="true"] .sidebar-count,
 .dashboard-sidebar[data-collapsed="true"] .account-identity,
 .dashboard-sidebar[data-collapsed="true"] .org-switcher > svg,
-.dashboard-sidebar[data-collapsed="true"] .profile-button > svg,
-.dashboard-sidebar[data-collapsed="true"] .sidebar-section h2,
+.dashboard-sidebar[data-collapsed="true"] .profile-button > svg {
+  opacity: 0;
+  visibility: hidden;
+}
+.dashboard-sidebar .sidebar-shortcuts {
+  min-width: 0;
+  overflow-x: hidden;
+}
+.dashboard-sidebar .sidebar-shortcuts nav {
+  width: calc(var(--sidebar-expanded-width) - 24px);
+}
+.dashboard-sidebar .sidebar-shortcuts h2 {
+  white-space: nowrap;
+}
 .dashboard-sidebar[data-collapsed="true"] .sidebar-shortcuts {
   display: none;
 }
-.dashboard-sidebar[data-collapsed="true"] .sidebar-item,
-.dashboard-sidebar[data-collapsed="true"] .org-switcher,
-.dashboard-sidebar[data-collapsed="true"] .profile-button {
-  justify-content: center;
-  gap: 0;
-  min-height: 40px;
-  padding: 8px;
+.dashboard-sidebar .sidebar-item,
+.dashboard-sidebar .org-switcher,
+.dashboard-sidebar .profile-button {
+  justify-content: flex-start;
+  overflow: hidden;
 }
-.dashboard-sidebar[data-collapsed="true"] .org-row {
+.dashboard-sidebar .sidebar-item {
+  min-height: 40px;
+  padding: 8px 17px;
+}
+.dashboard-sidebar .sidebar-item > svg {
+  margin-inline: 0;
+}
+.dashboard-sidebar .org-switcher {
+  height: 40px;
+  padding-inline: 12.5px;
+}
+.dashboard-sidebar .profile-button {
+  padding-inline: 9px;
+}
+.dashboard-sidebar .org-row {
   margin-bottom: 12px;
+}
+.dashboard-sidebar .sidebar-bottom {
+  padding-top: 12px;
+}
+.dashboard-sidebar .settings-section h2 {
+  max-height: 20px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.dashboard-sidebar[data-collapsed="true"] .settings-section h2 {
+  max-height: 0;
+  margin-bottom: 0;
+  opacity: 0;
+  visibility: hidden;
 }
 .dashboard-sidebar[data-collapsed="true"] .settings-section {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--border);
 }
-.dashboard-sidebar[data-collapsed="true"] .sidebar-bottom {
-  padding-top: 12px;
-}
 @media (prefers-reduced-motion: no-preference) {
   .dashboard-sidebar {
     transition: width 220ms cubic-bezier(0.77, 0, 0.175, 1);
+  }
+  .dashboard-sidebar .sidebar-label,
+  .dashboard-sidebar .sidebar-count,
+  .dashboard-sidebar .account-identity,
+  .dashboard-sidebar .org-switcher > svg,
+  .dashboard-sidebar .profile-button > svg {
+    transition:
+      opacity 120ms ease-out 80ms,
+      visibility 0s;
+  }
+  .dashboard-sidebar[data-collapsed="true"] .sidebar-label,
+  .dashboard-sidebar[data-collapsed="true"] .sidebar-count,
+  .dashboard-sidebar[data-collapsed="true"] .account-identity,
+  .dashboard-sidebar[data-collapsed="true"] .org-switcher > svg,
+  .dashboard-sidebar[data-collapsed="true"] .profile-button > svg {
+    transition:
+      opacity 80ms ease-out,
+      visibility 0s 80ms;
+  }
+  .dashboard-sidebar .sidebar-shortcuts {
+    transition: opacity 120ms ease-out 80ms;
+  }
+  @starting-style {
+    .dashboard-sidebar .sidebar-shortcuts {
+      opacity: 0;
+    }
+  }
+  .dashboard-sidebar .settings-section {
+    transition:
+      margin-top 220ms cubic-bezier(0.77, 0, 0.175, 1),
+      padding-top 220ms cubic-bezier(0.77, 0, 0.175, 1);
+  }
+  .dashboard-sidebar .settings-section h2 {
+    transition:
+      max-height 220ms cubic-bezier(0.77, 0, 0.175, 1),
+      margin-bottom 220ms cubic-bezier(0.77, 0, 0.175, 1),
+      opacity 120ms ease-out 80ms,
+      visibility 0s;
+  }
+  .dashboard-sidebar[data-collapsed="true"] .settings-section h2 {
+    transition:
+      max-height 220ms cubic-bezier(0.77, 0, 0.175, 1),
+      margin-bottom 220ms cubic-bezier(0.77, 0, 0.175, 1),
+      opacity 80ms ease-out,
+      visibility 0s 80ms;
   }
 }
 .org-row {
@@ -830,7 +920,7 @@ a {
 }
 @media (max-width: 1200px) {
   .dashboard-sidebar {
-    width: 224px;
+    --sidebar-expanded-width: 224px;
   }
   .dashboard-content {
     padding-inline: 28px;
@@ -843,7 +933,7 @@ a {
 }
 @media (max-width: 1000px) {
   .dashboard-sidebar {
-    width: 208px;
+    --sidebar-expanded-width: 208px;
   }
   .document-toolbar {
     align-items: flex-start;
@@ -1404,13 +1494,7 @@ a {
 }
 .document-workspace-version [data-slot="select-trigger"] {
   min-width: 0;
-  border: 0;
-  box-shadow: none;
-  background: transparent;
   font-size: 12px;
-}
-.document-workspace-version [data-slot="select-trigger"]::before {
-  box-shadow: none;
 }
 .document-save-state {
   font-size: 11px;
@@ -1683,9 +1767,8 @@ a {
   box-shadow: none;
   background: transparent;
   resize: none;
-  /* One line at rest, two at most, then it scrolls inside. */
-  min-height: calc(1.6em + 6px);
-  max-height: calc(3.2em + 6px);
+  min-height: calc(4.8em + 6px);
+  max-height: calc(9.6em + 6px);
   overflow-y: auto;
   padding: 3px;
   font-size: 13px;
@@ -1715,32 +1798,23 @@ a {
 }
 .planning-composer {
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
   gap: 8px;
 }
 .planning-composer > span {
-  flex: 1;
+  width: 100%;
   min-width: 0;
 }
 .planning-composer > div {
   display: flex;
+  width: 100%;
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
 }
 
 .voice-trigger {
-  position: relative;
   color: var(--primary);
-}
-.voice-trigger .voice-trigger-sparkle {
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  top: 3px;
-  right: 2px;
-  background: var(--background);
-  border-radius: 50%;
 }
 .voice-panel {
   display: flex;
@@ -2433,12 +2507,16 @@ a {
 .document-workspace[data-empty] .document-pane-switch {
   display: none;
 }
+.document-paper-version,
 .document-paper-actions {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
   align-items: center;
   margin-top: 20px;
+}
+.document-paper-actions {
+  margin-top: 12px;
 }
 .document-paper-actions [data-slot="button"] {
   font-size: 11px;

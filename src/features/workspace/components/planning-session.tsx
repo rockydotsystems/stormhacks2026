@@ -11,10 +11,10 @@ import {
 import {
   ArrowUpIcon,
   FileTextIcon,
-  MicrophoneIcon,
   MoonIcon,
   SparkleIcon,
 } from "@phosphor-icons/react";
+import { WaveformIcon } from "@phosphor-icons/react/dist/csr/Waveform";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
@@ -564,12 +564,7 @@ export function PlanningSession({
               }
               onClick={() => setVoiceOpen(true)}
             >
-              <MicrophoneIcon weight="bold" aria-hidden="true" />
-              <SparkleIcon
-                weight="fill"
-                className="voice-trigger-sparkle"
-                aria-hidden="true"
-              />
+              <WaveformIcon aria-hidden="true" />
             </Button>
             <Button
               type="submit"

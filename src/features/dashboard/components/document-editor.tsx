@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  ChatCircleIcon,
   CheckCircleIcon,
   ClockCounterClockwiseIcon,
   ClockIcon,
@@ -12,6 +11,7 @@ import {
   UploadSimpleIcon,
   UserIcon,
 } from "@phosphor-icons/react";
+import { ChatTeardropTextIcon } from "@phosphor-icons/react/dist/csr/ChatTeardropText";
 import { useDocument, useDocumentAction } from "../client/queries";
 import type { DocumentData, Person } from "../contracts";
 import { PlanningSession } from "@/features/workspace/components/planning-session";
@@ -168,7 +168,7 @@ export function DocumentWorkspace({
           aria-pressed={pane === "conversation"}
           onClick={() => setPane("conversation")}
         >
-          <ChatCircleIcon aria-hidden="true" /> Conversation
+          <ChatTeardropTextIcon aria-hidden="true" /> Conversation
         </Button>
         <Button
           variant={pane === "document" ? "secondary" : "ghost"}
@@ -195,7 +195,7 @@ export function DocumentWorkspace({
                   {(frozen ? frozen.title : title || latest?.title) ||
                     "Untitled document"}
                 </h1>
-                <div className="document-paper-actions">
+                <div className="document-paper-version">
                   <div className="document-workspace-version">
                     <Select
                       items={versions}
@@ -232,6 +232,8 @@ export function DocumentWorkspace({
                       {publishOpen ? "Publishing…" : "Saving…"}
                     </span>
                   )}
+                </div>
+                <div className="document-paper-actions">
                   <Button
                     size="sm"
                     variant="outline"
