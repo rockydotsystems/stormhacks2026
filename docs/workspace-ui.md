@@ -61,7 +61,10 @@ the existing Button, Input, Dialog, Label, and Textarea primitives.
 
 Dashboard records and repository options are local sample data. Created projects
 and documents reset on reload; repositories are not fetched from GitHub.
-Organization switching and profile data do not represent authenticated memberships.
+The organization switcher uses sample organizations. The account menu uses real
+WorkOS identity data and links to `/settings/profile`, `/settings/security`,
+`/settings/preferences`, and `/settings/team`. Team management uses the authenticated
+WorkOS organization, not the selected sample organization.
 
 Verify project creation with multiple repositories, its empty state, creating a
 document with inherited repositories, combined document filters, and organization

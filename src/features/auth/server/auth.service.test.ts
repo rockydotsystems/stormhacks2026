@@ -49,19 +49,33 @@ describe("AuthService", () => {
 
   it("exposes only public identity fields, never session tokens", async () => {
     vi.mocked(withAuth).mockResolvedValue({
-      user: { id: "user-a", email: "a@example.com", firstName: "Ada" },
+      user: {
+        id: "user-a",
+        email: "a@example.com",
+        firstName: "Ada",
+        lastName: "Lovelace",
+        profilePictureUrl: "https://workoscdn.com/ada.jpg",
+      },
       accessToken: "not-for-the-browser",
       refreshToken: "also-private",
     } as unknown as Awaited<ReturnType<typeof withAuth>>);
     const service = new AuthService();
     expect(await service.getSession()).toEqual({
       configured: true,
-      user: { id: "user-a", email: "a@example.com", firstName: "Ada" },
+      user: {
+        id: "user-a",
+        email: "a@example.com",
+        firstName: "Ada",
+        lastName: "Lovelace",
+        profilePictureUrl: "https://workoscdn.com/ada.jpg",
+      },
     });
     expect(await service.requireUser()).toEqual({
       id: "user-a",
       email: "a@example.com",
       firstName: "Ada",
+      lastName: "Lovelace",
+      profilePictureUrl: "https://workoscdn.com/ada.jpg",
     });
   });
 });

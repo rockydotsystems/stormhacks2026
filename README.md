@@ -125,6 +125,27 @@ For orb previews, replace the local origin in all three dashboard settings and t
 
 vinext runs `src/proxy.ts` for AuthKit session handling. Controllers explicitly require authentication before reading or writing data. The AuthKit provider handles session expiry; `/api/auth/session` exposes only public user identity fields, not tokens. Logout is a POST endpoint, not a server action. A full sign-in/callback/sign-out test needs valid credentials and dashboard settings.
 
+### Account settings widgets
+
+The account menu reads WorkOS names, email, and profile images from the session.
+`/settings/profile` and `/settings/security` use WorkOS UserProfile, UserSecurity,
+and UserSessions widgets with AuthKit's refreshable access token.
+`/settings/team` uses UsersManagement for the authenticated organization; it
+requires the `widgets:users-table:manage` permission. The dashboard organization
+switcher still uses sample organizations and does not change the WorkOS session.
+
+In the WorkOS application's Sessions settings, add your exact app origin (for
+example `http://localhost:3000`) to the allowed web origins for Widget CORS.
+See [WorkOS Widgets setup](https://workos.com/docs/widgets/quick-start).
+Use the same hostname for sign-in and the app so the session cookie is available.
+No extra credentials are sent to the client. The Log out menu action submits the
+existing POST `/api/auth/logout` endpoint.
+
+`/settings/preferences` stores the default document order on the current device,
+separately for each signed-in user. Live widget edits and logout verification
+require a signed-in WorkOS session; security changes should be verified with a
+disposable staging account.
+
 ## Cloudflare Workers deployment
 
 `vite.config.ts` runs vinext's RSC environment in workerd through the stable

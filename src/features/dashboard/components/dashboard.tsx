@@ -16,8 +16,19 @@ import {
   MagnifyingGlassIcon,
   PlusIcon,
   UsersIcon,
+  UserIcon,
+  ShieldCheckIcon,
+  SlidersHorizontalIcon,
 } from "@phosphor-icons/react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
+import { AccountMenu } from "@/features/account/components/account-menu";
+import type { SettingsSection } from "@/features/account/components/account-settings";
+import { useSession } from "@/features/auth/client/queries";
+import { useDefaultDocumentSort } from "@/features/account/preferences";
+const AccountSettings = dynamic(
+  () => import("@/features/account/components/account-settings"),
+);
 import { useRef, useState, type FormEvent } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -51,11 +62,9 @@ import {
   MenuGroup,
   MenuGroupLabel,
   MenuItem,
-  MenuLinkItem,
   MenuPopup,
   MenuRadioGroup,
   MenuRadioItem,
-  MenuSeparator,
   MenuTrigger,
 } from "@/components/ui/menu";
 import {
@@ -234,7 +243,13 @@ function MultiFilter({
   );
 }
 
-export function Dashboard() {
+export function Dashboard({
+  settingsSection,
+}: {
+  settingsSection?: SettingsSection;
+}) {
+  const session = useSession();
+  const [defaultSort] = useDefaultDocumentSort(session.data?.user?.id);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [projectRecords, setProjectRecords] = useState(initialProjects);
   const [projectCreateOpen, setProjectCreateOpen] = useState(false);
@@ -246,11 +261,11 @@ export function Dashboard() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<string[]>([]);
   const [project, setProject] = useState<string[]>([]);
-  const [sort, setSort] = useState("Last updated");
+  const [sortOverride, setSort] = useState<string | null>(null);
+  const sort = sortOverride || defaultSort;
   const [recent, setRecent] = useState(["adr-008", "adr-007", "adr-006"]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [activeProject, setActiveProject] = useState<string | null>(null);
   const [myReviews, setMyReviews] = useState(false);
@@ -416,111 +431,143 @@ export function Dashboard() {
           </MenuPopup>
         </Menu>
       </div>
-      <nav aria-label="Workspace" className="sidebar-navigation">
-        {[
-          { name: "Overview", icon: HouseIcon },
-          { name: "Projects", icon: FolderIcon },
-          { name: "Documents", icon: FileTextIcon },
-        ].map(({ name, icon: Icon }) => (
+      {settingsSection ? (
+        <>
           <Button
-            key={name}
             variant="ghost"
-            className={cn(
-              "sidebar-item",
-              view === name && "sidebar-item-active",
-            )}
-            onClick={() => navigate(name)}
-            aria-current={
-              view === name && !selected && !activeProject ? "page" : undefined
-            }
+            className="sidebar-item back-to-app"
+            render={<Link href="/" />}
           >
-            <Icon
-              aria-hidden="true"
-              weight={view === name ? "fill" : "regular"}
-            />
-            <span>{name}</span>
+            <ArrowLeftIcon aria-hidden="true" />
+            Back to app
           </Button>
-        ))}
-      </nav>
-      <div className="sidebar-section">
-        <h2>Projects</h2>
-        <nav aria-label="Projects">
-          {projects.map((name) => (
-            <Button
-              key={name}
-              variant="ghost"
-              className={cn(
-                "sidebar-item",
-                activeProject === name && "sidebar-item-active",
-              )}
-              onClick={() => openProject(name)}
-            >
-              <FolderIcon aria-hidden="true" />
-              <span className="truncate">{name}</span>
-              <span className="sidebar-count">
-                {
-                  orgDocuments.filter((decision) => decision.project === name)
-                    .length
-                }
-              </span>
-            </Button>
-          ))}
-        </nav>
-      </div>
-      <div className="sidebar-section sidebar-recents">
-        <h2>Recently viewed</h2>
-        <nav aria-label="Recently viewed documents">
-          {recentDocuments.length ? (
-            recentDocuments.map((decision) => (
+          <nav
+            aria-label="Account settings"
+            className="sidebar-navigation settings-navigation"
+          >
+            {[
+              { section: "profile", label: "Profile", icon: UserIcon },
+              { section: "security", label: "Security", icon: ShieldCheckIcon },
+              {
+                section: "preferences",
+                label: "Preferences",
+                icon: SlidersHorizontalIcon,
+              },
+            ].map(({ section, label, icon: Icon }) => (
               <Button
-                key={decision.id}
+                key={section}
                 variant="ghost"
                 className={cn(
                   "sidebar-item",
-                  selectedId === decision.id && "sidebar-item-active",
+                  settingsSection === section && "sidebar-item-active",
                 )}
-                onClick={() => openDocument(decision.id)}
-                title={decision.title}
+                render={<Link href={`/settings/${section}`} />}
+                aria-current={settingsSection === section ? "page" : undefined}
               >
-                <FileTextIcon aria-hidden="true" />
-                <span className="truncate">{decision.title}</span>
+                <Icon aria-hidden="true" />
+                {label}
               </Button>
-            ))
-          ) : (
-            <p className="sidebar-empty">Documents you open appear here.</p>
-          )}
-        </nav>
-      </div>
+            ))}
+            {settingsSection === "team" && (
+              <Button
+                variant="ghost"
+                className="sidebar-item sidebar-item-active"
+                render={<Link href="/settings/team" />}
+                aria-current="page"
+              >
+                <UsersIcon aria-hidden="true" />
+                Team settings
+              </Button>
+            )}
+          </nav>
+        </>
+      ) : (
+        <>
+          <nav aria-label="Workspace" className="sidebar-navigation">
+            {[
+              { name: "Overview", icon: HouseIcon },
+              { name: "Projects", icon: FolderIcon },
+              { name: "Documents", icon: FileTextIcon },
+            ].map(({ name, icon: Icon }) => (
+              <Button
+                key={name}
+                variant="ghost"
+                className={cn(
+                  "sidebar-item",
+                  view === name && "sidebar-item-active",
+                )}
+                onClick={() => navigate(name)}
+                aria-current={
+                  view === name && !selected && !activeProject
+                    ? "page"
+                    : undefined
+                }
+              >
+                <Icon
+                  aria-hidden="true"
+                  weight={view === name ? "fill" : "regular"}
+                />
+                <span>{name}</span>
+              </Button>
+            ))}
+          </nav>
+          <div className="sidebar-section">
+            <h2>Projects</h2>
+            <nav aria-label="Projects">
+              {projects.map((name) => (
+                <Button
+                  key={name}
+                  variant="ghost"
+                  className={cn(
+                    "sidebar-item",
+                    activeProject === name && "sidebar-item-active",
+                  )}
+                  onClick={() => openProject(name)}
+                >
+                  <FolderIcon aria-hidden="true" />
+                  <span className="truncate">{name}</span>
+                  <span className="sidebar-count">
+                    {
+                      orgDocuments.filter(
+                        (decision) => decision.project === name,
+                      ).length
+                    }
+                  </span>
+                </Button>
+              ))}
+            </nav>
+          </div>
+          <div className="sidebar-section sidebar-recents">
+            <h2>Recently viewed</h2>
+            <nav aria-label="Recently viewed documents">
+              {recentDocuments.length ? (
+                recentDocuments.map((decision) => (
+                  <Button
+                    key={decision.id}
+                    variant="ghost"
+                    className={cn(
+                      "sidebar-item",
+                      selectedId === decision.id && "sidebar-item-active",
+                    )}
+                    onClick={() => openDocument(decision.id)}
+                    title={decision.title}
+                  >
+                    <FileTextIcon aria-hidden="true" />
+                    <span className="truncate">{decision.title}</span>
+                  </Button>
+                ))
+              ) : (
+                <p className="sidebar-empty">Documents you open appear here.</p>
+              )}
+            </nav>
+          </div>
+        </>
+      )}
       <div className="sidebar-bottom">
         <p className="product-wordmark">
           WhyDidWeChooseThis<span>.Tech</span>
         </p>
-        <Menu>
-          <MenuTrigger
-            render={<Button variant="ghost" className="profile-button" />}
-            aria-label="Open profile menu"
-          >
-            <PersonAvatar id="matthew" className="size-8" />
-            <span>
-              <strong>Matthew</strong>
-              <small>Team workspace</small>
-            </span>
-            <CaretUpDownIcon aria-hidden="true" />
-          </MenuTrigger>
-          <MenuPopup side="top" align="start" className="w-56">
-            <MenuGroup>
-              <MenuGroupLabel>Matthew</MenuGroupLabel>
-              <MenuItem onClick={() => setProfileOpen(true)}>
-                View profile
-              </MenuItem>
-            </MenuGroup>
-            <MenuSeparator />
-            <MenuLinkItem render={<Link href="/starter" />}>
-              Account & sign in
-              <ArrowUpRightIcon aria-hidden="true" />
-            </MenuLinkItem>
-          </MenuPopup>
-        </Menu>
+        <AccountMenu />
       </div>
     </div>
   );
@@ -542,69 +589,100 @@ export function Dashboard() {
           >
             <ListIcon />
           </Button>
-          <nav aria-label="Breadcrumb">
-            <ol className="dashboard-breadcrumb">
-              <li>
-                <button type="button" onClick={() => navigate("Overview")}>
-                  Workspace
-                </button>
-              </li>
-              {activeProject || selected ? (
-                <>
-                  <li className="breadcrumb-divider" aria-hidden="true">
-                    /
-                  </li>
-                  <li>
-                    <button type="button" onClick={() => navigate("Projects")}>
-                      Projects
-                    </button>
-                  </li>
-                  <li className="breadcrumb-divider" aria-hidden="true">
-                    /
-                  </li>
-                  <li>
-                    {selected ? (
+          {settingsSection ? (
+            <nav aria-label="Breadcrumb">
+              <ol className="dashboard-breadcrumb">
+                <li>
+                  <Link href="/">Workspace</Link>
+                </li>
+                <li className="breadcrumb-divider" aria-hidden="true">
+                  /
+                </li>
+                <li>Settings</li>
+                <li className="breadcrumb-divider" aria-hidden="true">
+                  /
+                </li>
+                <li className="breadcrumb-current" aria-current="page">
+                  {settingsSection === "team"
+                    ? "Team settings"
+                    : settingsSection.charAt(0).toUpperCase() +
+                      settingsSection.slice(1)}
+                </li>
+              </ol>
+            </nav>
+          ) : (
+            <nav aria-label="Breadcrumb">
+              <ol className="dashboard-breadcrumb">
+                <li>
+                  <button type="button" onClick={() => navigate("Overview")}>
+                    Workspace
+                  </button>
+                </li>
+                {activeProject || selected ? (
+                  <>
+                    <li className="breadcrumb-divider" aria-hidden="true">
+                      /
+                    </li>
+                    <li>
                       <button
                         type="button"
-                        onClick={() => openProject(selected.project)}
+                        onClick={() => navigate("Projects")}
                       >
-                        {selected.project}
+                        Projects
                       </button>
-                    ) : (
-                      <span className="breadcrumb-current" aria-current="page">
-                        {activeProject}
-                      </span>
+                    </li>
+                    <li className="breadcrumb-divider" aria-hidden="true">
+                      /
+                    </li>
+                    <li>
+                      {selected ? (
+                        <button
+                          type="button"
+                          onClick={() => openProject(selected.project)}
+                        >
+                          {selected.project}
+                        </button>
+                      ) : (
+                        <span
+                          className="breadcrumb-current"
+                          aria-current="page"
+                        >
+                          {activeProject}
+                        </span>
+                      )}
+                    </li>
+                    {selected && (
+                      <>
+                        <li className="breadcrumb-divider" aria-hidden="true">
+                          /
+                        </li>
+                        <li
+                          className="breadcrumb-current breadcrumb-document"
+                          aria-current="page"
+                        >
+                          {selected.title}
+                        </li>
+                      </>
                     )}
-                  </li>
-                  {selected && (
-                    <>
-                      <li className="breadcrumb-divider" aria-hidden="true">
-                        /
-                      </li>
-                      <li
-                        className="breadcrumb-current breadcrumb-document"
-                        aria-current="page"
-                      >
-                        {selected.title}
-                      </li>
-                    </>
-                  )}
-                </>
-              ) : (
-                <>
-                  <li className="breadcrumb-divider" aria-hidden="true">
-                    /
-                  </li>
-                  <li className="breadcrumb-current" aria-current="page">
-                    {view}
-                  </li>
-                </>
-              )}
-            </ol>
-          </nav>
+                  </>
+                ) : (
+                  <>
+                    <li className="breadcrumb-divider" aria-hidden="true">
+                      /
+                    </li>
+                    <li className="breadcrumb-current" aria-current="page">
+                      {view}
+                    </li>
+                  </>
+                )}
+              </ol>
+            </nav>
+          )}
         </header>
         <div className="dashboard-scroll" ref={scrollRef}>
-          {selected ? (
+          {settingsSection ? (
+            <AccountSettings section={settingsSection} />
+          ) : selected ? (
             <div className="decision-detail">
               <Button
                 variant="ghost"
@@ -1135,31 +1213,6 @@ export function Dashboard() {
               <Button type="submit">Create project</Button>
             </DialogFooter>
           </form>
-        </DialogPopup>
-      </Dialog>
-      <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
-        <DialogPopup>
-          <DialogHeader>
-            <DialogTitle>Profile</DialogTitle>
-            <DialogDescription>
-              Manage your account and team workspace.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogPanel>
-            <div className="flex items-center gap-3 py-3">
-              <PersonAvatar id="matthew" className="size-12" />
-              <div>
-                <p className="font-medium">Matthew</p>
-                <p className="text-sm text-muted-foreground">
-                  {organization} · Member
-                </p>
-              </div>
-            </div>
-            <Button render={<Link href="/starter" />} variant="outline">
-              Open account & sign in
-              <ArrowUpRightIcon aria-hidden="true" />
-            </Button>
-          </DialogPanel>
         </DialogPopup>
       </Dialog>
     </div>
