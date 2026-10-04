@@ -20,6 +20,10 @@ import type {
   MessageRow,
   PlanningSessionStore,
 } from "@/features/planning/server/planning-session.types";
+import type {
+  ChangeReason,
+  RealtimePort,
+} from "@/features/planning/server/realtime";
 import type { UserDirectory } from "@/features/planning/server/user-directory";
 import type { ActorResolver } from "@/features/planning/server/workspace-context";
 import {
@@ -35,6 +39,7 @@ import {
   type ConversationListItem,
   type CreateConversationInput,
   type MessageDto,
+  type ParticipantDto,
   type PublishInput,
   type RevertInput,
   type RevertResult,
@@ -207,11 +212,22 @@ export class PlanningSessionService {
       planningService: AgentPort;
       workspaceContext: ActorResolver;
       userDirectory: UserDirectory;
+      realtime: RealtimePort;
     },
   ) {}
 
   private get store() {
     return this.dependencies.planningSessionStore;
+  }
+
+  // Tells everyone in the chat to refetch. A failure here must never fail the request, because
+  // the change is already saved and every client sees it on its next fetch.
+  private async announce(conversationId: string, reason: ChangeReason) {
+    try {
+      await this.dependencies.realtime.notify(conversationId, reason);
+    } catch (error) {
+      console.error("Announcing a change failed", error);
+    }
   }
 
   private get docs() {
@@ -229,6 +245,18 @@ export class PlanningSessionService {
       organizationId: conversation.organizationId,
     };
     return { actor, conversation };
+  }
+
+  // Who the live layer should admit to this conversation's room, and under what name.
+  async liveAccess(userId: string, id: string): Promise<ParticipantDto> {
+    const { actor, conversation } = await this.load(userId, id);
+    const participants = await this.participantsFor(
+      actor.userId,
+      conversation.id,
+    );
+    const me = participants.find((row) => row.userId === userId);
+    if (!me) throw new ApiError(404, "Conversation not found.");
+    return { userId: me.userId, displayName: me.displayName };
   }
 
   async createConversation(
@@ -272,6 +300,7 @@ export class PlanningSessionService {
         userId,
         displayName: await this.dependencies.userDirectory.displayName(userId),
       });
+      await this.announce(existing.id, "participants");
       return this.detail(actor, existing);
     }
     const hasText = Boolean(changes.at(-1)?.content.trim());
@@ -618,6 +647,7 @@ export class PlanningSessionService {
         revertedToChangeId: target.id,
         applyDocument: apply,
       });
+      await this.announce(conversation.id, "document");
       const described = await this.describeChange(
         actor,
         committed.conversation,
@@ -683,15 +713,14 @@ export class PlanningSessionService {
         await release();
         return raced;
       }
-      const { message: userMessage } = await this.store.insertUserMessage(
-        conversation.id,
-        {
+      const { message: userMessage, created } =
+        await this.store.insertUserMessage(conversation.id, {
           authorUserId: userId,
           content: input.text,
           via: input.via,
           clientMessageId: input.clientMessageId ?? null,
-        },
-      );
+        });
+      if (created) await this.announce(conversation.id, "message");
       // State may have moved between load and claim.
       const fresh =
         (await this.store.findConversation(
@@ -798,6 +827,10 @@ export class PlanningSessionService {
       revertedToChangeId: revertedTo,
       applyDocument: apply,
     });
+    await this.announce(
+      conversation.id,
+      committed.change ? "document" : "message",
+    );
     return {
       assistant: committed.assistant,
       conversation: committed.conversation,

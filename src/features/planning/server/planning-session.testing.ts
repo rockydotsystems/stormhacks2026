@@ -24,6 +24,11 @@ import type {
   CommitTurnInput,
   AppliedChange,
 } from "@/features/planning/server/planning-session.types";
+import type {
+  ChangeReason,
+  Presence,
+  RealtimePort,
+} from "@/features/planning/server/realtime";
 import { ApiError } from "@/server/errors";
 
 // In-memory stand-ins for the data layer and the store. They follow the same rules the real
@@ -580,5 +585,29 @@ export class ScriptedAgent implements AgentPort {
     }
     if (script.fail) throw script.fail;
     yield { type: "final", result };
+  }
+}
+
+// Stands in for the live layer. Tests set who is present and read what was announced.
+export class FakeRealtime implements RealtimePort {
+  present = new Map<string, Presence[]>();
+  notified: { conversationId: string; reason: ChangeReason }[] = [];
+  failing = false;
+
+  async presence(conversationId: string) {
+    if (this.failing) throw new Error("realtime down");
+    return this.present.get(conversationId) ?? [];
+  }
+
+  async notify(conversationId: string, reason: ChangeReason) {
+    if (this.failing) throw new Error("realtime down");
+    this.notified.push({ conversationId, reason });
+  }
+
+  setPresent(conversationId: string, ...userIds: string[]) {
+    this.present.set(
+      conversationId,
+      userIds.map((userId) => ({ userId, displayName: `Name of ${userId}` })),
+    );
   }
 }

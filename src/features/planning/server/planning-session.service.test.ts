@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PlanningSessionService } from "@/features/planning/server/planning-session.service";
 import {
   FakeDocs,
+  FakeRealtime,
   InMemoryStore,
   ScriptedAgent,
 } from "@/features/planning/server/planning-session.testing";
@@ -29,6 +30,7 @@ function setup() {
   docs.onChangeDeleted = (docId, changeId) =>
     store.cascadeDelete(docId, changeId);
   const agent = new ScriptedAgent();
+  const realtime = new FakeRealtime();
   const service = new PlanningSessionService({
     planningSessionStore: store,
     docsService: docs,
@@ -42,8 +44,9 @@ function setup() {
     userDirectory: {
       displayName: async (userId: string) => `Name of ${userId}`,
     },
+    realtime,
   });
-  return { docs, store, agent, service };
+  return { docs, store, agent, service, realtime };
 }
 
 async function collect(stream: AsyncIterable<SessionEvent>) {
@@ -639,5 +642,41 @@ describe("PlanningSessionService: collaboration", () => {
     expect(detail.participants).toEqual([
       { userId: ana, displayName: "Name of user-ana" },
     ]);
+  });
+
+  it("announces a stored message, a document change and a join", async () => {
+    const { service, agent, input, first, realtime } = await shared();
+    realtime.notified.length = 0;
+    await service.createConversation(ben, input);
+    agent.enqueue(generate);
+    await service.sendMessage(ana, first.id, { text: "draft" });
+    expect(realtime.notified.map((n) => n.reason)).toEqual([
+      "participants",
+      "message",
+      "document",
+    ]);
+    expect(realtime.notified.every((n) => n.conversationId === first.id)).toBe(
+      true,
+    );
+  });
+
+  it("a live layer that is down never fails a message", async () => {
+    const { service, agent, first, realtime } = await shared();
+    realtime.failing = true;
+    agent.enqueue(generate);
+    const sent = await service.sendMessage(ana, first.id, { text: "draft" });
+    expect(sent.assistantMessage.content).toBeTruthy();
+  });
+
+  it("tells the live layer who may join, and refuses everyone else", async () => {
+    const { service, input, first } = await shared();
+    await service.createConversation(ben, input);
+    expect(await service.liveAccess(ben, first.id)).toEqual({
+      userId: ben,
+      displayName: "Name of user-ben",
+    });
+    await expect(
+      service.liveAccess("user-eve", first.id),
+    ).rejects.toMatchObject({ status: 404 });
   });
 });

@@ -25,6 +25,10 @@ import {
   WorkOsUserDirectory,
   type UserDirectory,
 } from "@/features/planning/server/user-directory";
+import {
+  DurableObjectRealtime,
+  type RealtimePort,
+} from "@/features/planning/server/realtime";
 import type { SpeechPort } from "@/features/planning/server/speech";
 import { createSpeech } from "@/features/planning/server/speech.factory";
 import { createDatabase, type Database } from "@/server/db";
@@ -41,6 +45,7 @@ export type Dependencies = {
   planningSessionStore: PlanningSessionStore;
   workspaceContext: WorkspaceContext;
   userDirectory: UserDirectory;
+  realtime: RealtimePort;
   planningSessionService: PlanningSessionService;
   planningSessionController: PlanningSessionController;
   authService: AuthService;
@@ -74,6 +79,7 @@ container.register({
   planningSessionStore: asClass(DrizzlePlanningSessionStore).scoped(),
   workspaceContext: asClass(WorkspaceContext).scoped(),
   userDirectory: asClass(WorkOsUserDirectory).scoped(),
+  realtime: asClass(DurableObjectRealtime).scoped(),
   planningSessionService: asClass(PlanningSessionService).scoped(),
   planningSessionController: asClass(PlanningSessionController).scoped(),
   authService: asClass(AuthService).scoped(),

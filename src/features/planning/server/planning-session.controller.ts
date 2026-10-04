@@ -37,6 +37,7 @@ type SessionService = Pick<
   | "createConversation"
   | "listConversations"
   | "getConversation"
+  | "liveAccess"
   | "listChanges"
   | "listVersions"
   | "getVersion"
@@ -94,6 +95,13 @@ export class PlanningSessionController {
     return json(
       await this.service.getConversation(user.id, conversationId(id)),
     );
+  }
+
+  // For the realtime Worker only. It forwards the caller's cookie to learn who they are and
+  // whether they may join this conversation's live room.
+  async liveAccess(id: string) {
+    const user = await this.dependencies.authService.requireUser();
+    return json(await this.service.liveAccess(user.id, conversationId(id)));
   }
 
   async send(request: Request, id: string) {

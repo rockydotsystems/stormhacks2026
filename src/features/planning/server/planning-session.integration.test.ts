@@ -6,7 +6,10 @@ import postgres from "postgres";
 import { DocsService } from "@/features/docs/server/docs.service";
 import { PlanningSessionService } from "@/features/planning/server/planning-session.service";
 import { DrizzlePlanningSessionStore } from "@/features/planning/server/planning-session.store";
-import { ScriptedAgent } from "@/features/planning/server/planning-session.testing";
+import {
+  FakeRealtime,
+  ScriptedAgent,
+} from "@/features/planning/server/planning-session.testing";
 import { WorkspaceContext } from "@/features/planning/server/workspace-context";
 
 // Creates and drops only its own database; requires local CREATEDB privileges.
@@ -51,6 +54,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         docsService: docs,
         planningService: agent,
         workspaceContext: context,
+        realtime: new FakeRealtime(),
         userDirectory: { displayName: async (id: string) => `Name of ${id}` },
       });
       return { agent, service };

@@ -15,8 +15,10 @@ export default defineConfig({
     include: [
       "src/**/*.test.ts",
       "apps/mcp/src/**/*.test.ts",
+      "apps/realtime/src/**/*.test.ts",
       "packages/data/src/**/*.test.ts",
       "scripts/**/*.test.ts",
+      "worker/**/*.test.ts",
     ],
     setupFiles: ["./tests/setup.ts"],
   },
