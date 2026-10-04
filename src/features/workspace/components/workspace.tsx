@@ -10,7 +10,6 @@ import {
   LightningIcon,
   ListIcon,
   PlusIcon,
-  PlugsConnectedIcon,
   SidebarSimpleIcon,
   SparkleIcon,
   SquareIcon,
@@ -31,7 +30,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { AgentActivity } from "@/features/workspace/components/agent-activity";
-import { ConnectionsDialog } from "@/features/workspace/components/connections-dialog";
 import { DocumentViewer } from "@/features/workspace/components/document-viewer";
 import { usePlanningSync } from "@/features/planning/client/use-planning-sync";
 import { PlanningConversation } from "@/features/planning/components/planning-conversation";
@@ -54,7 +52,6 @@ export function Workspace() {
   const [documentId, setDocumentId] = useState<DocumentId | null>("brief");
   const [documentFocused, setDocumentFocused] = useState(false);
   const [documentsOpen, setDocumentsOpen] = useState(false);
-  const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [planningDraftOpen, setPlanningDraftOpen] = useState(true);
@@ -222,16 +219,6 @@ export function Workspace() {
           <FileTextIcon /> Documents{" "}
           <span className="ml-auto text-xs">{documents.length}</span>
         </Button>
-        <Button
-          variant="ghost"
-          className="w-full justify-start text-muted-foreground"
-          onClick={() => setConnectionsOpen(true)}
-        >
-          <PlugsConnectedIcon /> Connections
-          <span className="ml-auto rounded-md bg-muted px-1.5 text-[10px]">
-            MCP
-          </span>
-        </Button>
       </nav>
       <div className="mt-7 flex min-h-0 flex-1 flex-col">
         <div className="mb-3 flex items-center justify-between px-2">
@@ -290,7 +277,7 @@ export function Workspace() {
           little less tab-switching.
         </div>
         <p className="mt-1.5 text-[11px] leading-5 text-muted-foreground">
-          Your ideas, tools, and documents.
+          Your ideas, decisions, and documents.
           <br />
           All in the same conversation.
         </p>
@@ -359,7 +346,7 @@ export function Workspace() {
                 <DialogHeader className="sr-only">
                   <DialogTitle>Workspace navigation</DialogTitle>
                   <DialogDescription>
-                    Open conversations, documents, or connections.
+                    Open conversations or documents.
                   </DialogDescription>
                 </DialogHeader>
                 <DialogPanel className="flex-1 p-2 pt-4">{sidebar}</DialogPanel>
@@ -678,10 +665,6 @@ export function Workspace() {
           </DialogPanel>
         </DialogPopup>
       </Dialog>
-      <ConnectionsDialog
-        open={connectionsOpen}
-        onOpenChange={setConnectionsOpen}
-      />
     </div>
   );
 }

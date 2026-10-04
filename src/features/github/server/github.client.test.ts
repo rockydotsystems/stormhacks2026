@@ -2,9 +2,96 @@ import { generateKeyPairSync, verify } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GitHubClient } from "./github.client";
 
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 describe("GitHub API adapter", () => {
+  it("binds the native fetch receiver required by Workers", async () => {
+    vi.stubGlobal(
+      "fetch",
+      function (this: unknown, _input: RequestInfo | URL, init?: RequestInit) {
+        if (this !== globalThis) throw new TypeError("Illegal invocation");
+        if (init?.redirect === "error")
+          throw new TypeError("Invalid redirect value");
+        return Promise.resolve(Response.json({ id: 123, login: "test-user" }));
+      },
+    );
+    expect(await new GitHubClient().user("user-token")).toEqual({
+      id: "123",
+      login: "test-user",
+    });
+  });
+
+  it("does not follow provider redirects or forward credentials to another host", async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      new Response(null, {
+        status: 302,
+        headers: { Location: "https://untrusted.test" },
+      }),
+    );
+    await expect(
+      new GitHubClient(fetcher).user("private-token"),
+    ).rejects.toMatchObject({ status: 502 });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher.mock.calls[0][1].redirect).toBe("manual");
+  });
+  it("logs only allowlisted OAuth diagnostics, never codes or provider details", async () => {
+    for (const key of [
+      "GITHUB_APP_ID",
+      "GITHUB_APP_SLUG",
+      "GITHUB_CLIENT_ID",
+      "GITHUB_CLIENT_SECRET",
+      "GITHUB_PRIVATE_KEY",
+      "GITHUB_WEBHOOK_SECRET",
+    ])
+      vi.stubEnv(key, "private-config-value");
+    const logger = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fetcher = vi.fn().mockResolvedValue(
+      Response.json(
+        {
+          error: "bad_verification_code",
+          error_description: "private-provider-details",
+          access_token: "private-token",
+        },
+        { status: 400 },
+      ),
+    );
+    await expect(
+      new GitHubClient(fetcher).exchangeCode(
+        "private-code",
+        "private-verifier",
+        "https://app.test/callback",
+      ),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(logger).toHaveBeenLastCalledWith("GitHub OAuth exchange failed", {
+      reason: "bad_verification_code",
+      status: 400,
+    });
+    fetcher.mockResolvedValue(
+      Response.json(
+        {
+          error: "private-arbitrary-error",
+          error_description: "private-provider-details",
+        },
+        { status: 400 },
+      ),
+    );
+    await expect(
+      new GitHubClient(fetcher).exchangeCode(
+        "private-code",
+        "private-verifier",
+        "https://app.test/callback",
+      ),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(logger).toHaveBeenLastCalledWith("GitHub OAuth exchange failed", {
+      reason: "provider_rejected",
+      status: 400,
+    });
+    expect(JSON.stringify(logger.mock.calls)).not.toContain("private-");
+  });
   it("uses bounded pagination and validates provider identities", async () => {
     const fetcher = vi
       .fn()
@@ -32,7 +119,7 @@ describe("GitHub API adapter", () => {
     expect(rows[100].id).toBe("101");
     expect(fetcher.mock.calls[1][0]).toContain("page=2");
     expect(fetcher.mock.calls[0][1]).toMatchObject({
-      redirect: "error",
+      redirect: "manual",
       headers: { Authorization: "Bearer user-token" },
     });
   });

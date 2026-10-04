@@ -83,7 +83,7 @@ export class DashboardController {
     const [projectRows, repositoryRows, links, latest, first, versions] =
       await Promise.all([
         projectsService.list(actor),
-        projectsService.listRepositories(actor),
+        projectsService.listConnectedRepositories(actor),
         db
           .select({
             projectId: projectRepositories.projectId,
@@ -213,6 +213,15 @@ export class DashboardController {
     // Project creation and all repository links either succeed together or roll back.
     const project = await db.transaction(async (tx) => {
       const service = new ProjectsService({ db: tx });
+      const repositories = await service.listConnectedRepositories(actor);
+      const connectedIds = new Set(
+        repositories.map((repository) => repository.id),
+      );
+      if (input.repositoryIds.some((id) => !connectedIds.has(id)))
+        throw new ApiError(
+          400,
+          "Choose connected GitHub repositories. Refresh the page or reconnect GitHub.",
+        );
       const project = await service.create(actor, input);
       for (const id of new Set(input.repositoryIds))
         await service.linkRepository(actor, project.id, id);

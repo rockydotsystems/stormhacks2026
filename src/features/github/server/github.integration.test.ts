@@ -70,6 +70,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       await client`DELETE FROM github_repository_access`;
       await client`DELETE FROM github_installations`;
       await client`DELETE FROM github_oauth_states`;
+      await client`DELETE FROM github_selections`;
       await client`DELETE FROM project_repositories`;
       await client`DELETE FROM github_repositories`;
       vi.stubEnv(
@@ -104,7 +105,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               {
                 id: 500,
                 app_id: 42,
-                account: { login: "GitHubOrg" },
+                account: { login: "GitHubOrg", type: "Organization" },
                 suspended_at: null,
               },
             ],
@@ -133,15 +134,21 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
     });
 
     async function connect(target = actor) {
-      const { state, url } = await service.begin(target, "githuborg");
+      const { state, url } = await service.begin(target);
       expect(new URL(url).searchParams.get("code_challenge_method")).toBe(
         "S256",
       );
-      await service.complete(target.userId, state, "test-code");
+      const { selection } = await service.complete(
+        target.userId,
+        state,
+        "test-code",
+      );
+      const choices = await service.choices(target, selection);
+      await service.select(target, selection, choices.installations[0].id);
     }
 
     it("consumes expiring OAuth state exactly once and binds it to WorkOS identity", async () => {
-      const { state } = await service.begin(actor, "githuborg");
+      const { state } = await service.begin(actor);
       await expect(
         service.consumeState(other.userId, state),
       ).rejects.toMatchObject({ status: 400 });
@@ -151,15 +158,90 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       await expect(
         service.consumeState(actor.userId, state),
       ).rejects.toMatchObject({ status: 400 });
-      const expired = await service.begin(actor, "githuborg");
+      const expired = await service.begin(actor);
       await client`UPDATE github_oauth_states SET expires_at = now() - interval '1 second'`;
       await expect(
         service.consumeState(actor.userId, expired.state),
       ).rejects.toMatchObject({ status: 400 });
     });
 
+    it("offers personal accounts and organizations without linking until selected", async () => {
+      const original = fetcher.getMockImplementation()!;
+      fetcher.mockImplementation(async (input, init) => {
+        if (new URL(String(input)).pathname === "/user/installations")
+          return Response.json({
+            total_count: 2,
+            installations: [
+              {
+                id: 500,
+                app_id: 42,
+                account: { login: "PersonalUser", type: "User" },
+                suspended_at: null,
+              },
+              {
+                id: 501,
+                app_id: 42,
+                account: { login: "GitHubOrg", type: "Organization" },
+                suspended_at: null,
+              },
+            ],
+          });
+        return original(input, init);
+      });
+      const { state } = await service.begin(actor);
+      const { selection } = await service.complete(actor.userId, state, "code");
+      expect((await service.status(actor)).installations).toEqual([]);
+      const choices = await service.choices(actor, selection);
+      expect(choices.installations.map((item) => item.accountType)).toEqual([
+        "User",
+        "Organization",
+      ]);
+      const [pending] =
+        await client`SELECT encrypted_token FROM github_selections`;
+      expect(pending.encrypted_token).not.toContain("transient-user-token");
+      await expect(service.choices(other, selection)).rejects.toMatchObject({
+        status: 400,
+      });
+      await expect(
+        service.select(actor, selection, "999"),
+      ).rejects.toMatchObject({ status: 403 });
+      await service.select(actor, selection, "500");
+      expect((await service.status(actor)).installations[0].accountLogin).toBe(
+        "PersonalUser",
+      );
+      expect(await client`SELECT * FROM github_selections`).toHaveLength(0);
+      await expect(
+        service.select(actor, selection, "500"),
+      ).rejects.toMatchObject({ status: 400 });
+    });
+
+    it("rejects expired installation selections", async () => {
+      const { state } = await service.begin(actor);
+      const { selection } = await service.complete(actor.userId, state, "code");
+      await client`UPDATE github_selections SET expires_at = now() - interval '1 second'`;
+      await expect(
+        service.select(actor, selection, "500"),
+      ).rejects.toMatchObject({ status: 400 });
+    });
+
+    it("consumes a selection only once under concurrent linking", async () => {
+      const { state } = await service.begin(actor);
+      const { selection } = await service.complete(actor.userId, state, "code");
+      const results = await Promise.allSettled([
+        service.select(actor, selection, "500"),
+        service.select(actor, selection, "500"),
+      ]);
+      expect(
+        results.filter((result) => result.status === "fulfilled"),
+      ).toHaveLength(1);
+      expect(
+        results.filter((result) => result.status === "rejected"),
+      ).toHaveLength(1);
+      expect((await service.status(actor)).installations).toHaveLength(1);
+    });
+
     it("rechecks membership after OAuth, before GitHub exchange", async () => {
-      const { state } = await service.begin(actor, "githuborg");
+      const { state } = await service.begin(actor);
       workos.userManagement.deactivate(actor.organizationId, actor.userId);
       try {
         await expect(
@@ -191,7 +273,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       ).toHaveLength(1);
       const [columns] =
         await client`SELECT count(*)::int AS count FROM information_schema.columns WHERE table_name LIKE 'github_%' AND column_name LIKE '%token%'`;
-      expect(columns.count).toBe(0);
+      expect(columns.count).toBe(1); // Only the expiring encrypted selection credential.
     });
 
     it("prevents cross-organization claims, reads and syncs", async () => {
@@ -332,7 +414,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               {
                 id: 501,
                 app_id: 42,
-                account: { login: "GitHubOrg" },
+                account: { login: "GitHubOrg", type: "Organization" },
                 suspended_at: null,
               },
             ],

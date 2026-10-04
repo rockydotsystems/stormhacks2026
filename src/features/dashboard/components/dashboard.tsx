@@ -4,6 +4,8 @@ import {
   ArrowLeftIcon,
   ArrowUpRightIcon,
   CaretDownIcon,
+  CaretLeftIcon,
+  CaretRightIcon,
   CaretUpDownIcon,
   CheckCircleIcon,
   CheckIcon,
@@ -15,6 +17,7 @@ import {
   ListIcon,
   MagnifyingGlassIcon,
   PlusIcon,
+  PlugsConnectedIcon,
   UsersIcon,
   UserIcon,
   ShieldCheckIcon,
@@ -249,9 +252,11 @@ function MultiFilter({
 export function Dashboard({
   settingsSection,
   githubOutcome,
+  mcpEndpoint,
 }: {
   settingsSection?: SettingsSection;
   githubOutcome?: string;
+  mcpEndpoint?: string;
 }) {
   const session = useSession();
   const [defaultSort] = useDefaultDocumentSort(session.data?.user?.id);
@@ -291,6 +296,7 @@ export function Dashboard({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeProject, setActiveProject] = useState<string | null>(null);
   const [myReviews, setMyReviews] = useState(false);
   const selected = decisions.find((decision) => decision.id === selectedId);
@@ -420,18 +426,22 @@ export function Dashboard({
       setFormError("Choose at least one repository for this project.");
       return;
     }
+    const repositories = projectRepositories.map((slug) =>
+      workspace.data?.repositories.find(
+        (repo) => `${repo.owner}/${repo.name}` === slug,
+      ),
+    );
+    if (repositories.some((repository) => !repository)) {
+      setFormError("Choose connected GitHub repositories. Refresh the page.");
+      return;
+    }
     try {
       const result = await mutation.mutateAsync({
         action: "createProject",
         organizationId: organization,
         name: String(fields.get("name")),
         description: String(fields.get("description")),
-        repositoryIds: projectRepositories.map(
-          (slug) =>
-            workspace.data!.repositories.find(
-              (repo) => `${repo.owner}/${repo.name}` === slug,
-            )!.id,
-        ),
+        repositoryIds: repositories.map((repository) => repository!.id),
       });
       setProjectCreateOpen(false);
       openProject(result.id);
@@ -455,31 +465,6 @@ export function Dashboard({
       setFormError((error as Error).message);
     }
   }
-  async function connectRepository(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setFormError(null);
-    const form = event.currentTarget;
-    const slug = String(new FormData(form).get("repository")).trim();
-    const parts = slug.split("/");
-    if (parts.length !== 2) {
-      setFormError("Enter a repository as owner/name.");
-      return;
-    }
-    try {
-      await mutation.mutateAsync({
-        action: "connectRepository",
-        organizationId: organization,
-        owner: parts[0],
-        name: parts[1],
-      });
-      setProjectRepositories((items) => [
-        ...new Set([...items, slug.toLowerCase()]),
-      ]);
-      form.reset();
-    } catch (error) {
-      setFormError((error as Error).message);
-    }
-  }
 
   const sidebar = (
     <div className="dashboard-sidebar-content">
@@ -488,12 +473,13 @@ export function Dashboard({
           <MenuTrigger
             render={<Button variant="ghost" className="org-switcher" />}
             aria-label="Switch organization"
+            title={`Switch organization: ${organizationName}`}
           >
             <span className="org-mark" aria-hidden="true">
               {organizationName.charAt(0).toLowerCase()}
               <span>•</span>
             </span>
-            <span className="truncate">{organizationName}</span>
+            <span className="sidebar-label truncate">{organizationName}</span>
             <CaretUpDownIcon aria-hidden="true" />
           </MenuTrigger>
           <MenuPopup align="start" className="w-60">
@@ -534,9 +520,11 @@ export function Dashboard({
             variant="ghost"
             className="sidebar-item back-to-app"
             render={<Link href="/" />}
+            aria-label="Back to app"
+            title="Back to app"
           >
             <ArrowLeftIcon aria-hidden="true" />
-            Back to app
+            <span className="sidebar-label">Back to app</span>
           </Button>
           <nav
             aria-label="Account settings"
@@ -546,6 +534,7 @@ export function Dashboard({
               { section: "profile", label: "Profile", icon: UserIcon },
               { section: "security", label: "Security", icon: ShieldCheckIcon },
               { section: "github", label: "GitHub", icon: GitBranchIcon },
+              { section: "mcp", label: "MCP", icon: PlugsConnectedIcon },
               {
                 section: "preferences",
                 label: "Preferences",
@@ -561,9 +550,11 @@ export function Dashboard({
                 )}
                 render={<Link href={`/settings/${section}`} />}
                 aria-current={settingsSection === section ? "page" : undefined}
+                aria-label={label}
+                title={label}
               >
                 <Icon aria-hidden="true" />
-                {label}
+                <span className="sidebar-label">{label}</span>
               </Button>
             ))}
             {settingsSection === "team" && (
@@ -572,9 +563,11 @@ export function Dashboard({
                 className="sidebar-item sidebar-item-active"
                 render={<Link href="/settings/team" />}
                 aria-current="page"
+                aria-label="Team settings"
+                title="Team settings"
               >
                 <UsersIcon aria-hidden="true" />
-                Team settings
+                <span className="sidebar-label">Team settings</span>
               </Button>
             )}
           </nav>
@@ -595,6 +588,8 @@ export function Dashboard({
                   view === name && "sidebar-item-active",
                 )}
                 onClick={() => navigate(name)}
+                aria-label={name}
+                title={name}
                 aria-current={
                   view === name && !selected && !activeProject
                     ? "page"
@@ -605,7 +600,7 @@ export function Dashboard({
                   aria-hidden="true"
                   weight={view === name ? "fill" : "regular"}
                 />
-                <span>{name}</span>
+                <span className="sidebar-label">{name}</span>
               </Button>
             ))}
           </nav>
@@ -621,9 +616,13 @@ export function Dashboard({
                     activeProject === name && "sidebar-item-active",
                   )}
                   onClick={() => openProject(name)}
+                  aria-label={projectName(name)}
+                  title={projectName(name)}
                 >
                   <FolderIcon aria-hidden="true" />
-                  <span className="truncate">{projectName(name)}</span>
+                  <span className="sidebar-label truncate">
+                    {projectName(name)}
+                  </span>
                   <span className="sidebar-count">
                     {
                       orgDocuments.filter(
@@ -649,9 +648,12 @@ export function Dashboard({
                     )}
                     onClick={() => openDocument(decision.id)}
                     title={decision.title}
+                    aria-label={decision.title}
                   >
                     <FileTextIcon aria-hidden="true" />
-                    <span className="truncate">{decision.title}</span>
+                    <span className="sidebar-label truncate">
+                      {decision.title}
+                    </span>
                   </Button>
                 ))
               ) : (
@@ -675,7 +677,30 @@ export function Dashboard({
       <a className="dashboard-skip" href="#dashboard-main">
         Skip to content
       </a>
-      <aside className="dashboard-sidebar">{sidebar}</aside>
+      <aside
+        id="dashboard-sidebar"
+        className="dashboard-sidebar"
+        data-collapsed={sidebarCollapsed}
+        aria-label="Sidebar"
+      >
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="sidebar-collapse-toggle"
+          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!sidebarCollapsed}
+          aria-controls="dashboard-sidebar"
+          onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+        >
+          {sidebarCollapsed ? (
+            <CaretRightIcon aria-hidden="true" />
+          ) : (
+            <CaretLeftIcon aria-hidden="true" />
+          )}
+        </Button>
+        {sidebar}
+      </aside>
       <main id="dashboard-main" className="dashboard-main">
         <header className="dashboard-topbar">
           <Button
@@ -705,8 +730,10 @@ export function Dashboard({
                     ? "Team settings"
                     : settingsSection === "github"
                       ? "GitHub"
-                      : settingsSection.charAt(0).toUpperCase() +
-                        settingsSection.slice(1)}
+                      : settingsSection === "mcp"
+                        ? "MCP"
+                        : settingsSection.charAt(0).toUpperCase() +
+                          settingsSection.slice(1)}
                 </li>
               </ol>
             </nav>
@@ -789,31 +816,16 @@ export function Dashboard({
           {settingsSection ? (
             settingsSection === "github" ? (
               <div className="settings-content">
-                <Label htmlFor="github-organization">Organization</Label>
-                <Select
-                  items={
-                    workspace.data?.organizations.map((org) => ({
-                      value: org.id,
-                      label: org.name,
-                    })) || []
-                  }
-                  value={organization || null}
-                  disabled={switching || workspace.isPending}
-                  onValueChange={(value) => {
-                    if (value) void switchOrganization(value);
-                  }}
-                >
-                  <SelectTrigger id="github-organization">
-                    <SelectValue placeholder="Choose organization" />
-                  </SelectTrigger>
-                  <SelectPopup>
-                    {workspace.data?.organizations.map((org) => (
-                      <SelectItem key={org.id} value={org.id}>
-                        {org.name}
-                      </SelectItem>
-                    ))}
-                  </SelectPopup>
-                </Select>
+                {organization && (
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">
+                      Organization
+                    </p>
+                    <h2 className="text-xl font-semibold">
+                      {organizationName}
+                    </h2>
+                  </div>
+                )}
                 {switchError && <p role="alert">{switchError}</p>}
                 {session.data?.user && workspace.isPending ? (
                   <p role="status">Loading your organizations…</p>
@@ -840,6 +852,7 @@ export function Dashboard({
                 section={settingsSection}
                 organizationId={organization}
                 githubOutcome={githubOutcome}
+                mcpEndpoint={mcpEndpoint}
               />
             )
           ) : session.isPending ||
@@ -1396,36 +1409,6 @@ export function Dashboard({
               project can contain a monorepo, or several related repositories.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={connectRepository} className="px-6 pb-4 space-y-2">
-            <Button
-              variant="outline"
-              render={
-                <Link
-                  href={`/settings/github?organizationId=${organization}`}
-                />
-              }
-            >
-              Connect repositories with GitHub
-            </Button>
-            <Label htmlFor="repository-slug">
-              Add a repository reference manually
-            </Label>
-            <div className="flex gap-2">
-              <Input
-                id="repository-slug"
-                name="repository"
-                placeholder="owner/repository"
-                required
-              />
-              <Button
-                variant="outline"
-                type="submit"
-                disabled={mutation.isPending}
-              >
-                Add
-              </Button>
-            </div>
-          </form>
           <form onSubmit={createProject}>
             <DialogPanel className="space-y-4">
               <div className="space-y-2">
@@ -1454,19 +1437,36 @@ export function Dashboard({
                 <Label htmlFor="dashboard-project-repositories">
                   Repositories
                 </Label>
-                <MultiFilter
-                  label="Project repositories"
-                  values={projectRepositories}
-                  options={
-                    workspace.data?.repositories.map(
+                {workspace.data?.repositories.length ? (
+                  <MultiFilter
+                    label="Project repositories"
+                    values={projectRepositories}
+                    options={workspace.data.repositories.map(
                       (repo) => `${repo.owner}/${repo.name}`,
-                    ) || []
-                  }
-                  onChange={setProjectRepositories}
-                />
+                    )}
+                    onChange={setProjectRepositories}
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No connected repositories. Connect repositories with GitHub
+                    before creating a project.
+                  </p>
+                )}
                 <p className="text-xs text-muted-foreground">
+                  Only connected GitHub repositories can be selected.
                   Repositories can belong to more than one project.
                 </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  render={
+                    <Link
+                      href={`/settings/github?organizationId=${organization}`}
+                    />
+                  }
+                >
+                  Connect repositories with GitHub
+                </Button>
               </div>
             </DialogPanel>
             {formError && (
@@ -1478,7 +1478,10 @@ export function Dashboard({
               <DialogClose render={<Button variant="outline" />}>
                 Cancel
               </DialogClose>
-              <Button type="submit" disabled={mutation.isPending}>
+              <Button
+                type="submit"
+                disabled={mutation.isPending || !projectRepositories.length}
+              >
                 {mutation.isPending ? "Creating…" : "Create project"}
               </Button>
             </DialogFooter>

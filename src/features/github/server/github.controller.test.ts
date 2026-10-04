@@ -38,7 +38,11 @@ function setup() {
       state,
       url: "https://github.com/login/oauth/authorize",
     }),
-    complete: vi.fn().mockResolvedValue(organizationId),
+    complete: vi
+      .fn()
+      .mockResolvedValue({ organizationId, selection: "b".repeat(43) }),
+    choices: vi.fn().mockResolvedValue({ installations: [] }),
+    select: vi.fn(),
     consumeState: vi.fn(),
     status: vi.fn().mockResolvedValue({ configured: true }),
     sync: vi.fn(),
@@ -81,6 +85,61 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("GitHub controller", () => {
+  it("lists authorized installations without exposing the selection cookie", async () => {
+    const { controller, githubService } = setup();
+    const cookie = "c".repeat(43);
+    await controller.installations(
+      new Request(
+        `https://app.test/api/github/installations?organizationId=${organizationId}`,
+        { headers: { cookie: `github_installation_selection=${cookie}` } },
+      ),
+    );
+    expect(githubService.choices).toHaveBeenCalledWith(
+      { userId: "workos-user", organizationId },
+      cookie,
+    );
+    const response = await controller.installations(
+      new Request(
+        `https://app.test/api/github/installations?organizationId=${organizationId}`,
+      ),
+    );
+    expect(await response.json()).toEqual({
+      installations: [],
+      authorized: false,
+    });
+  });
+
+  it("links only through a same-origin form with the HttpOnly selection handle", async () => {
+    const { controller, githubService } = setup();
+    const selection = "c".repeat(43);
+    const request = () =>
+      new Request("https://app.test/api/github/installations", {
+        method: "POST",
+        headers: {
+          origin: "https://app.test",
+          cookie: `github_installation_selection=${selection}`,
+        },
+        body: new URLSearchParams({ organizationId, installationId: "123" }),
+      });
+    const response = await controller.select(request());
+    expect(githubService.select).toHaveBeenCalledWith(
+      { userId: "workos-user", organizationId },
+      selection,
+      "123",
+    );
+    expect(response.headers.get("location")).toContain("github=connected");
+    expect(response.headers.get("set-cookie")).toContain(
+      "github_installation_selection=; Path=/api/github; Max-Age=0",
+    );
+    await expect(
+      controller.select(
+        new Request("https://app.test/api/github/installations", {
+          method: "POST",
+          headers: { origin: "https://evil.test" },
+        }),
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+  });
   it("starts OAuth only for an authenticated same-origin form and binds the organization", async () => {
     const { controller, githubService } = setup();
     const response = await controller.connect(
@@ -89,7 +148,6 @@ describe("GitHub controller", () => {
         headers: { origin: "https://app.test" },
         body: new URLSearchParams({
           organizationId,
-          accountLogin: "rockydotsystems",
         }),
       }),
     );
@@ -97,10 +155,10 @@ describe("GitHub controller", () => {
     expect(response.headers.get("set-cookie")).toContain("HttpOnly");
     expect(response.headers.get("set-cookie")).toContain("Secure");
     expect(response.headers.get("set-cookie")).toContain("SameSite=lax");
-    expect(githubService.begin).toHaveBeenCalledWith(
-      { userId: "workos-user", organizationId },
-      "rockydotsystems",
-    );
+    expect(githubService.begin).toHaveBeenCalledWith({
+      userId: "workos-user",
+      organizationId,
+    });
     await expect(
       controller.connect(
         new Request("https://app.test/api/github/connect", {

@@ -28,7 +28,7 @@ export const dashboardActionSchema = z.discriminatedUnion("action", [
     action: z.literal("createProject"),
     organizationId,
     ...projectSchema.shape,
-    repositoryIds: z.array(z.uuid()).max(100),
+    repositoryIds: z.array(z.uuid()).min(1).max(100),
   }),
   z.object({
     action: z.literal("connectRepository"),

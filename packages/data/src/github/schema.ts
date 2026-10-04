@@ -82,7 +82,6 @@ export const githubOAuthStates = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organizations.id),
-    accountLogin: text("account_login").notNull(),
     verifier: text("verifier").notNull(),
     redirectUri: text("redirect_uri").notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
@@ -110,4 +109,20 @@ export const githubDeliveries = pgTable(
       table.receivedAt,
     ),
   ],
+);
+
+export const githubSelections = pgTable(
+  "github_selections",
+  {
+    hash: text("hash").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    encryptedToken: text("encrypted_token").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [index("github_selections_expiry_idx").on(table.expiresAt)],
 );

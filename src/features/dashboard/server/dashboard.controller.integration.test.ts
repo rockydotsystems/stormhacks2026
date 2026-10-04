@@ -90,6 +90,8 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           }),
         )
       ).json()) as { id: string };
+      await client`INSERT INTO github_installations (id, organization_id, account_login, connected_by, github_user_id, github_user_login) VALUES ('dashboard-connected', ${organizationId}, 'org', ${user.id}, '123', 'test')`;
+      await client`INSERT INTO github_repository_access (repository_id, organization_id, installation_id, github_id) VALUES (${repo.id}, ${organizationId}, 'dashboard-connected', '456')`;
       const project = (await (
         await controller.create(
           request({
@@ -186,7 +188,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             repositoryIds: [randomUUID()],
           }),
         ),
-      ).rejects.toMatchObject({ status: 404 });
+      ).rejects.toMatchObject({ status: 400 });
       expect(
         ((await (await list(organizationId)).json()) as DashboardData).projects,
       ).toHaveLength(before);
@@ -244,6 +246,66 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       ).rejects.toMatchObject({ status: 404 });
       requireUser.mockResolvedValueOnce({ ...user, id: "outsider" });
       await expect(list(organizationId)).rejects.toMatchObject({ status: 404 });
+    });
+    it("offers only connected repositories and rejects disconnected project selections", async () => {
+      const org = (await (
+        await controller.create(
+          request({ action: "createOrganization", name: "Connected repos" }),
+        )
+      ).json()) as { id: string };
+      const organizationId = org.id;
+      const ids: Record<string, string> = {};
+      for (const name of ["connected", "manual", "removed", "unauthorized"]) {
+        const repo = (await (
+          await controller.create(
+            request({
+              action: "connectRepository",
+              organizationId,
+              owner: "org",
+              name,
+            }),
+          )
+        ).json()) as { id: string };
+        ids[name] = repo.id;
+      }
+      await client`INSERT INTO github_installations (id, organization_id, account_login, connected_by, github_user_id, github_user_login) VALUES ('dashboard-filter', ${organizationId}, 'org', ${user.id}, '123', 'test')`;
+      for (const name of ["connected", "removed", "unauthorized"]) {
+        await client`INSERT INTO github_repository_access (repository_id, organization_id, installation_id, github_id, available, authorized) VALUES (${ids[name]}, ${organizationId}, 'dashboard-filter', ${name}, ${name !== "removed"}, ${name !== "unauthorized"})`;
+      }
+      const data = (await (await list(organizationId)).json()) as DashboardData;
+      expect(data.repositories).toEqual([
+        { id: ids.connected, owner: "org", name: "connected" },
+      ]);
+      for (const name of ["manual", "removed", "unauthorized"]) {
+        await expect(
+          controller.create(
+            request({
+              action: "createProject",
+              organizationId,
+              name: "Must not create",
+              repositoryIds: [ids.connected, ids[name]],
+            }),
+          ),
+        ).rejects.toMatchObject({ status: 400 });
+      }
+      await client`UPDATE github_installations SET active = false WHERE id = 'dashboard-filter'`;
+      expect(
+        ((await (await list(organizationId)).json()) as DashboardData)
+          .repositories,
+      ).toEqual([]);
+      await expect(
+        controller.create(
+          request({
+            action: "createProject",
+            organizationId,
+            name: "Suspended installation",
+            repositoryIds: [ids.connected],
+          }),
+        ),
+      ).rejects.toMatchObject({ status: 400 });
+      expect(
+        ((await (await list(organizationId)).json()) as DashboardData).projects,
+      ).toEqual([]);
     });
     it("rejects invalid input before database writes", async () => {
       await expect(

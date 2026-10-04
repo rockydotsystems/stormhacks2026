@@ -1,10 +1,21 @@
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "stormhacks2026-mcp",
+  "account_id": "c9f498eef7a97c90a87c47f676709e7d",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-03",
   "compatibility_flags": ["nodejs_compat"],
-  "workers_dev": true,
+  "workers_dev": false,
+  "routes": [
+    {
+      "pattern": "mcp.whydidwechoosethis.tech",
+      "custom_domain": true,
+    },
+  ],
+  "vars": {
+    "AUTHKIT_ISSUER": "https://great-shell-53-staging.authkit.app",
+    "MCP_RESOURCE_URL": "https://mcp.whydidwechoosethis.tech/mcp",
+  },
   "observability": { "enabled": true },
   "hyperdrive": [
     {

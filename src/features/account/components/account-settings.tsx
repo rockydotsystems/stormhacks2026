@@ -23,23 +23,28 @@ import {
 import { useSession } from "@/features/auth/client/queries";
 import { useDefaultDocumentSort } from "@/features/account/preferences";
 import { GitHubSettings } from "@/features/github/components/github-settings";
+import { McpSettings } from "@/features/account/components/mcp-settings";
+import { ThemeSelect } from "./theme-select";
+import { useTheme } from "./theme-provider";
 
 export type SettingsSection =
-  "profile" | "security" | "preferences" | "team" | "github";
+  "profile" | "security" | "preferences" | "team" | "github" | "mcp";
 const headings = {
   profile: "Profile",
   security: "Security",
   preferences: "Preferences",
   team: "Team settings",
   github: "GitHub",
+  mcp: "MCP",
 };
 
 function AuthenticatedWidgets({
   section,
 }: {
-  section: Exclude<SettingsSection, "preferences" | "github">;
+  section: Exclude<SettingsSection, "preferences" | "github" | "mcp">;
 }) {
   const { organizationId, permissions } = useAuth();
+  const { resolvedTheme } = useTheme();
   const { getAccessToken } = useAccessToken();
   const queryClient = useQueryClient();
   async function token() {
@@ -66,6 +71,7 @@ function AuthenticatedWidgets({
     <WorkOsWidgets
       queryClient={queryClient}
       theme={{
+        appearance: resolvedTheme,
         accentColor: "teal",
         grayColor: "gray",
         radius: "medium",
@@ -93,6 +99,13 @@ function Preferences({ userId }: { userId?: string }) {
   const [error, setError] = useState("");
   return (
     <div className="settings-preferences">
+      <div>
+        <Label htmlFor="color-theme">Color theme</Label>
+        <p className="settings-description">
+          Use a light or dark theme, or follow your system.
+        </p>
+      </div>
+      <ThemeSelect id="color-theme" />
       <div>
         <Label htmlFor="default-document-sort">Default document order</Label>
         <p className="settings-description">
@@ -133,10 +146,12 @@ export default function AccountSettings({
   section,
   organizationId = "",
   githubOutcome,
+  mcpEndpoint,
 }: {
   section: SettingsSection;
   organizationId?: string;
   githubOutcome?: string;
+  mcpEndpoint?: string;
 }) {
   const session = useSession();
   return (
@@ -144,6 +159,8 @@ export default function AccountSettings({
       <h1>{headings[section]}</h1>
       {section === "preferences" ? (
         <Preferences userId={session.data?.user?.id} />
+      ) : section === "mcp" ? (
+        <McpSettings endpoint={mcpEndpoint} />
       ) : session.isPending ? (
         <p role="status">Loading your account…</p>
       ) : session.error ? (

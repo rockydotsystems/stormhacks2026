@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { connection } from "next/server";
 import { Providers } from "@/app/providers";
 import { isAuthConfigured } from "@/features/auth/server/config";
+import { themeScript } from "@/features/account/theme";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -19,7 +20,10 @@ export default async function RootLayout({
   // Read server configuration at request time, not during static builds.
   await connection();
   return (
-    <html lang="en" className="h-full antialiased">
+    <html lang="en" className="h-full antialiased" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body className="min-h-full flex flex-col">
         <div className="isolate flex flex-1 flex-col">
           <Providers authConfigured={isAuthConfigured()}>{children}</Providers>

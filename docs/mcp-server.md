@@ -57,18 +57,20 @@ registration. This Worker verifies RS256 JWT signatures using the configured
 issuer's `/oauth2/jwks`, checks the exact issuer and MCP URL audience, expiry,
 and required claims, and accepts only human `user_` subjects with a consent `sid`.
 It does not accept web session cookies, web-client audiences, unsigned tokens,
-or machine-to-machine credentials. It needs no WorkOS API key or client secret.
+or machine-to-machine credentials. JWT verification needs no client secret;
+organization membership checks require the environment's `WORKOS_API_KEY`.
 
-On every authenticated request, the Worker resolves local memberships from the
-verified user ID. Exactly one organization is required; zero or multiple
+On every authenticated request, the Worker resolves active WorkOS memberships
+from the verified user ID and mirrors the organization into Postgres. Exactly
+one organization is required; zero or multiple
 memberships return `403` rather than selecting one. No tools take org/user IDs
 as identity inputs, and all project/doc operations enforce the organization
 boundary through shared services. Roles remain equal, as in the data layer.
 
-Signing in does not provision local users, organizations or memberships. Those
-must already exist with the same WorkOS user ID. WorkOS membership synchronization
-and onboarding are not implemented here. `org_id` in a token is not treated as
-proof of local authorization. There is no sign-in bypass for local development.
+Signing in does not create an organization or grant membership. The user must
+already have exactly one active WorkOS organization membership. `org_id` in a
+token is not treated as proof of authorization. There is no sign-in bypass for
+local development.
 
 The configured resource origin also guards host/DNS rebinding. Browser `Origin`
 headers are denied unless explicitly allowed in `MCP_ALLOWED_ORIGINS`; native
@@ -105,7 +107,7 @@ Before connecting an OAuth-capable MCP client:
    if the environment requires it.
 3. Optionally set that resource as default for clients omitting the `resource`
    parameter. The Worker never falls back to the environment's web client ID.
-4. Provision exactly one local organization membership for the signing-in user.
+4. Ensure the signing-in user has exactly one active WorkOS organization membership.
 5. Configure the MCP client with the remote HTTP URL and complete its browser
    authorization flow. Its OAuth callback belongs to the **client**, not this app.
 
@@ -145,6 +147,31 @@ disabled for read-after-write consistency. Set configuration as Worker secrets
 or explicit deployment variables before invoking the app's `deploy` script.
 There is no automatic MCP publication yet.
 
+### Hosted endpoint
+
+The MCP Worker configuration serves `https://mcp.whydidwechoosethis.tech/mcp`
+through a Cloudflare Custom Domain in the existing rocky.systems account. The
+web Worker uses the same `MCP_RESOURCE_URL` for personal setup commands. The MCP
+Worker's `workers.dev` route is disabled; its resource origin is the custom domain.
+
+Authentication uses the same WorkOS staging environment as the deployed web app,
+with issuer `https://great-shell-53-staging.authkit.app`. Connect has CIMD and DCR
+enabled, and the exact MCP endpoint is registered as the default Resource
+Indicator. Keep the staging identity environment until a separate production
+identity migration is explicitly planned.
+
+The MCP Worker also needs a `WORKOS_API_KEY` secret from that environment to
+check active organization memberships. It does not need the web cookie password,
+client secret, GitHub secrets, or AI-provider credentials. Store the key using
+Wrangler's secure secret input; never add it to configuration or documentation.
+
+Deploy the MCP Worker explicitly from the repository root with
+`pnpm --filter @stormhacks/mcp run deploy`, then deploy the web Worker with
+`pnpm run deploy`. Use the intended Cloudflare account credentials and preserve
+existing remote variables with `--keep-vars` when deploying from an environment
+that manages additional dashboard variables. Both commands publish and require
+deployment approval. The existing CI workflow still deploys only the web Worker.
+
 ## Implementation record
 
 - Extracted transport-independent schemas/contracts/services into `packages/data`;
@@ -160,8 +187,9 @@ There is no automatic MCP publication yet.
   qualify the outer doc-change reference, so another doc's newer publication
   cannot incorrectly mark this doc's drafts immutable. A regression test covers it.
 
-Hosted WorkOS browser sign-in and MCP deployment are not verified until the
-Connect domain/resource registration and deployment are configured.
+Hosted WorkOS browser sign-in and authenticated tool calls require a real user
+to complete consent in their coding agent; discovery and deployment checks alone
+do not prove that flow.
 
 Local verification passed: all 60 tests with real Postgres enabled, web and MCP
 Worker build/dry-runs, the workerd smoke, and Nix source/application checks.

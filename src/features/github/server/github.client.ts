@@ -29,14 +29,19 @@ export const remoteRepositorySchema = z.object({
 const installationSchema = z.object({
   id,
   app_id: id,
-  account: z.object({ login: z.string().min(1) }),
+  account: z.object({
+    login: z.string().min(1),
+    type: z.enum(["User", "Organization"]),
+  }),
   suspended_at: z.string().nullable(),
 });
 export type RemoteRepository = z.infer<typeof remoteRepositorySchema>;
 export type RemoteInstallation = z.infer<typeof installationSchema>;
 
 export class GitHubClient {
-  constructor(private readonly fetcher: typeof fetch = fetch) {}
+  constructor(
+    private readonly fetcher: typeof fetch = fetch.bind(globalThis),
+  ) {}
 
   private async request<T>(
     path: string,
@@ -49,7 +54,7 @@ export class GitHubClient {
       response = await this.fetcher(`https://api.github.com${path}`, {
         ...init,
         signal: AbortSignal.timeout(15000),
-        redirect: "error",
+        redirect: "manual",
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: "application/vnd.github+json",
@@ -115,7 +120,7 @@ export class GitHubClient {
         "https://github.com/login/oauth/access_token",
         {
           method: "POST",
-          redirect: "error",
+          redirect: "manual",
           signal: AbortSignal.timeout(15000),
           headers: {
             Accept: "application/json",
@@ -131,19 +136,46 @@ export class GitHubClient {
         },
       );
     } catch {
+      console.error("GitHub OAuth exchange failed", { reason: "network" });
       throw new ApiError(
         502,
         "GitHub could not be reached. Try connecting again.",
       );
     }
-    const data = z
-      .object({ access_token: z.string().min(1) })
-      .safeParse(await readProviderJson(response));
-    if (!response.ok || !data.success)
+    let value: unknown;
+    try {
+      value = await readProviderJson(response);
+    } catch (error) {
+      console.error("GitHub OAuth exchange failed", {
+        reason: "invalid_response",
+        status: response.status,
+      });
+      throw error;
+    }
+    const data = z.object({ access_token: z.string().min(1) }).safeParse(value);
+    if (!response.ok || !data.success) {
+      const providerError = z
+        .object({
+          error: z.enum([
+            "bad_verification_code",
+            "incorrect_client_credentials",
+            "redirect_uri_mismatch",
+            "access_denied",
+            "unsupported_grant_type",
+          ]),
+        })
+        .safeParse(value);
+      console.error("GitHub OAuth exchange failed", {
+        reason: providerError.success
+          ? providerError.data.error
+          : "provider_rejected",
+        status: response.status,
+      });
       throw new ApiError(
         400,
         "GitHub authorization failed. Try connecting again.",
       );
+    }
     return data.data.access_token;
   }
 

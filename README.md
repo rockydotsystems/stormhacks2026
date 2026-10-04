@@ -157,6 +157,16 @@ separately for each signed-in user. Live widget edits and logout verification
 require a signed-in WorkOS session; security changes should be verified with a
 disposable staging account.
 
+`/settings/mcp` is a personal settings section for connecting AI clients to this
+app's MCP server. Choose Claude Code, OpenCode (V2), or Codex, copy the setup
+command, and complete the client's browser sign-in. Commands configure the agent
+for all projects on the user's device without collecting API keys or editing JSON.
+The web and MCP Worker configurations use the registered hosted endpoint
+`https://mcp.whydidwechoosethis.tech/mcp`. If `MCP_RESOURCE_URL` is missing or
+invalid, the page shows command previews with copying disabled. Local setup uses
+`http://localhost:3001/mcp` and requires the separate MCP Worker to be running.
+See [MCP server](docs/mcp-server.md) for server setup and authorization requirements.
+
 ## GitHub integration
 
 Connect an installed GitHub App from `/settings/github` after selecting an

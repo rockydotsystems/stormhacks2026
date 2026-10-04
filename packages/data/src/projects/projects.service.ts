@@ -12,6 +12,7 @@ import { requireProject } from "./access";
 import { githubRepositories, projectRepositories, projects } from "./schema";
 import type { Database, Page } from "../db";
 import { ApiError } from "../errors";
+import { githubInstallations, githubRepositoryAccess } from "../github/schema";
 
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
@@ -83,6 +84,34 @@ export class ProjectsService {
       .select()
       .from(githubRepositories)
       .where(eq(githubRepositories.organizationId, actor.organizationId))
+      .orderBy(asc(githubRepositories.owner), asc(githubRepositories.name));
+  }
+
+  async listConnectedRepositories(actor: OrganizationActor) {
+    await requireOrganizationMember(this.dependencies.db, actor);
+    return this.dependencies.db
+      .select({
+        id: githubRepositories.id,
+        owner: githubRepositories.owner,
+        name: githubRepositories.name,
+      })
+      .from(githubRepositories)
+      .innerJoin(
+        githubRepositoryAccess,
+        eq(githubRepositoryAccess.repositoryId, githubRepositories.id),
+      )
+      .innerJoin(
+        githubInstallations,
+        eq(githubInstallations.id, githubRepositoryAccess.installationId),
+      )
+      .where(
+        and(
+          eq(githubRepositories.organizationId, actor.organizationId),
+          eq(githubRepositoryAccess.authorized, true),
+          eq(githubRepositoryAccess.available, true),
+          eq(githubInstallations.active, true),
+        ),
+      )
       .orderBy(asc(githubRepositories.owner), asc(githubRepositories.name));
   }
 
