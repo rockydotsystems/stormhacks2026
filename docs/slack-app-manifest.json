@@ -12,11 +12,12 @@
   },
   "oauth_config": {
     "redirect_urls": [
-      "https://api.workos.com/data-integrations/slack/LK206Z2oCesxgwjIfbQEai240/callback"
+      "https://api.workos.com/data-integrations/slack/LK206Z2oCesxgwjIfbQEai240/callback",
+      "https://api.workos.com/data-integrations/slack/i6I3HRsTfuRRRwYDfXnbivQxy/callback"
     ],
     "scopes": {
       "bot": [
-        "app_mentions.read",
+        "app_mentions:read",
         "chat:write",
         "channels:read",
         "groups:read",
