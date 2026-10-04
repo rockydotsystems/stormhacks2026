@@ -1,7 +1,8 @@
 # Workspace UI preview
 
-Open `/` for the interactive workspace. The existing WorkOS and database-backed
-notes example is still available at `/starter`.
+Open `/` for the decision dashboard and `/workspace` for the interactive document
+workspace prototype. The existing WorkOS and database-backed notes example is
+still available at `/starter`.
 
 ## Included
 
@@ -30,3 +31,55 @@ permissions must come from the provider when the authorization flow is integrate
 
 Run `pnpm check` and `pnpm deploy:check` for source and Worker build checks. The
 latter is a deployment dry run, not publication.
+
+## Decision dashboard
+
+`/` opens the WhyDidWeChooseThis.Tech dashboard. The original conversation and
+document workspace is at `/workspace`, and authentication remains at `/starter`.
+
+The three primary destinations are Overview, Projects, and Documents. Overview
+shows commonly visited projects and recently viewed documents. Projects group
+related decisions and associated repositories; Documents searches across all
+projects. Project shortcuts and recent documents appear in the sidebar.
+
+Projects have a name, description, and optional repository selections. A repository
+can belong to multiple projects. New documents use a Coss project dropdown and
+inherit repository context from the project; repository selection lives in
+project creation. Reviewer requests are deferred until inside the document.
+Projects are identified by UUID, so names do not determine ownership or document scope.
+
+Status, Project, and repository selectors use Coss's inline chip multi-selection
+combobox pattern. Selections within a filter combine with OR, and different filters
+combine with AND. My reviews is disabled until review requests have a backend. Bound is a status. Clearing filters
+inside a project retains its scope. The inset frame and header remain fixed while
+its content scrolls.
+
+The folder artwork is an original CSS interpretation inspired by
+[Rare UI's folder component](https://www.rareui.com/components/foldercomponent).
+It respects reduced motion. Coss Menu, Avatar, Badge, Select, and Combobox join
+the existing Button, Input, Dialog, Label, and Textarea primitives.
+
+Dashboard records come from authenticated `/api/dashboard` requests. Organizations,
+projects, descriptions, repository associations, and documents persist in Postgres.
+Repository entries are explicit `owner/name` associations, not GitHub installation
+access or fetched repository contents. Project creation and repository links share
+one transaction. Apply migration `0003_quiet_randall_flagg.sql` before running this UI.
+
+Document details load `/api/documents/[id]`. Saving appends a complete snapshot;
+binding publishes the saved snapshot as an immutable version. Published versions
+remain readable after new drafts. The list shows Bound only when its latest snapshot
+is the latest published version; otherwise it shows Draft. Reviewers are not invented.
+Descriptions are excerpts of the latest document body. Recently viewed document IDs
+are stored on the device, scoped by authenticated user and organization.
+
+The organization switcher uses the backend's membership list. New organization
+creation adds its creator as a member. The backend currently provisions memberships
+locally; it does not sync them from WorkOS. The account menu uses real WorkOS identity
+and links to `/settings/profile`, `/settings/security`, `/settings/preferences`, and
+`/settings/team`. Team management still uses the authenticated WorkOS organization,
+which is separate from the selected database organization.
+
+Verify project creation with multiple repositories, its empty state, creating a
+document with inherited repositories, combined document filters, and organization
+isolation. At narrow widths, check navigation, dialog dismissal, and chip wrapping.
+Run `pnpm check` and `pnpm deploy:check` before publication.

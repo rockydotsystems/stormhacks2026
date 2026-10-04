@@ -26,6 +26,9 @@
             root = ./.;
             fileset = pkgs.lib.fileset.unions [
               ./src
+              ./apps
+              ./packages
+              ./drizzle
               ./public
               ./tests
               ./scripts
@@ -76,6 +79,8 @@
           commands = {
             install = "pnpm install --frozen-lockfile";
             dev = "pnpm dev";
+            mcp-dev = "pnpm mcp:dev";
+            mcp-build = "pnpm mcp:build";
             build = "pnpm build";
             start = "pnpm start";
             deploy = "pnpm run deploy";

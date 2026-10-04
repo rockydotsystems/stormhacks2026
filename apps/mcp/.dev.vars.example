@@ -1,0 +1,6 @@
+# AuthKit Connect domain (not api.workos.com).
+AUTHKIT_ISSUER=https://your-authkit-domain.workos.com
+# Must exactly match the registered WorkOS resource indicator.
+MCP_RESOURCE_URL=http://localhost:3001/mcp
+# Comma-separated browser origins allowed to call MCP; empty denies browser origins.
+MCP_ALLOWED_ORIGINS=

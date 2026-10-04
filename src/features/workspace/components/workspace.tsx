@@ -182,12 +182,20 @@ export function Workspace() {
           <LightningIcon weight="fill" className="size-4" aria-hidden="true" />
         </span>
         <span className="text-sm font-semibold tracking-tight">
-          StormHacks
+          WhyDidWeChooseThis
           <span className="ml-1.5 text-xs font-normal text-muted-foreground">
             workspace
           </span>
         </span>
       </div>
+      <Button
+        render={<Link href="/" />}
+        variant="ghost"
+        className="mb-2 w-full justify-start text-xs"
+      >
+        <ArrowDownIcon className="rotate-90" aria-hidden="true" /> Back to
+        documents
+      </Button>
       <Button
         variant="outline"
         className="mb-5 w-full justify-start bg-background/70"
@@ -370,9 +378,6 @@ export function Workspace() {
               </span>
               <h1 className="truncate font-medium">{active.title}</h1>
             </div>
-            <span className="ml-auto shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] text-muted-foreground">
-              Preview
-            </span>
             <Button
               variant="ghost"
               size="icon-sm"
@@ -600,9 +605,6 @@ export function Workspace() {
                 </div>
               </div>
             </form>
-            <p className="mt-2.5 text-center text-[10px] text-muted-foreground">
-              UI preview · Sample replies · Nothing is sent to an AI provider
-            </p>
           </div>
         </section>
         {isPlanning && (

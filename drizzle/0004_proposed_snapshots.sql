@@ -1,0 +1,1 @@
+ALTER TABLE "doc_changes" ADD COLUMN "proposed" boolean DEFAULT false NOT NULL;

@@ -38,6 +38,8 @@ describe("notes API through the request-scoped DI container", () => {
       id: "user-a",
       email: "a@example.com",
       firstName: null,
+      lastName: null,
+      profilePictureUrl: null,
     });
   });
 

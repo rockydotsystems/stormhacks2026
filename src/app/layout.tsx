@@ -6,9 +6,9 @@ import { isAuthConfigured } from "@/features/auth/server/config";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "StormHacks 2026",
+  title: "WhyDidWeChooseThis.Tech",
   description:
-    "A focused workspace for conversations, connected tools, and documents.",
+    "A shared record of architectural decisions, team intent, and the reasons behind them.",
 };
 
 export default async function RootLayout({

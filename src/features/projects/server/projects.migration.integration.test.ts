@@ -89,10 +89,29 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         await client`SELECT * FROM doc_versions ORDER BY id`;
 
       const db = drizzle(client);
+      // Simulate an installation that already applied the dashboard's migration.
+      const dashboardJournal = JSON.parse(
+        await readFile("drizzle/meta/_journal.json", "utf8"),
+      );
+      dashboardJournal.entries = dashboardJournal.entries.filter(
+        (entry: { idx: number }) => entry.idx <= 3,
+      );
+      await writeFile(
+        join(migrationFolder, "meta/_journal.json"),
+        JSON.stringify(dashboardJournal),
+      );
+      for (const entry of dashboardJournal.entries) {
+        await cp(
+          `drizzle/${entry.tag}.sql`,
+          join(migrationFolder, `${entry.tag}.sql`),
+        );
+      }
+      await migrate(db, { migrationsFolder: migrationFolder });
+      await client`UPDATE projects SET description = 'Existing dashboard description' WHERE id = ${doc.id}`;
       await migrate(db, { migrationsFolder: "./drizzle" });
       await migrate(db, { migrationsFolder: "./drizzle" });
       expect(await client`SELECT * FROM doc_changes ORDER BY id`).toEqual(
-        beforeChanges,
+        beforeChanges.map((row) => ({ ...row, proposed: false })),
       );
       expect(await client`SELECT * FROM doc_versions ORDER BY id`).toEqual(
         beforeVersions,
@@ -113,6 +132,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       expect(await projects.get(actor, doc.id)).toMatchObject({
         id: doc.id,
         name: "Latest draft title",
+        description: "Existing dashboard description",
         createdAt: new Date(doc.created_at).toISOString(),
       });
       expect(await projects.get(actor, empty.id)).toMatchObject({

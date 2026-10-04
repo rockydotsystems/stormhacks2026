@@ -1,5 +1,6 @@
 import "server-only";
 import { asClass, asFunction, createContainer, InjectionMode } from "awilix";
+import { DashboardController } from "@/features/dashboard/server/dashboard.controller";
 import { AuthController } from "@/features/auth/server/auth.controller";
 import { AuthService } from "@/features/auth/server/auth.service";
 import { DocsService } from "@/features/docs/server/docs.service";
@@ -21,6 +22,7 @@ import { createSpeech } from "@/features/planning/server/speech.factory";
 import { createDatabase, type Database } from "@/server/db";
 
 export type Dependencies = {
+  dashboardController: DashboardController;
   db: Database;
   model: ModelPort;
   speech: SpeechPort;
@@ -45,6 +47,7 @@ export const container = createContainer<Dependencies>({
 });
 
 container.register({
+  dashboardController: asClass(DashboardController).scoped(),
   db: asFunction(createDatabase)
     .scoped()
     .disposer((db) => db.$client.end({ timeout: 1 })),

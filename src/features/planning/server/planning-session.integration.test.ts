@@ -121,6 +121,15 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       });
       const first = generated.conversation.changes[0];
       expect(first.source?.mode).toBe("generated");
+      const actor = await context.resolveActor(userId);
+      const [project] = await client`SELECT * FROM projects WHERE id = ${id}`;
+      expect(project).toMatchObject({
+        organization_id: actor.organizationId,
+        name: "Flow",
+      });
+      const [document] =
+        await client`SELECT * FROM docs WHERE project_id = ${id}`;
+      expect(document.organization_id).toBe(actor.organizationId);
       const firstSource = await service.getChangeSource(userId, id, first.id);
       expect(firstSource.messages.map((m) => m.role)).toEqual([
         "user",
@@ -241,12 +250,20 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           mode: "generated",
           revertedToChangeId: null,
           applyDocument: async (txDocs) => {
-            await txDocs.create(actor, { title: "Doomed", content: "text" });
+            await txDocs.create(actor, id, {
+              title: "Doomed",
+              content: "text",
+            });
             throw new Error("boom");
           },
         }),
       ).rejects.toThrow("boom");
-      expect(await docs.list(actor)).toEqual([]);
+      expect(
+        await client`SELECT * FROM docs WHERE organization_id = ${actor.organizationId}`,
+      ).toEqual([]);
+      expect(
+        await client`SELECT * FROM projects WHERE organization_id = ${actor.organizationId}`,
+      ).toEqual([]);
       const detail = await service.getConversation(userId, id);
       expect(detail.messages.map((m) => m.role)).toEqual(["user"]);
       expect(detail.phase).toBe("grilling");

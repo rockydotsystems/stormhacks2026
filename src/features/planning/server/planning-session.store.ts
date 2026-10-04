@@ -16,6 +16,7 @@ import {
 } from "drizzle-orm";
 import type { ChecklistEntry } from "@/features/planning/contracts";
 import { DocsService } from "@/features/docs/server/docs.service";
+import { projects } from "@/features/projects/server/schema";
 import type {
   AppliedChange,
   ChangeSourceRow,
@@ -252,6 +253,17 @@ export class DrizzlePlanningSessionStore implements PlanningSessionStore {
 
   async commitTurn(input: CommitTurnInput): Promise<CommitTurnResult> {
     return this.dependencies.db.transaction(async (tx) => {
+      if (input.applyDocument && input.mode === "generated") {
+        const [conversation] = await tx
+          .select()
+          .from(planningConversations)
+          .where(eq(planningConversations.id, input.conversationId));
+        await tx.insert(projects).values({
+          id: conversation.id,
+          organizationId: conversation.organizationId,
+          name: conversation.title,
+        });
+      }
       const change = input.applyDocument
         ? await input.applyDocument(docsOn(tx))
         : null;

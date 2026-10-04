@@ -20,6 +20,7 @@ The data layer calls an ADR a **doc**. The planning agent writes docs.
 - **Revert.** A revert is an appended change that carries an earlier change's text. History is never rewritten. Main's data layer can delete an unpublished draft change and renumbers display numbers while stable change ids stay the same. This API does not expose deletion.
 - **Provenance.** Each change links to the conversation segment that produced it: the user message that triggered it, the assistant message that announced it, and the messages since the previous linked change. Voice turns keep their transcript. Deleting a draft change removes its link and keeps the messages. See `planning_change_sources`.
 - **Organizations.** Not part of this slice. Each user gets a hidden personal organization on first use, because the data layer requires one on every call. It is an ordinary row named "Personal workspace" and will show up once organizations get a picker.
+- **Projects.** The first generated draft creates a project named after the conversation, using the conversation ID as its project ID. Project creation, document creation, the assistant message, and source links commit together. Later edits reuse that document and project.
 
 ## First-start flow
 

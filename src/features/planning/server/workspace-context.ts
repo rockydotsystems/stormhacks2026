@@ -1,7 +1,7 @@
 import "server-only";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import type { OrganizationActor } from "@/features/docs/contracts";
+import type { OrganizationActor } from "@/features/organizations/contracts";
 import { personalWorkspaces } from "@/features/planning/server/schema";
 import {
   organizationMembers,

@@ -46,7 +46,7 @@ export function AgentActivity({
         <li className="flex items-center gap-2.5">
           <CircleIcon className="size-4" aria-hidden="true" />
           {running
-            ? "Prepare the preview reply"
+            ? "Prepare the reply"
             : stopped
               ? "Canceled before replying"
               : "Present the project brief"}

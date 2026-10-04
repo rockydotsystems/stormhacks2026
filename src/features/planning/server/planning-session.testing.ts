@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 import type {
   DocChange,
   DocVersion,
-  OrganizationActor,
   Snapshot,
 } from "@/features/docs/contracts";
+import type { OrganizationActor } from "@/features/organizations/contracts";
 import type {
   AgentTurnInput,
   AgentTurnResult,
@@ -61,7 +61,7 @@ export class FakeDocs implements DocsPort {
     return doc;
   }
 
-  async create(actor: OrganizationActor, input: Snapshot) {
+  async create(actor: OrganizationActor, projectId: string, input: Snapshot) {
     this.calls.push("create");
     const id = randomUUID();
     this.docs.set(id, {
@@ -74,6 +74,7 @@ export class FakeDocs implements DocsPort {
       id,
       organizationId: actor.organizationId,
       createdAt: new Date().toISOString(),
+      projectId,
     };
   }
 
@@ -95,6 +96,7 @@ export class FakeDocs implements DocsPort {
       content: change.content,
       createdBy: change.createdBy,
       createdAt: change.createdAt.toISOString(),
+      proposed: false,
     };
   }
 
@@ -113,6 +115,7 @@ export class FakeDocs implements DocsPort {
       createdAt: change.createdAt.toISOString(),
       number: index + 1,
       immutable: change.id <= boundary,
+      proposed: false,
     }));
   }
 

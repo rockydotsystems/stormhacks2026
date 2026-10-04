@@ -44,7 +44,7 @@ import {
   type WorkingDocumentDto,
 } from "@/features/planning/session-contracts";
 import { ApiError } from "@/server/errors";
-import type { OrganizationActor } from "@/features/docs/contracts";
+import type { OrganizationActor } from "@/features/organizations/contracts";
 
 // The agent as the session service sees it. It can run a turn and nothing else: no publish, no
 // doc access. The real PlanningService satisfies this shape.
@@ -646,7 +646,7 @@ export class PlanningSessionService {
       if (!conversation.docId) {
         mode = "generated";
         apply = async (docs) => {
-          const doc = await docs.create(actor, snapshot);
+          const doc = await docs.create(actor, conversation.id, snapshot);
           const changes = await docs.listChanges(actor, doc.id);
           return { docId: doc.id, changeId: changes[changes.length - 1].id };
         };

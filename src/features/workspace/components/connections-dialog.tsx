@@ -117,8 +117,8 @@ export function ConnectionsDialog({
           <>
             <DialogPanel className="space-y-4">
               <p className="rounded-lg border border-primary/15 bg-primary/5 p-3 text-xs leading-5 text-primary">
-                UI preview only. No provider is contacted and no credentials are
-                collected. Connections last until you reload.
+                No provider is contacted and no credentials are collected.
+                Connections last until you reload.
               </p>
               {notice && (
                 <p role="status" className="text-sm text-primary">
@@ -128,7 +128,7 @@ export function ConnectionsDialog({
               {connections.length > 0 && (
                 <div className="space-y-2">
                   <h3 className="text-xs font-medium text-muted-foreground">
-                    Preview connections
+                    Connections
                   </h3>
                   {connections.map((connection) => (
                     <div
@@ -150,9 +150,7 @@ export function ConnectionsDialog({
                           setConnections((items) =>
                             items.filter((item) => item.id !== connection.id),
                           );
-                          setNotice(
-                            `${connection.name} removed from this preview.`,
-                          );
+                          setNotice(`${connection.name} removed.`);
                         }}
                       >
                         <TrashIcon />
@@ -276,8 +274,8 @@ export function ConnectionsDialog({
                 </h3>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   In the live flow, the provider will show its actual
-                  permissions and ask you to authorize access. This preview only
-                  adds a sample connection to the list.
+                  permissions and ask you to authorize access. Adding a
+                  connection stores it in this session.
                 </p>
               </div>
             </DialogPanel>
@@ -291,13 +289,11 @@ export function ConnectionsDialog({
                     ...items,
                     { id: crypto.randomUUID(), name: name.trim(), url },
                   ]);
-                  setNotice(
-                    `${name.trim()} added as a preview. No access was authorized.`,
-                  );
+                  setNotice(`${name.trim()} added. No access was authorized.`);
                   setStep("catalog");
                 }}
               >
-                Add preview connection
+                Add connection
               </Button>
             </DialogFooter>
           </>
