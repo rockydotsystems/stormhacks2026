@@ -1,0 +1,45 @@
+# whydidwechoosethis
+
+> A workspace for planning documents. Teams keep project docs with full change history and permanent published versions. If you are an agent, use the MCP server below instead of scraping the web app.
+
+## MCP server
+
+- Endpoint: https://mcp.whydidwechoosethis.tech/mcp
+- Transport: stateless Streamable HTTP
+- Auth: OAuth in your MCP client's browser flow (WorkOS AuthKit). Tools never accept credentials. The signed-in person must belong to exactly one organization.
+- Server name: stormhacks-docs
+
+Add it to your client:
+
+- Claude Code: `claude mcp add --transport http --scope user whydidwechoosethis 'https://mcp.whydidwechoosethis.tech/mcp'`, then run `/mcp` and sign in.
+- OpenCode: `opencode mcp add whydidwechoosethis --global --url 'https://mcp.whydidwechoosethis.tech/mcp'`, then run `/mcps` and sign in.
+- Codex: `codex mcp add whydidwechoosethis --url 'https://mcp.whydidwechoosethis.tech/mcp'` then `codex mcp login whydidwechoosethis`.
+
+## Tools
+
+- `get_current_organization`: the signed-in user and their organization
+- `list_projects`: projects in the organization
+- `list_docs`: docs in a project (`projectId`)
+- `get_doc_metadata`: title, counts, latest version and unpublished state for a doc (`docId`)
+- `list_changes`: change history without content bodies (`docId`)
+- `get_change`: full title and content of one snapshot (`docId`, `changeId`)
+- `list_repositories`: repositories shared by a project's docs (`projectId`)
+- `list_versions`: permanent published versions of a doc (`docId`)
+- `get_version`: published title and content (`docId`, `number`)
+- `delete_change`: delete a change, only if it is not yet published (`docId`, `changeId`)
+- `propose_change`: append a full snapshot marked `proposed: true` (`docId`, `title`, `content`)
+
+## Things to know
+
+- Read before you write. Start with `get_current_organization`, then `list_projects`, `list_docs`, and `get_change` or `get_version` for content.
+- List tools return `{ items, nextOffset }`. Pass `offset` and `limit` (default 50, maximum 100) and continue until `nextOffset` is null.
+- Doc and project IDs are UUIDs. Change IDs are decimal strings and are not the display change numbers, which can shift after a deletion.
+- `propose_change` needs the complete new document, not a diff. Titles are up to 1,000 characters and content up to 1,000,000. Retrying creates another snapshot.
+- There is no tool to publish a version. Published history is immutable, so a person publishes in the web app. Your proposals stay as drafts until then.
+- A 401 means sign in again. A 403 means the account has zero or multiple organizations.
+
+## Links
+
+- Web app: https://whydidwechoosethis.tech
+- Source: https://github.com/rockydotsystems/stormhacks2026
+- MCP details: https://github.com/rockydotsystems/stormhacks2026/blob/main/docs/mcp-server.md
