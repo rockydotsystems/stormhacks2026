@@ -22,19 +22,22 @@ import {
 } from "@/components/ui/select";
 import { useSession } from "@/features/auth/client/queries";
 import { useDefaultDocumentSort } from "@/features/account/preferences";
+import { GitHubSettings } from "@/features/github/components/github-settings";
 
-export type SettingsSection = "profile" | "security" | "preferences" | "team";
+export type SettingsSection =
+  "profile" | "security" | "preferences" | "team" | "github";
 const headings = {
   profile: "Profile",
   security: "Security",
   preferences: "Preferences",
   team: "Team settings",
+  github: "GitHub",
 };
 
 function AuthenticatedWidgets({
   section,
 }: {
-  section: Exclude<SettingsSection, "preferences">;
+  section: Exclude<SettingsSection, "preferences" | "github">;
 }) {
   const { organizationId, permissions } = useAuth();
   const { getAccessToken } = useAccessToken();
@@ -128,8 +131,12 @@ function Preferences({ userId }: { userId?: string }) {
 
 export default function AccountSettings({
   section,
+  organizationId = "",
+  githubOutcome,
 }: {
   section: SettingsSection;
+  organizationId?: string;
+  githubOutcome?: string;
 }) {
   const session = useSession();
   return (
@@ -142,16 +149,26 @@ export default function AccountSettings({
       ) : session.error ? (
         <p role="alert">{session.error.message}</p>
       ) : session.data?.configured && session.data.user ? (
-        <AuthenticatedWidgets section={section} />
+        section === "github" ? (
+          <GitHubSettings
+            userId={session.data.user.id}
+            organizationId={organizationId}
+            outcome={githubOutcome}
+          />
+        ) : (
+          <AuthenticatedWidgets section={section} />
+        )
       ) : (
         <div className="settings-sign-in">
           <p className="settings-description">
             Sign in to manage{" "}
-            {section === "team"
-              ? "your team"
-              : section === "security"
-                ? "your password, verification methods, and sessions"
-                : "your name, email, and profile"}
+            {section === "github"
+              ? "GitHub connections"
+              : section === "team"
+                ? "your team"
+                : section === "security"
+                  ? "your password, verification methods, and sessions"
+                  : "your name, email, and profile"}
             .
           </p>
           <Button render={<Link href="/login" />}>Sign in with WorkOS</Button>

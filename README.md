@@ -156,6 +156,15 @@ separately for each signed-in user. Live widget edits and logout verification
 require a signed-in WorkOS session; security changes should be verified with a
 disposable staging account.
 
+## GitHub integration
+
+Connect an installed GitHub App from `/settings/github` after selecting an
+organization. OAuth verifies the connecting user's repository access; installation
+tokens refresh enrolled repositories, and signed webhooks record activity and
+access changes. WorkOS remains the login provider. See
+[GitHub integration](docs/github-integration.md) for registration settings, secrets,
+the additive migration, authorization boundaries, and verification.
+
 ## Cloudflare Workers deployment
 
 `vite.config.ts` runs vinext's RSC environment in workerd through the stable

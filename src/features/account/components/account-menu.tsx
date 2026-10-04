@@ -74,6 +74,9 @@ export function AccountMenu() {
           Team settings
         </MenuLinkItem>
         <MenuSeparator />
+        <MenuLinkItem render={<Link href="/settings/github" />}>
+          GitHub connections
+        </MenuLinkItem>
         {user ? (
           <form action="/api/auth/logout" method="post">
             <MenuItem

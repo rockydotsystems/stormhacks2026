@@ -247,13 +247,19 @@ function MultiFilter({
 
 export function Dashboard({
   settingsSection,
+  initialOrganization,
+  githubOutcome,
 }: {
   settingsSection?: SettingsSection;
+  initialOrganization?: string;
+  githubOutcome?: string;
 }) {
   const session = useSession();
   const [defaultSort] = useDefaultDocumentSort(session.data?.user?.id);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [organizationOverride, setOrganization] = useState<string | null>(null);
+  const [organizationOverride, setOrganization] = useState<string | null>(
+    initialOrganization || null,
+  );
   const workspace = useDashboard(session.data?.user?.id, organizationOverride);
   const mutation = useDashboardAction(session.data?.user?.id);
   const organization = workspace.data?.organizationId || "";
@@ -512,6 +518,7 @@ export function Dashboard({
             {[
               { section: "profile", label: "Profile", icon: UserIcon },
               { section: "security", label: "Security", icon: ShieldCheckIcon },
+              { section: "github", label: "GitHub", icon: GitBranchIcon },
               {
                 section: "preferences",
                 label: "Preferences",
@@ -669,8 +676,10 @@ export function Dashboard({
                 <li className="breadcrumb-current" aria-current="page">
                   {settingsSection === "team"
                     ? "Team settings"
-                    : settingsSection.charAt(0).toUpperCase() +
-                      settingsSection.slice(1)}
+                    : settingsSection === "github"
+                      ? "GitHub"
+                      : settingsSection.charAt(0).toUpperCase() +
+                        settingsSection.slice(1)}
                 </li>
               </ol>
             </nav>
@@ -745,7 +754,11 @@ export function Dashboard({
         </header>
         <div className="dashboard-scroll" ref={scrollRef}>
           {settingsSection ? (
-            <AccountSettings section={settingsSection} />
+            <AccountSettings
+              section={settingsSection}
+              organizationId={organization}
+              githubOutcome={githubOutcome}
+            />
           ) : session.isPending ||
             (session.data?.user && workspace.isPending) ? (
             <div className="documents-empty" role="status">
@@ -1307,7 +1320,19 @@ export function Dashboard({
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={connectRepository} className="px-6 pb-4 space-y-2">
-            <Label htmlFor="repository-slug">Add a repository</Label>
+            <Button
+              variant="outline"
+              render={
+                <Link
+                  href={`/settings/github?organizationId=${organization}`}
+                />
+              }
+            >
+              Connect repositories with GitHub
+            </Button>
+            <Label htmlFor="repository-slug">
+              Add a repository reference manually
+            </Label>
             <div className="flex gap-2">
               <Input
                 id="repository-slug"

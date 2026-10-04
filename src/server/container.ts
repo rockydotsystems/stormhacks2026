@@ -3,6 +3,8 @@ import { asClass, asFunction, createContainer, InjectionMode } from "awilix";
 import { DashboardController } from "@/features/dashboard/server/dashboard.controller";
 import { AuthController } from "@/features/auth/server/auth.controller";
 import { AuthService } from "@/features/auth/server/auth.service";
+import { GitHubService } from "@/features/github/server/github.service";
+import { GitHubController } from "@/features/github/server/github.controller";
 import { DocsService } from "@/features/docs/server/docs.service";
 import { OrganizationsService } from "@/features/organizations/server/organizations.service";
 import { ProjectsService } from "@/features/projects/server/projects.service";
@@ -22,6 +24,8 @@ import { createSpeech } from "@/features/planning/server/speech.factory";
 import { createDatabase, type Database } from "@/server/db";
 
 export type Dependencies = {
+  githubService: GitHubService;
+  githubController: GitHubController;
   dashboardController: DashboardController;
   db: Database;
   model: ModelPort;
@@ -47,6 +51,8 @@ export const container = createContainer<Dependencies>({
 });
 
 container.register({
+  githubService: asClass(GitHubService).scoped(),
+  githubController: asClass(GitHubController).scoped(),
   dashboardController: asClass(DashboardController).scoped(),
   db: asFunction(createDatabase)
     .scoped()

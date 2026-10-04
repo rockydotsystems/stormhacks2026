@@ -1,0 +1,208 @@
+import "server-only";
+import { createPrivateKey, sign } from "node:crypto";
+import { z } from "zod";
+import { getGitHubConfig } from "./config";
+import { ApiError } from "@/server/errors";
+import { readLimitedBody } from "./security";
+
+async function readProviderJson(response: Response): Promise<unknown> {
+  try {
+    return JSON.parse(
+      (await readLimitedBody(response, 4 * 1024 * 1024)).toString("utf8"),
+    );
+  } catch {
+    throw new ApiError(502, "GitHub returned an unexpected response.");
+  }
+}
+
+const id = z
+  .number()
+  .int()
+  .positive()
+  .max(Number.MAX_SAFE_INTEGER)
+  .transform(String);
+export const remoteRepositorySchema = z.object({
+  id,
+  name: z.string().min(1),
+  owner: z.object({ login: z.string().min(1) }),
+});
+const installationSchema = z.object({
+  id,
+  app_id: id,
+  account: z.object({ login: z.string().min(1) }),
+  suspended_at: z.string().nullable(),
+});
+export type RemoteRepository = z.infer<typeof remoteRepositorySchema>;
+export type RemoteInstallation = z.infer<typeof installationSchema>;
+
+export class GitHubClient {
+  constructor(private readonly fetcher: typeof fetch = fetch) {}
+
+  private async request<T>(
+    path: string,
+    token: string,
+    schema: z.ZodType<T>,
+    init?: RequestInit,
+  ) {
+    let response: Response;
+    try {
+      response = await this.fetcher(`https://api.github.com${path}`, {
+        ...init,
+        signal: AbortSignal.timeout(15000),
+        redirect: "error",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2026-03-10",
+          "User-Agent": "stormhacks2026",
+          "Content-Type": "application/json",
+        },
+      });
+    } catch {
+      throw new ApiError(502, "GitHub could not be reached. Try again.");
+    }
+    if (!response.ok)
+      throw new ApiError(
+        response.status === 401 ||
+          response.status === 403 ||
+          response.status === 404
+          ? 403
+          : 502,
+        "GitHub access could not be verified. Check the app installation and try connecting again.",
+      );
+    const result = schema.safeParse(await readProviderJson(response));
+    if (!result.success)
+      throw new ApiError(502, "GitHub returned an unexpected response.");
+    return result.data;
+  }
+
+  private async pages<T>(
+    path: string,
+    token: string,
+    key: string,
+    schema: z.ZodType<T>,
+  ) {
+    const result: T[] = [];
+    for (let page = 1; page <= 5; page++) {
+      const data = await this.request(
+        `${path}?per_page=100&page=${page}`,
+        token,
+        z.object({ total_count: z.number().int().nonnegative() }).passthrough(),
+      );
+      if (data.total_count > 500)
+        throw new ApiError(
+          422,
+          "Connect an installation with at most 500 repositories.",
+        );
+      const parsed = z.array(schema).safeParse(data[key]);
+      if (!parsed.success)
+        throw new ApiError(502, "GitHub returned an unexpected response.");
+      const rows = parsed.data;
+      result.push(...rows);
+      if (result.length >= data.total_count || rows.length < 100) return result;
+    }
+    throw new ApiError(
+      422,
+      "This installation is too large to connect in one request.",
+    );
+  }
+
+  async exchangeCode(code: string, verifier: string, redirectUri: string) {
+    const config = getGitHubConfig();
+    let response: Response;
+    try {
+      response = await this.fetcher(
+        "https://github.com/login/oauth/access_token",
+        {
+          method: "POST",
+          redirect: "error",
+          signal: AbortSignal.timeout(15000),
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            client_id: config.clientId,
+            client_secret: config.clientSecret,
+            code,
+            code_verifier: verifier,
+            redirect_uri: redirectUri,
+          }),
+        },
+      );
+    } catch {
+      throw new ApiError(
+        502,
+        "GitHub could not be reached. Try connecting again.",
+      );
+    }
+    const data = z
+      .object({ access_token: z.string().min(1) })
+      .safeParse(await readProviderJson(response));
+    if (!response.ok || !data.success)
+      throw new ApiError(
+        400,
+        "GitHub authorization failed. Try connecting again.",
+      );
+    return data.data.access_token;
+  }
+
+  user(token: string) {
+    return this.request(
+      "/user",
+      token,
+      z.object({ id, login: z.string().min(1) }),
+    );
+  }
+  installations(token: string) {
+    return this.pages(
+      "/user/installations",
+      token,
+      "installations",
+      installationSchema,
+    );
+  }
+  userRepositories(token: string, installationId: string) {
+    return this.pages(
+      `/user/installations/${installationId}/repositories`,
+      token,
+      "repositories",
+      remoteRepositorySchema,
+    );
+  }
+
+  async installationToken(installationId: string) {
+    const config = getGitHubConfig();
+    const now = Math.floor(Date.now() / 1000);
+    const encode = (value: unknown) =>
+      Buffer.from(JSON.stringify(value)).toString("base64url");
+    const payload = `${encode({ alg: "RS256", typ: "JWT" })}.${encode({ iss: config.clientId, iat: now - 60, exp: now + 540 })}`;
+    const jwt = `${payload}.${Buffer.from(sign("RSA-SHA256", Buffer.from(payload), createPrivateKey(config.privateKey))).toString("base64url")}`;
+    const data = await this.request(
+      `/app/installations/${installationId}/access_tokens`,
+      jwt,
+      z.object({ token: z.string().min(1) }),
+      {
+        method: "POST",
+        body: JSON.stringify({
+          permissions: {
+            metadata: "read",
+            contents: "read",
+            issues: "read",
+            pull_requests: "read",
+          },
+        }),
+      },
+    );
+    return data.token;
+  }
+
+  installationRepositories(token: string) {
+    return this.pages(
+      "/installation/repositories",
+      token,
+      "repositories",
+      remoteRepositorySchema,
+    );
+  }
+}
