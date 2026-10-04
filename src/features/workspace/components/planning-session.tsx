@@ -68,7 +68,6 @@ const starters = [
 export function PlanningSession({
   title,
   documentId,
-  projectId,
   organizationId,
   onOpenDocument,
   onDocumentChanged,
@@ -201,7 +200,7 @@ export function PlanningSession({
 
   function submit(event?: FormEvent) {
     event?.preventDefault();
-    if (!draft.trim()) return;
+    if (!draft.trim() || busy || !conversationId) return;
     send(draft.trim());
     setDraft("");
   }
@@ -265,20 +264,6 @@ export function PlanningSession({
       if (composer.current?.disabled) end.current?.parentElement?.focus();
       else composer.current?.focus();
     });
-  }
-
-  if (voiceOpen) {
-    return (
-      <section className="planning-session" aria-label="Planning session">
-        <VoiceConversation
-          characterId={`project:${projectId ?? documentId}`}
-          onTurn={(text) => send(text, "voice")}
-          onEnd={returnToTranscript}
-          reasoning={ui.reasoningText}
-          initialReply={lastAssistant?.content ?? ""}
-        />
-      </section>
-    );
   }
 
   return (
@@ -553,62 +538,70 @@ export function PlanningSession({
             }}
           />
         ) : null}
-        <form className="planning-composer" onSubmit={submit}>
-          <Textarea
-            unstyled
-            ref={composer}
-            aria-label="Message planning agent"
-            placeholder={
-              standby
-                ? "Talk it through with your team…"
-                : phase === "generated"
-                  ? "Ask for a change to the document…"
-                  : "Describe your idea, or answer the agent…"
-            }
-            value={draft}
-            maxLength={8000}
-            disabled={busy || voiceOpen || !conversationId}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (
-                event.key === "Enter" &&
-                !event.shiftKey &&
-                !event.nativeEvent.isComposing
-              ) {
-                event.preventDefault();
-                submit();
-              }
-            }}
+        {voiceOpen && !standby ? (
+          <VoiceConversation
+            onTurn={(text) => send(text, "voice")}
+            onEnd={returnToTranscript}
+            busy={busy}
           />
-          <div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              className="voice-trigger"
-              disabled={
-                busy || !conversationId || ui.status === "error" || standby
-              }
-              aria-label="Start AI voice conversation"
-              title={
+        ) : (
+          <form className="planning-composer" onSubmit={submit}>
+            <Textarea
+              unstyled
+              ref={composer}
+              aria-label="Message planning agent"
+              placeholder={
                 standby
-                  ? "Voice is off while the team is talking"
-                  : "Talk to the AI"
+                  ? "Talk it through with your team…"
+                  : phase === "generated"
+                    ? "Ask for a change to the document…"
+                    : "Describe your idea, or answer the agent…"
               }
-              onClick={() => setVoiceOpen(true)}
-            >
-              <WaveformIcon aria-hidden="true" />
-            </Button>
-            <Button
-              type="submit"
-              size="icon-sm"
-              aria-label="Send message"
-              disabled={!draft.trim() || busy || !conversationId}
-            >
-              <ArrowUpIcon weight="bold" />
-            </Button>
-          </div>
-        </form>
+              value={draft}
+              maxLength={8000}
+              disabled={busy || !conversationId}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (
+                  event.key === "Enter" &&
+                  !event.shiftKey &&
+                  !event.nativeEvent.isComposing
+                ) {
+                  event.preventDefault();
+                  submit();
+                }
+              }}
+            />
+            <div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="voice-trigger"
+                disabled={
+                  busy || !conversationId || ui.status === "error" || standby
+                }
+                aria-label="Use voice in this chat"
+                title={
+                  standby
+                    ? "Voice is off while the team is talking"
+                    : "Talk to the AI"
+                }
+                onClick={() => setVoiceOpen(true)}
+              >
+                <WaveformIcon aria-hidden="true" />
+              </Button>
+              <Button
+                type="submit"
+                size="icon-sm"
+                aria-label="Send message"
+                disabled={!draft.trim() || busy || !conversationId}
+              >
+                <ArrowUpIcon weight="bold" aria-hidden="true" />
+              </Button>
+            </div>
+          </form>
+        )}
       </div>
     </section>
   );

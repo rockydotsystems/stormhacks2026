@@ -1842,221 +1842,70 @@ a {
 .voice-trigger {
   color: var(--primary);
 }
-.voice-panel {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 12px;
-  padding-bottom: 28px;
-  padding-inline: 16px;
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  justify-content: center;
-}
 .voice-conversation {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
   min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--background);
 }
 .voice-heading {
-  padding: 20px 20px 8px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px 12px;
 }
 .voice-heading h2 {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  outline: none;
 }
-.voice-heading span {
+.voice-status,
+.voice-hint {
+  font-size: 12px;
+  line-height: 1.6;
   color: var(--muted-foreground);
-  font-size: 11px;
+}
+.voice-signal {
+  display: block;
+  width: 100%;
+  height: 36px;
+  margin-block: 8px;
+  color: var(--muted-foreground);
+}
+.voice-signal[data-state="listening"],
+.voice-signal[data-state="speaking"] {
+  color: var(--primary);
+}
+.voice-user-wave {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.voice-agent-bars rect {
+  fill: currentColor;
 }
 .voice-controls {
   display: flex;
   flex-wrap: wrap;
-  justify-content: space-between;
+  align-items: center;
   gap: 8px;
-  padding: 14px 16px;
-  border-top: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.voice-orb-stage {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 240px;
-  height: 240px;
-  flex-shrink: 0;
-  margin-top: 8px;
-}
-.voice-orb {
-  position: relative;
-  width: 160px;
-  height: 160px;
-  transform: scale(calc(1 + var(--voice-level) * 0.25));
-  transition: transform 80ms linear;
-}
-.voice-orb > svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-.voice-orb-halo {
-  position: absolute;
-  inset: 24px;
-  border-radius: 50%;
-  background: color-mix(in oklch, var(--primary), transparent 94%);
-  transform: scale(calc(1 + var(--voice-level) * 0.6));
-  transition: transform 100ms linear;
-}
-.voice-orb-ring {
-  position: absolute;
-  inset: 28px;
-  border: 1px solid color-mix(in oklch, var(--primary), transparent 75%);
-  border-radius: 50%;
-}
-.voice-orb-stage[data-state="listening"] .voice-orb-ring {
-  animation: voice-listen 2.4s ease-out infinite;
-}
-.voice-orb-stage[data-state="thinking"] .voice-orb-ring,
-.voice-orb-stage[data-state="starting"] .voice-orb-ring {
-  border-top: 3px solid var(--primary);
-  border-right-color: transparent;
-  animation: voice-think 1.6s linear infinite;
-}
-.voice-orb-stage[data-state="paused"],
-.voice-orb-stage[data-state="error"] {
-  filter: saturate(0.25);
-}
-.voice-status {
-  font-size: 20px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-.voice-hint {
-  max-width: 320px;
-  color: var(--muted-foreground);
-  font-size: 13px;
-  line-height: 1.6;
-}
-.voice-bubble-slot {
-  width: 100%;
-  max-width: 300px;
-  min-height: 120px;
-  padding-top: 16px;
-}
-.voice-thought-bubble {
-  position: relative;
-  border-radius: 18px;
-  padding: 12px 16px;
-  border: 1px solid var(--border);
-  background: var(--background);
-  text-align: left;
-}
-.voice-thought-bubble::before,
-.voice-thought-bubble::after {
-  content: "";
-  position: absolute;
-  border-radius: 50%;
-  border: 1px solid var(--border);
-  background: var(--background);
-}
-.voice-thought-bubble::before {
-  width: 10px;
-  height: 10px;
-  top: -14px;
-  left: calc(50% - 5px);
-}
-.voice-thought-bubble::after {
-  width: 6px;
-  height: 6px;
-  top: -24px;
-  left: calc(50% - 3px);
-}
-.voice-thought-bubble[data-kind="thought"] {
-  padding: 24px 28px;
-  background: transparent;
-  border: 0;
-}
-.voice-thought-cloud {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  fill: color-mix(in oklch, var(--primary), var(--background) 95%);
-  stroke: var(--border);
-  stroke-width: 1;
-  pointer-events: none;
-}
-.voice-thought-bubble[data-kind="thought"]::before,
-.voice-thought-bubble[data-kind="thought"]::after {
-  background: color-mix(in oklch, var(--primary), var(--background) 95%);
-}
-.voice-thought-bubble[data-kind="reply"]::before {
-  width: 16px;
-  height: 16px;
-  top: -9px;
-  left: calc(50% - 8px);
-  border-radius: 2px 0 0 0;
-  border-right: 0;
-  border-bottom: 0;
-  transform: rotate(45deg);
-}
-.voice-thought-bubble[data-kind="reply"]::after {
-  display: none;
-}
-.voice-bubble-label {
-  position: relative;
-  display: block;
-  margin-bottom: 4px;
-  color: var(--muted-foreground);
-  font-size: 10px;
-  font-weight: 600;
-}
-.voice-thought-bubble p {
-  position: relative;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  font-size: 13px;
-  line-height: 1.6;
-}
-.voice-bubble-slot > button {
-  margin-top: 6px;
-  color: var(--primary);
+  margin-top: 12px;
 }
 .voice-error {
+  margin-top: 8px;
   color: var(--destructive);
   font-size: 13px;
   line-height: 1.6;
 }
-@keyframes voice-listen {
-  from {
-    transform: scale(0.8);
-    opacity: 0.9;
-  }
-  to {
-    transform: scale(1.2);
-    opacity: 0;
-  }
-}
-@keyframes voice-think {
-  to {
-    transform: rotate(360deg);
-  }
-}
 @media (prefers-reduced-motion: reduce) {
-  .voice-orb,
-  .voice-orb-halo,
-  .voice-orb-stage .voice-orb-ring {
-    animation: none !important;
-    transition: none;
-    transform: none;
+  .voice-user-wave {
+    d: path("M0,20 L300,20");
+  }
+  .voice-agent-bars rect {
+    height: 3px;
+    y: 18.5px;
   }
 }
 .planning-confirm {
@@ -2856,5 +2705,11 @@ a {
 @media (prefers-reduced-motion: reduce) {
   .history-skeleton span {
     animation: none;
+  }
+}
+
+@media (max-width: 40rem) {
+  .planning-composer textarea {
+    font-size: 16px;
   }
 }

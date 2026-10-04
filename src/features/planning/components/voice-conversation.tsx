@@ -1,18 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { Blobatar } from "@blobatar/react";
-import { useGaze } from "@blobatar/react/gaze";
-import { happy, thinking as thinkingExpression } from "blobatar/expression";
-import "blobatar/motion.css";
-import "blobatar/gaze.css";
+import { useEffect, useRef, useState } from "react";
 import {
   MicrophoneIcon,
   MicrophoneSlashIcon,
-  PhoneDisconnectIcon,
+  KeyboardIcon,
 } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
-import { voiceBubble } from "@/features/planning/client/voice-bubble";
 import { useSpeechPlayback } from "@/features/planning/client/use-speech-playback";
 import { useVoiceRecorder } from "@/features/planning/client/use-voice-recorder";
 
@@ -27,11 +21,11 @@ type VoiceState =
   | "error";
 
 const labels: Record<VoiceState, string> = {
-  ready: "Let’s talk it through",
+  ready: "Microphone off",
   starting: "Connecting your microphone…",
-  listening: "I’m listening",
+  listening: "Listening to you",
   thinking: "Thinking it through…",
-  speaking: "Speaking",
+  speaking: "Agent speaking",
   blocked: "Your reply is ready",
   paused: "Microphone paused",
   error: "Conversation paused",
@@ -40,34 +34,27 @@ const labels: Record<VoiceState, string> = {
 export function VoiceConversation({
   onTurn,
   onEnd,
-  reasoning,
-  initialReply,
-  characterId,
+  busy,
 }: {
   onTurn: (text: string) => Promise<string | null>;
   onEnd: () => void;
-  reasoning: string;
-  initialReply: string;
-  characterId: string;
+  busy: boolean;
 }) {
   const [active, setActive] = useState(false);
   const [paused, setPaused] = useState(false);
   const [thinking, setThinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [replyText, setReplyText] = useState(initialReply);
   const heading = useRef<HTMLHeadingElement>(null);
   const alive = useRef(true);
   const playback = useSpeechPlayback();
-  const { ref: character } = useGaze({ travel: 3, lookAt: "pointer" });
   async function respond(text: string) {
     try {
       const reply = await onTurn(text);
       if (!alive.current) return;
       if (!reply)
         throw new Error(
-          "The agent could not reply. Select Read more to retry your message in the transcript.",
+          "The agent could not reply. Retry your message in the chat above.",
         );
-      setReplyText(reply);
       await playback.speak(reply);
     } catch (caught) {
       if (alive.current)
@@ -83,7 +70,6 @@ export function VoiceConversation({
 
   const recorder = useVoiceRecorder(
     (text) => {
-      setReplyText("");
       setThinking(true);
       void respond(text);
     },
@@ -100,11 +86,20 @@ export function VoiceConversation({
 
   const voiceError = error ?? recorder.error ?? playback.error;
   const start = recorder.start;
+  const cancel = recorder.cancel;
+  useEffect(() => {
+    if (
+      busy &&
+      (recorder.status === "recording" || recorder.status === "starting")
+    )
+      cancel();
+  }, [busy, recorder.status, cancel]);
   useEffect(() => {
     if (
       active &&
       !paused &&
       !thinking &&
+      !busy &&
       !voiceError &&
       playback.status === "idle" &&
       recorder.status === "idle"
@@ -115,6 +110,7 @@ export function VoiceConversation({
     active,
     paused,
     thinking,
+    busy,
     voiceError,
     playback.status,
     recorder.status,
@@ -125,6 +121,7 @@ export function VoiceConversation({
   if (voiceError) state = "error";
   else if (
     thinking ||
+    busy ||
     recorder.status === "transcribing" ||
     playback.status === "loading"
   )
@@ -134,12 +131,6 @@ export function VoiceConversation({
   else if (paused) state = "paused";
   else if (recorder.status === "recording") state = "listening";
   else if (active) state = "starting";
-  const level = state === "speaking" ? playback.level : recorder.level;
-  const bubble = voiceBubble({
-    thinking: (thinking && !replyText) || recorder.status === "transcribing",
-    reasoning: recorder.status === "transcribing" ? "" : reasoning,
-    reply: replyText,
-  });
 
   return (
     <div
@@ -150,93 +141,101 @@ export function VoiceConversation({
     >
       <header className="voice-heading">
         <h2 ref={heading} tabIndex={-1}>
-          Talk it through
+          Voice
         </h2>
-        <span>Voice powered by ElevenLabs</span>
-      </header>
-      <div className="voice-panel">
-        <div
-          className="voice-orb-stage"
-          data-state={state}
-          style={{ "--voice-level": level } as CSSProperties}
-          aria-hidden="true"
-        >
-          <div className="voice-orb-halo" />
-          <div className="voice-orb-ring" />
-          <div className="voice-orb" data-character={characterId}>
-            <Blobatar
-              ref={character}
-              name={characterId}
-              size={160}
-              animate="always"
-              background={false}
-              expression={state === "thinking" ? thinkingExpression : happy}
-              aria-hidden="true"
-            />
-          </div>
-        </div>
         <p className="voice-status" role="status">
           {labels[state]}
         </p>
-        <p className="voice-hint">
-          {state === "listening"
-            ? "Speak naturally. A short pause sends your message."
-            : state === "speaking"
-              ? "Listen, or interrupt to take the next turn."
-              : state === "thinking"
-                ? "Working with your document and conversation."
-                : "Start when you’re ready. You can return to typing anytime."}
+      </header>
+      <svg
+        className="voice-signal"
+        viewBox="0 0 300 40"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+        data-state={state}
+      >
+        {state === "speaking" ? (
+          <g className="voice-agent-bars">
+            {Array.from({ length: 40 }, (_, i) => {
+              const height =
+                3 + playback.level * (10 + 25 * Math.abs(Math.sin(i * 0.8)));
+              return (
+                <rect
+                  key={i}
+                  x={i * 7.6}
+                  y={(40 - height) / 2}
+                  width="3"
+                  height={height}
+                  rx="1.5"
+                />
+              );
+            })}
+          </g>
+        ) : (
+          <path
+            className="voice-user-wave"
+            d={Array.from({ length: 101 }, (_, i) => {
+              const amplitude = state === "listening" ? recorder.level * 16 : 0;
+              const y =
+                20 +
+                Math.sin(i * 0.55) * Math.sin((i * Math.PI) / 100) * amplitude;
+              return `${i === 0 ? "M" : "L"}${i * 3},${y.toFixed(2)}`;
+            }).join(" ")}
+          />
+        )}
+      </svg>
+      <p className="voice-hint">
+        {state === "listening"
+          ? "Pause briefly to send, or send now."
+          : state === "speaking"
+            ? "Interrupt to take the next turn."
+            : "Voice messages stay in this conversation."}
+      </p>
+      {voiceError ? (
+        <p className="voice-error" role="alert">
+          {voiceError}
         </p>
-        {voiceError ? (
-          <p className="voice-error" role="alert">
-            {voiceError}
-          </p>
-        ) : null}
-        <div className="voice-bubble-slot">
-          {bubble ? (
-            <div className="voice-thought-bubble" data-kind={bubble.kind}>
-              {bubble.kind === "thought" ? (
-                <svg
-                  className="voice-thought-cloud"
-                  viewBox="0 0 300 140"
-                  preserveAspectRatio="none"
-                  aria-hidden="true"
-                >
-                  <path d="M 36 27 C 18 16 2 35 12 53 C -3 71 8 96 32 97 C 34 120 61 133 83 119 C 105 136 135 133 151 122 C 174 136 202 131 215 118 C 239 130 269 122 270 102 C 297 103 309 79 289 59 C 302 35 277 15 254 27 C 243 4 210 3 193 18 C 172 1 139 4 127 20 C 107 3 78 8 68 23 C 58 14 43 16 36 27 Z" />
-                </svg>
-              ) : null}
-              <span className="voice-bubble-label">
-                {bubble.kind === "thought" ? "Thinking" : "Reply"}
-              </span>
-              <p>{bubble.text}</p>
-            </div>
-          ) : null}
-          <Button type="button" variant="ghost" size="sm" onClick={onEnd}>
-            Read more
+      ) : null}
+      <div className="voice-controls">
+        {state === "listening" ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={recorder.stop}
+          >
+            Send now
           </Button>
-        </div>
+        ) : null}
         {state === "ready" ? (
           <Button
             type="button"
+            size="sm"
             onClick={() => {
               playback.prepare();
               recorder.prepare();
               setActive(true);
             }}
           >
-            <MicrophoneIcon aria-hidden="true" /> Start conversation
+            <MicrophoneIcon aria-hidden="true" /> Start microphone
           </Button>
         ) : null}
         {state === "blocked" ? (
-          <Button type="button" onClick={() => void playback.resume()}>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => void playback.resume()}
+          >
             Play reply
           </Button>
         ) : null}
-        {voiceError && !error ? (
+        {voiceError ? (
           <Button
             type="button"
+            size="sm"
             variant="outline"
             onClick={() => {
+              setError(null);
               recorder.clearError();
               playback.clearError();
               recorder.prepare();
@@ -251,6 +250,7 @@ export function VoiceConversation({
         {state === "speaking" ? (
           <Button
             type="button"
+            size="sm"
             variant="outline"
             onClick={() => {
               playback.stop();
@@ -260,27 +260,34 @@ export function VoiceConversation({
             Interrupt and speak
           </Button>
         ) : null}
-      </div>
-      <div className="voice-controls">
-        <Button
-          type="button"
-          variant="outline"
-          disabled={!active || Boolean(voiceError)}
-          aria-pressed={paused}
-          onClick={() => {
-            if (!paused) recorder.cancel();
-            setPaused(!paused);
-          }}
-        >
-          {paused ? (
-            <MicrophoneIcon aria-hidden="true" />
-          ) : (
-            <MicrophoneSlashIcon aria-hidden="true" />
-          )}
-          {paused ? "Resume mic" : "Pause mic"}
-        </Button>
-        <Button type="button" variant="destructive" onClick={onEnd}>
-          <PhoneDisconnectIcon aria-hidden="true" /> End conversation
+        {active ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={
+              !active ||
+              Boolean(voiceError) ||
+              thinking ||
+              busy ||
+              recorder.status === "transcribing"
+            }
+            aria-pressed={paused}
+            onClick={() => {
+              if (!paused) recorder.cancel();
+              setPaused(!paused);
+            }}
+          >
+            {paused ? (
+              <MicrophoneIcon aria-hidden="true" />
+            ) : (
+              <MicrophoneSlashIcon aria-hidden="true" />
+            )}
+            {paused ? "Resume mic" : "Pause mic"}
+          </Button>
+        ) : null}
+        <Button type="button" size="sm" variant="ghost" onClick={onEnd}>
+          <KeyboardIcon aria-hidden="true" /> Type instead
         </Button>
       </div>
     </div>
