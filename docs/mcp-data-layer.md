@@ -14,21 +14,26 @@ The existing starter notes feature remains unchanged.
 | `organizations`        | Organization identity and name                                             |
 | `users`                | Local identity references using authenticated provider user IDs            |
 | `organization_members` | Many-to-many organization membership                                       |
-| `github_repositories`  | Repositories connected to an organization                                  |
-| `docs`                 | Stable organization-owned document identity                                |
-| `doc_repositories`     | Many-to-many doc/repository associations                                   |
+| `projects`             | Organization-owned projects                                                |
+| `github_repositories`  | Organization-scoped GitHub repository identities                           |
+| `project_repositories` | Many-to-many project/repository associations                               |
+| `docs`                 | Stable document identity belonging to exactly one project                  |
 | `doc_changes`          | Full title and Markdown snapshots, author, creation time                   |
 | `doc_versions`         | Permanent published snapshots, version number, publisher, publication time |
 
-An org can have multiple users, docs, and repositories. A user can belong to
-multiple orgs. A doc can link to any number of its org's repositories, and a
-repository can link to any number of docs. Composite foreign keys prevent
-cross-org links; there is no cardinality cap. GitHub owner/name pairs are
-normalized to lowercase by the service and unique within an org. Connecting
-a repository records its identity only; it does not verify GitHub access.
+An org has many users and projects. Each project has many docs and repositories.
+Each doc belongs to exactly one project; there is no one-doc-per-project limit.
+A user can belong to multiple orgs. A repository can be reused across projects
+within its org, with no cardinality cap. Composite foreign keys prevent docs from
+belonging to another org's project and prevent cross-org repository links.
+GitHub owner/name pairs are normalized to lowercase by the service and unique
+within an org. Connecting a repository records its identity only; it does not
+verify GitHub access.
 
-Repository links are live doc metadata, not part of a published content snapshot.
-Published title/content remain unchanged when links are added or removed.
+Docs obtain their repository context from their project; they have no direct
+repository links. Project repository links are live metadata, not part of a
+published content snapshot. Published title/content remain unchanged when a
+project's repository links are added or removed.
 
 ## History and publication
 
@@ -63,22 +68,26 @@ same independent full-snapshot representation.
 
 ## Service boundary
 
-`OrganizationsService` and `DocsService` are registered as request-scoped Awilix
-services. They reuse the existing request-scoped Drizzle/Postgres.js connection;
+`OrganizationsService`, `ProjectsService`, and `DocsService` are registered as
+request-scoped Awilix services. They reuse the existing request-scoped Drizzle/Postgres.js connection;
 the scope disposer closes it, and Hyperdrive owns pooling.
 
 Future adapters must authenticate first and construct an `OrganizationActor`
 using the authenticated user ID and selected org ID. Never accept a user ID from
-MCP tool arguments or browser input as proof of identity. Every docs operation
-checks membership and scopes doc/repository lookups to the selected org.
-An inaccessible organization/doc/repository returns 404 without disclosing
+MCP tool arguments or browser input as proof of identity. Every docs/project operation
+checks membership and scopes lookups to the selected org. Doc creation and listing
+require a project ID; history/version operations continue to use stable doc IDs.
+An inaccessible organization/project/doc/repository returns 404 without disclosing
 another tenant's data. Published-history conflicts return 409. Input schemas
 are exported for future transport validation; service writes validate snapshots,
 repository names, and change IDs as well.
 
 ```ts
 const actor = { userId: authenticatedUser.id, organizationId };
-const doc = await scope.cradle.docsService.create(actor, {
+const project = await scope.cradle.projectsService.create(actor, {
+  name: "Backend",
+});
+const doc = await scope.cradle.docsService.create(actor, project.id, {
   title: "Use PostgreSQL",
   content: "# Context\n\nWe need relational constraints...",
 });
@@ -95,11 +104,13 @@ const published = await scope.cradle.docsService.getVersion(actor, doc.id, 1);
 Available operations:
 
 - Organizations: `create`, `list`, `addMember` (idempotent).
-- Docs: `create`, `list`.
+- Projects: `create`, `list`, `get` on `ProjectsService`.
+- Docs: `create(actor, projectId, snapshot)`, `list(actor, projectId)`.
 - Changes: `addChange`, `listChanges`, `deleteChange`.
 - Versions: `publish`, `listVersions`, `getVersion` (includes frozen title/content).
-- Repositories: `connectRepository` (idempotent), `listRepositories`,
-  `linkRepository` (idempotent), `unlinkRepository`, `listDocRepositories`.
+- Repositories on `ProjectsService`: `connectRepository` (idempotent),
+  `listRepositories` (org catalog), `linkRepository(actor, projectId, repositoryId)`
+  (idempotent), `unlinkRepository`, `listProjectRepositories`.
 
 Membership currently has no roles: all members have the same data-layer
 permissions, including adding members. Identity provisioning is local; membership
@@ -112,8 +123,9 @@ The services lock the parent doc before appending, deleting, or publishing.
 Postgres triggers take the same lock for direct snapshot/version writes,
 allocate the next version number, reject publication behind the current boundary,
 reject all snapshot updates, and reject version updates/deletes. An explicit
-snapshot-ID backfill into a published prefix is rejected too. Doc identity and
-org assignment cannot be updated. Foreign keys use restrictive deletion, so
+snapshot-ID backfill into a published prefix is rejected too. Doc identity, org,
+and project assignment cannot be updated. Project identity and org assignment
+cannot be updated. Foreign keys use restrictive deletion, so
 deleting a parent cannot cascade away published history.
 
 Concurrent publication of the same snapshot has one winner. A publish/delete
@@ -128,12 +140,16 @@ not PostgreSQL row-level security; never expose a raw SQL tool to an MCP client.
 ## Files and migration
 
 - `src/features/organizations/server/`: schema and membership service.
+- `src/features/organizations/contracts.ts`: authenticated organization context.
+- `src/features/projects/`: project/repository contracts, schema, service, and access checks.
 - `src/features/docs/contracts.ts`: client-safe inputs and response types.
 - `src/features/docs/server/`: schema, business operations, and Postgres tests.
-- `src/server/container.ts`: scoped registrations for both services.
+- `src/server/container.ts`: scoped registrations for all three services.
 - `drizzle/0001_chemical_black_crow.sql` and `drizzle/meta/`: additive tables,
   constraints, and hand-authored lifecycle triggers. The triggers are part of the
   committed migration, not generated from the Drizzle table declarations.
+- `drizzle/0002_salty_dust.sql` and its metadata: the project middle layer,
+  legacy-doc/repository backfill, and project ownership constraints.
 
 Apply migrations with `pnpm db:migrate` against an explicitly chosen direct
 database URL. GitHub Actions now runs this command automatically after checks
@@ -156,19 +172,19 @@ Run the new real-Postgres suite against a local disposable database:
 
 ```sh
 TEST_DATABASE_URL=postgres://stormhacks:stormhacks@127.0.0.1:5432/stormhacks \
-  pnpm exec vitest run src/features/docs
+  pnpm exec vitest run src/features/docs src/features/projects
 ```
 
-The docs suite creates a uniquely named `docs_test_*` database, applies the
-committed migrations, and drops only that database afterward. The configured
+The suites create uniquely named `docs_test_*` and `projects_test_*` databases,
+apply the committed migrations, and drop only those databases afterward. The configured
 local test user needs `CREATEDB`. It never deletes or truncates tables in the
 configured database. Without `TEST_DATABASE_URL`, integration tests are skipped.
 Never use hosted or production credentials for this suite.
 
-Coverage includes membership and tenant isolation; full-snapshot persistence;
+Coverage includes membership, tenant and project isolation; full-snapshot persistence;
 arbitrary draft deletion and computed numbering; v1/v2/v3 progression; freezing
 prior changes; immutable version reads; direct-SQL mutation/backfill rejection;
-same-doc version references; many-to-many repository links; and concurrent
+same-doc version references; many-to-many project/repository links; and concurrent
 publication and publish/delete races. Contract tests cover blank titles,
 GitHub normalization, invalid repository paths, and bigint ID boundaries.
 
@@ -176,8 +192,8 @@ To include the existing notes integration test in a full `pnpm test` run, first
 migrate the configured disposable database as documented in the README. The docs
 suite migrates its own database independently.
 
-Verified locally using the pinned Nix environment and an isolated PostgreSQL 18
-cluster:
+Initial data-layer verification, before the project layer, used the pinned Nix
+environment and an isolated PostgreSQL 18 cluster:
 
 - `pnpm check`: passed; 37 tests passed, including all nine docs integration
   tests and the existing notes integration test. Lint, TypeScript, and formatting
@@ -208,3 +224,35 @@ sync, MCP calls, and deployed Worker database behavior remain outside this phase
   command to verify missing-secret failure, migration-error propagation, and
   successful `pnpm db:migrate` invocation. The production secret was confirmed
   present via GitHub's secret metadata without retrieving its value.
+- The first hosted migration/deployment run succeeded:
+  [GitHub Actions run 37166339192](https://github.com/rockydotsystems/stormhacks2026/actions/runs/37166339192).
+
+## Follow-up: projects as the middle layer
+
+- Added org-owned projects. A project can contain multiple docs and repositories;
+  every doc must belong to exactly one same-org project.
+- Moved GitHub repository operations and contracts from docs to the projects
+  feature. Removed direct doc/repository links and their service methods.
+- Doc creation/listing now require a project ID; returned doc metadata includes
+  `projectId`. Snapshot/version IDs, publication rules, and permissions are unchanged.
+- Centralized the shared organization membership check, and registered the new
+  request-scoped `ProjectsService`.
+- The upgrade creates one project per existing doc, retaining the doc's UUID as
+  its imported project's UUID and using its latest title (or `Imported doc <id>`)
+  for the project name. It copies each exact repository set before dropping the
+  obsolete `doc_repositories` table. It does not guess which legacy docs should
+  be grouped into one project. Additional docs can be created in imported projects.
+- Existing doc IDs/timestamps, repository identities, full snapshots, versions,
+  and publication timestamps remain intact. The migration temporarily disables
+  the doc-identity guard only to backfill `project_id`, then restores the guard,
+  within Drizzle's migration transaction. The published-history guards stay active.
+- Added a real-Postgres upgrade test with populated legacy docs, shared and
+  exclusive repository sets, an empty doc, and a published version. It checks
+  unchanged history, restored immutability, continued v2 publishing, many docs
+  per project, cross-org rejection, and a no-op second migration run.
+- Project-layer verification: `pnpm check` passed all 39 tests, including fresh
+  database and populated legacy-upgrade tests. `pnpm deploy:check` passed the
+  Worker build/dry-run. `pnpm db:generate` reported no remaining schema changes.
+  Test-created databases were confirmed removed. Local evidence:
+  `/tmp/opencode/projects-data-check.log` and
+  `/tmp/opencode/projects-data-deploy-check.log`.

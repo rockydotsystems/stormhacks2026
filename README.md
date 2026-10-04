@@ -347,7 +347,7 @@ Both upstream agent skills are included in `.agents/skills`: `using-coss-ui` (co
 
 ## Database workflow
 
-The organization-scoped docs foundation, snapshot/publication rules, service
+The organization/project-scoped docs foundation, snapshot/publication rules, service
 operations, and MCP integration boundary are documented in
 [`docs/mcp-data-layer.md`](docs/mcp-data-layer.md).
 

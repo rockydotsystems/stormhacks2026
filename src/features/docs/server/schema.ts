@@ -6,36 +6,13 @@ import {
   index,
   integer,
   pgTable,
-  primaryKey,
   text,
   timestamp,
   unique,
   uuid,
 } from "drizzle-orm/pg-core";
 import { organizations, users } from "@/features/organizations/server/schema";
-
-export const githubRepositories = pgTable(
-  "github_repositories",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id),
-    owner: text("owner").notNull(),
-    name: text("name").notNull(),
-  },
-  (table) => [
-    unique("github_repositories_org_id_unique").on(
-      table.organizationId,
-      table.id,
-    ),
-    unique("github_repositories_org_slug_unique").on(
-      table.organizationId,
-      table.owner,
-      table.name,
-    ),
-  ],
-);
+import { projects } from "@/features/projects/server/schema";
 
 export const docs = pgTable(
   "docs",
@@ -44,34 +21,19 @@ export const docs = pgTable(
     organizationId: uuid("organization_id")
       .notNull()
       .references(() => organizations.id),
+    projectId: uuid("project_id").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
   },
-  (table) => [unique("docs_org_id_unique").on(table.organizationId, table.id)],
-);
-
-export const docRepositories = pgTable(
-  "doc_repositories",
-  {
-    organizationId: uuid("organization_id").notNull(),
-    docId: uuid("doc_id").notNull(),
-    repositoryId: uuid("repository_id").notNull(),
-  },
   (table) => [
-    primaryKey({ columns: [table.docId, table.repositoryId] }),
+    unique("docs_org_id_unique").on(table.organizationId, table.id),
     foreignKey({
-      columns: [table.organizationId, table.docId],
-      foreignColumns: [docs.organizationId, docs.id],
+      name: "docs_project_fk",
+      columns: [table.organizationId, table.projectId],
+      foreignColumns: [projects.organizationId, projects.id],
     }),
-    foreignKey({
-      columns: [table.organizationId, table.repositoryId],
-      foreignColumns: [
-        githubRepositories.organizationId,
-        githubRepositories.id,
-      ],
-    }),
-    index("doc_repositories_repository_idx").on(table.repositoryId),
+    index("docs_project_idx").on(table.projectId),
   ],
 );
 
