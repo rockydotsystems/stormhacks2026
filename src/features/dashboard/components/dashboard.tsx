@@ -318,6 +318,8 @@ export function Dashboard({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [myReviews, setMyReviews] = useState(false);
+  const [documentActionsTarget, setDocumentActionsTarget] =
+    useState<HTMLDivElement | null>(null);
   const orgDocuments = decisions.filter(
     (decision) => decision.organization === organization,
   );
@@ -910,6 +912,10 @@ export function Dashboard({
           )}
           {selected && !settingsSection && session.data?.user && (
             <div className="dashboard-topbar-actions">
+              <div
+                className="document-publish-actions"
+                ref={setDocumentActionsTarget}
+              />
               <DocumentActionsMenu
                 key={selected.id}
                 id={selected.id}
@@ -1037,6 +1043,7 @@ export function Dashboard({
               creatorId={selected.creator}
               repositories={selectedRepositories}
               title={selected.title}
+              actionsTarget={documentActionsTarget}
             />
           ) : (
             <div className="dashboard-content">

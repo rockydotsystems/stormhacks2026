@@ -43,12 +43,17 @@ typography.
 ## Product fidelity
 
 Visitors see the landing page at `/`; signed-in users retain their dashboard at
-that URL. Primary actions use the existing `/login` route. Workspace examples
-use published document versions and team discussion. GitHub review is a planned
-product workflow, so its capability and example are explicitly labeled planned,
-not yet available. The example identifies plan version v1, PR commit `8f3c2a1`,
-and code location `src/search.ts:12`. Preview chrome is static content; it does
-not pretend to be interactive controls.
+that URL. Primary actions use the existing `/login` route. The workspace and
+decision-library images are captures of the authenticated app, backed by seeded
+local database records. Desktop and mobile captures use separate responsive
+views. Light-mode views are rendered from the authenticated app DOM at 2× pixel
+density. Lossless PNG masters are in `app-screenshots`; lossless WebP assets are in
+`public/product`. See [presentation-data.md](presentation-data.md) to reproduce
+the three projects, seven plans, and team discussion.
+
+The review panel uses real HTML text and components to present the intended
+GitHub review workflow. It identifies plan version v1, PR commit `8f3c2a1`, and
+code location `src/search.ts:12`.
 
 See [verification.md](verification.md) for checks and browser evidence. No deploy
 was performed.

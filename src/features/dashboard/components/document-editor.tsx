@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
+import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircleIcon,
@@ -19,6 +20,7 @@ import { useDocument, useDocumentAction } from "../client/queries";
 import type { DocumentData, Person } from "../contracts";
 import { PlanningSession } from "@/features/workspace/components/planning-session";
 import { DocumentHistoryDialog } from "./document-history-dialog";
+import { DocumentDivider } from "./document-divider";
 import { DocumentReviewersPicker } from "./document-reviewers-picker";
 import { publishState } from "../lib/history";
 import { DocumentCanvas } from "@/features/workspace/components/document-canvas";
@@ -56,6 +58,7 @@ export function DocumentEditor({
   creator: Person;
   creatorId: string;
   repositories: string[];
+  actionsTarget: HTMLElement | null;
 }) {
   const queryClient = useQueryClient();
   const document = useDocument(userId, organizationId, id);
@@ -110,6 +113,7 @@ export function DocumentWorkspace({
   onPublish,
   pending,
   error,
+  actionsTarget,
 }: {
   data: DocumentData;
   documentId: string;
@@ -124,8 +128,10 @@ export function DocumentWorkspace({
   onPublish: (changeId: string) => Promise<unknown>;
   pending: boolean;
   error?: string;
+  actionsTarget: HTMLElement | null;
 }) {
   const latest = data.changes.at(-1);
+  const documentPaneId = useId();
   const [pane, setPane] = useState("conversation");
   const [reviewers, setReviewers] = useState<TeamData["members"]>([]);
   const [publishOpen, setPublishOpen] = useState(false);
@@ -165,6 +171,32 @@ export function DocumentWorkspace({
       data-pane={pane}
       data-empty={!hasDocument || undefined}
     >
+      {hasDocument &&
+        actionsTarget &&
+        createPortal(
+          <>
+            <VersionState
+              state={state}
+              viewing={version ? { label: version.label } : null}
+            />
+            {pending && (
+              <span className="document-save-state" role="status">
+                {publishOpen ? "Publishing…" : "Saving…"}
+              </span>
+            )}
+            {!frozen && (
+              <Button
+                size="sm"
+                aria-label="Publish version"
+                onClick={() => setPublishOpen(true)}
+                disabled={!unpublished || pending}
+              >
+                <UploadSimpleIcon aria-hidden="true" /> Publish
+              </Button>
+            )}
+          </>,
+          actionsTarget,
+        )}
       <nav
         hidden={!hasDocument}
         className="document-pane-switch"
@@ -194,8 +226,13 @@ export function DocumentWorkspace({
           onOpenDocument={() => setPane("document")}
           onDocumentChanged={onDocumentChanged}
         />
+        {hasDocument && <DocumentDivider documentId={documentPaneId} />}
         {hasDocument && (
-          <section className="document-surface" aria-label="Decision document">
+          <section
+            id={documentPaneId}
+            className="document-surface"
+            aria-label="Decision document"
+          >
             <div className="document-paper-scroll">
               <article className="document-paper">
                 <header className="document-paper-header">
@@ -203,26 +240,6 @@ export function DocumentWorkspace({
                     {(frozen ? frozen.title : title || latest?.title) ||
                       "Untitled document"}
                   </h1>
-                  <div className="document-publish-actions">
-                    <VersionState
-                      state={state}
-                      viewing={version ? { label: version.label } : null}
-                    />
-                    {pending && (
-                      <span className="document-save-state" role="status">
-                        {publishOpen ? "Publishing…" : "Saving…"}
-                      </span>
-                    )}
-                    {!frozen && (
-                      <Button
-                        size="sm"
-                        onClick={() => setPublishOpen(true)}
-                        disabled={!unpublished || pending}
-                      >
-                        <UploadSimpleIcon aria-hidden="true" /> Publish version
-                      </Button>
-                    )}
-                  </div>
                 </header>
                 <div className="document-paper-actions">
                   <div className="document-workspace-version">
@@ -395,21 +412,41 @@ function VersionState({
 }) {
   if (viewing)
     return (
-      <Badge variant="success" className="decision-status">
-        <CheckCircleIcon aria-hidden="true" /> {viewing.label} · Published
+      <Badge
+        variant="success"
+        className="decision-status"
+        title={`${viewing.label} · Published`}
+      >
+        <CheckCircleIcon aria-hidden="true" />
+        <span className="document-version-status">
+          {viewing.label} · Published
+        </span>
       </Badge>
     );
   if (state.kind === "published")
     return (
-      <Badge variant="success" className="decision-status">
-        <CheckCircleIcon aria-hidden="true" /> Published {state.version.label}
+      <Badge
+        variant="success"
+        className="decision-status"
+        title={`Published ${state.version.label}`}
+      >
+        <CheckCircleIcon aria-hidden="true" />
+        <span className="document-version-status">
+          Published {state.version.label}
+        </span>
       </Badge>
     );
   if (state.kind === "edited")
     return (
-      <Badge variant="warning" className="decision-status">
-        <span className="draft-dot" aria-hidden="true" /> Edited since{" "}
-        {state.version.label}
+      <Badge
+        variant="warning"
+        className="decision-status"
+        title={`Edited since ${state.version.label}`}
+      >
+        <span className="draft-dot" aria-hidden="true" />
+        <span className="document-version-status">
+          Edited since {state.version.label}
+        </span>
       </Badge>
     );
   return (

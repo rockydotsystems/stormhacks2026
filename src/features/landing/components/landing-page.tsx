@@ -25,13 +25,15 @@ function WorkspacePreview() {
         <source
           media="(max-width: 650px)"
           srcSet="/product/workspace-mobile.webp"
+          width="390"
+          height="844"
         />
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           className={styles.productScreenshot}
           src="/product/workspace-desktop.webp"
           width="1440"
-          height="900"
+          height="800"
           alt="Search architecture in the rocky.systems workspace, with the published plan alongside the team's discussion."
           fetchPriority="high"
         />
@@ -267,13 +269,15 @@ export function LandingPage() {
               <source
                 media="(max-width: 650px)"
                 srcSet="/product/decisions-mobile.webp"
+                width="390"
+                height="844"
               />
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 className={styles.productScreenshot}
                 src="/product/decisions-desktop.webp"
                 width="1440"
-                height="900"
+                height="800"
                 alt="The workspace decision library, showing published and draft plans for incident search, developer platform, and workspace security."
                 loading="lazy"
               />
