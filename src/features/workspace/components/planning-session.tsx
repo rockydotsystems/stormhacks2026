@@ -228,7 +228,7 @@ export function PlanningSession({
             )}
             onRetry={() => {
               void binding.refetch();
-              void detail.refetch();
+              if (conversationId) void detail.refetch();
             }}
             onDismiss={() => undefined}
           />

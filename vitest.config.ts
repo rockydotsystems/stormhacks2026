@@ -15,6 +15,7 @@ export default defineConfig({
     include: [
       "src/**/*.test.ts",
       "apps/mcp/src/**/*.test.ts",
+      "packages/data/src/**/*.test.ts",
       "scripts/**/*.test.ts",
     ],
     setupFiles: ["./tests/setup.ts"],

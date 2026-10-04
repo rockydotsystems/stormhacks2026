@@ -1,6 +1,6 @@
 import { getWorkOS } from "./workos";
 import type { OrganizationActor } from "./contracts";
-import { users } from "./schema";
+import { organizationMembers, users } from "./schema";
 import type { Database } from "../db";
 import { ApiError } from "../errors";
 
@@ -26,4 +26,6 @@ export async function requireOrganizationMember(
     throw new ApiError(404, "Organization not found.");
   // New and invited WorkOS users must be present for document creator foreign keys.
   await db.insert(users).values({ id: actor.userId }).onConflictDoNothing();
+  // Planning foreign keys need a local mirror; WorkOS remains the access authority.
+  await db.insert(organizationMembers).values(actor).onConflictDoNothing();
 }
