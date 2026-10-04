@@ -39,7 +39,9 @@ export type RemoteRepository = z.infer<typeof remoteRepositorySchema>;
 export type RemoteInstallation = z.infer<typeof installationSchema>;
 
 export class GitHubClient {
-  constructor(private readonly fetcher: typeof fetch = fetch) {}
+  constructor(
+    private readonly fetcher: typeof fetch = fetch.bind(globalThis),
+  ) {}
 
   private async request<T>(
     path: string,
@@ -52,7 +54,7 @@ export class GitHubClient {
       response = await this.fetcher(`https://api.github.com${path}`, {
         ...init,
         signal: AbortSignal.timeout(15000),
-        redirect: "error",
+        redirect: "manual",
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: "application/vnd.github+json",
@@ -118,7 +120,7 @@ export class GitHubClient {
         "https://github.com/login/oauth/access_token",
         {
           method: "POST",
-          redirect: "error",
+          redirect: "manual",
           signal: AbortSignal.timeout(15000),
           headers: {
             Accept: "application/json",

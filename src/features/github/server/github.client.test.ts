@@ -4,10 +4,40 @@ import { GitHubClient } from "./github.client";
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
 describe("GitHub API adapter", () => {
+  it("binds the native fetch receiver required by Workers", async () => {
+    vi.stubGlobal(
+      "fetch",
+      function (this: unknown, _input: RequestInfo | URL, init?: RequestInit) {
+        if (this !== globalThis) throw new TypeError("Illegal invocation");
+        if (init?.redirect === "error")
+          throw new TypeError("Invalid redirect value");
+        return Promise.resolve(Response.json({ id: 123, login: "test-user" }));
+      },
+    );
+    expect(await new GitHubClient().user("user-token")).toEqual({
+      id: "123",
+      login: "test-user",
+    });
+  });
+
+  it("does not follow provider redirects or forward credentials to another host", async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      new Response(null, {
+        status: 302,
+        headers: { Location: "https://untrusted.test" },
+      }),
+    );
+    await expect(
+      new GitHubClient(fetcher).user("private-token"),
+    ).rejects.toMatchObject({ status: 502 });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher.mock.calls[0][1].redirect).toBe("manual");
+  });
   it("logs only allowlisted OAuth diagnostics, never codes or provider details", async () => {
     for (const key of [
       "GITHUB_APP_ID",
@@ -89,7 +119,7 @@ describe("GitHub API adapter", () => {
     expect(rows[100].id).toBe("101");
     expect(fetcher.mock.calls[1][0]).toContain("page=2");
     expect(fetcher.mock.calls[0][1]).toMatchObject({
-      redirect: "error",
+      redirect: "manual",
       headers: { Authorization: "Bearer user-token" },
     });
   });
