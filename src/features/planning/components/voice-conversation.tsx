@@ -5,19 +5,9 @@ import {
   MicrophoneIcon,
   MicrophoneSlashIcon,
   PhoneDisconnectIcon,
-  SparkleIcon,
 } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogPanel,
-  DialogPopup,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { voiceBubble } from "@/features/planning/client/voice-bubble";
 import { useSpeechPlayback } from "@/features/planning/client/use-speech-playback";
 import { useVoiceRecorder } from "@/features/planning/client/use-voice-recorder";
 
@@ -42,18 +32,23 @@ const labels: Record<VoiceState, string> = {
   error: "Conversation paused",
 };
 
-function VoiceSession({
+export function VoiceConversation({
   onTurn,
   onEnd,
+  reasoning,
+  initialReply,
 }: {
   onTurn: (text: string) => Promise<string | null>;
   onEnd: () => void;
+  reasoning: string;
+  initialReply: string;
 }) {
   const [active, setActive] = useState(false);
   const [paused, setPaused] = useState(false);
   const [thinking, setThinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [transcript, setTranscript] = useState("");
+  const [replyText, setReplyText] = useState(initialReply);
+  const heading = useRef<HTMLHeadingElement>(null);
   const alive = useRef(true);
   const playback = useSpeechPlayback();
   async function respond(text: string) {
@@ -62,9 +57,9 @@ function VoiceSession({
       if (!alive.current) return;
       if (!reply)
         throw new Error(
-          "The agent could not reply. Close voice mode to retry your message in chat.",
+          "The agent could not reply. Select Read more to retry your message in the transcript.",
         );
-      setTranscript(reply);
+      setReplyText(reply);
       await playback.speak(reply);
     } catch (caught) {
       if (alive.current)
@@ -80,7 +75,7 @@ function VoiceSession({
 
   const recorder = useVoiceRecorder(
     (text) => {
-      setTranscript(text);
+      setReplyText("");
       setThinking(true);
       void respond(text);
     },
@@ -89,6 +84,7 @@ function VoiceSession({
 
   useEffect(() => {
     alive.current = true;
+    heading.current?.focus();
     return () => {
       alive.current = false;
     };
@@ -131,16 +127,26 @@ function VoiceSession({
   else if (recorder.status === "recording") state = "listening";
   else if (active) state = "starting";
   const level = state === "speaking" ? playback.level : recorder.level;
+  const bubble = voiceBubble({
+    thinking: (thinking && !replyText) || recorder.status === "transcribing",
+    reasoning: recorder.status === "transcribing" ? "" : reasoning,
+    reply: replyText,
+  });
 
   return (
-    <>
-      <DialogHeader>
-        <DialogTitle>Talk to your planning agent</DialogTitle>
-        <DialogDescription>
-          Same document, same conversation. Voice powered by ElevenLabs.
-        </DialogDescription>
-      </DialogHeader>
-      <DialogPanel className="voice-panel">
+    <div
+      className="voice-conversation"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") onEnd();
+      }}
+    >
+      <header className="voice-heading">
+        <h2 ref={heading} tabIndex={-1}>
+          Talk it through
+        </h2>
+        <span>Voice powered by ElevenLabs</span>
+      </header>
+      <div className="voice-panel">
         <div
           className="voice-orb-stage"
           data-state={state}
@@ -170,7 +176,19 @@ function VoiceSession({
             {voiceError}
           </p>
         ) : null}
-        {transcript ? <p className="voice-transcript">{transcript}</p> : null}
+        <div className="voice-bubble-slot">
+          {bubble ? (
+            <div className="voice-thought-bubble" data-kind={bubble.kind}>
+              <span>
+                {bubble.kind === "thought" ? "Thinking" : "Planning agent"}
+              </span>
+              <p>{bubble.text}</p>
+            </div>
+          ) : null}
+          <Button type="button" variant="ghost" size="sm" onClick={onEnd}>
+            Read more
+          </Button>
+        </div>
         {state === "ready" ? (
           <Button
             type="button"
@@ -216,8 +234,8 @@ function VoiceSession({
             Interrupt and speak
           </Button>
         ) : null}
-      </DialogPanel>
-      <DialogFooter className="sm:justify-between">
+      </div>
+      <div className="voice-controls">
         <Button
           type="button"
           variant="outline"
@@ -238,49 +256,7 @@ function VoiceSession({
         <Button type="button" variant="destructive" onClick={onEnd}>
           <PhoneDisconnectIcon aria-hidden="true" /> End conversation
         </Button>
-      </DialogFooter>
-    </>
-  );
-}
-
-export function VoiceConversation({
-  disabled,
-  open,
-  onOpenChange,
-  onTurn,
-}: {
-  disabled: boolean;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onTurn: (text: string) => Promise<string | null>;
-}) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger
-        render={
-          <Button
-            type="button"
-            variant="ghost"
-            className="voice-trigger"
-            size="icon-sm"
-            disabled={disabled}
-            aria-label="Start AI voice conversation"
-            title="Talk to the AI"
-          />
-        }
-      >
-        <MicrophoneIcon weight="bold" aria-hidden="true" />
-        <SparkleIcon
-          weight="fill"
-          className="voice-trigger-sparkle"
-          aria-hidden="true"
-        />
-      </DialogTrigger>
-      <DialogPopup>
-        {open ? (
-          <VoiceSession onTurn={onTurn} onEnd={() => onOpenChange(false)} />
-        ) : null}
-      </DialogPopup>
-    </Dialog>
+      </div>
+    </div>
   );
 }

@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useReducer, useRef, useState, type FormEvent } from "react";
-import { ArrowUpIcon, FileTextIcon, SparkleIcon } from "@phosphor-icons/react";
+import {
+  ArrowUpIcon,
+  FileTextIcon,
+  MicrophoneIcon,
+  SparkleIcon,
+} from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
@@ -181,7 +186,14 @@ export function PlanningSession({
 
   useEffect(() => {
     end.current?.scrollIntoView({ block: "nearest" });
-  }, [items.length, ui.streamText, ui.reasoningText, ui.status, popupOpen]);
+  }, [
+    items.length,
+    ui.streamText,
+    ui.reasoningText,
+    ui.status,
+    popupOpen,
+    voiceOpen,
+  ]);
 
   // Each assistant message may carry questions, which the answers message refers to by number.
   function questionsBefore(index: number): Question[] {
@@ -198,11 +210,33 @@ export function PlanningSession({
   // The generate message starts the first draft, which takes much longer than a normal reply.
   const drafting = busy && ui.pending?.text === GENERATE_TEXT;
 
+  function returnToTranscript() {
+    setVoiceOpen(false);
+    requestAnimationFrame(() => {
+      if (composer.current?.disabled) end.current?.parentElement?.focus();
+      else composer.current?.focus();
+    });
+  }
+
+  if (voiceOpen) {
+    return (
+      <section className="planning-session" aria-label="Planning session">
+        <VoiceConversation
+          onTurn={(text) => send(text, "voice")}
+          onEnd={returnToTranscript}
+          reasoning={ui.reasoningText}
+          initialReply={lastAssistant?.content ?? ""}
+        />
+      </section>
+    );
+  }
+
   return (
     <section className="planning-session" aria-label="Planning session">
       <div
         className="planning-messages"
         role="log"
+        tabIndex={-1}
         aria-label="Planning conversation"
         aria-live="polite"
       >
@@ -399,12 +433,23 @@ export function PlanningSession({
             }}
           />
           <div>
-            <VoiceConversation
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="voice-trigger"
               disabled={busy || !conversationId || ui.status === "error"}
-              open={voiceOpen}
-              onOpenChange={setVoiceOpen}
-              onTurn={(text) => send(text, "voice")}
-            />
+              aria-label="Start AI voice conversation"
+              title="Talk to the AI"
+              onClick={() => setVoiceOpen(true)}
+            >
+              <MicrophoneIcon weight="bold" aria-hidden="true" />
+              <SparkleIcon
+                weight="fill"
+                className="voice-trigger-sparkle"
+                aria-hidden="true"
+              />
+            </Button>
             <Button
               type="submit"
               size="icon-sm"

@@ -1651,6 +1651,39 @@ a {
   text-align: center;
   gap: 12px;
   padding-bottom: 28px;
+  padding-inline: 16px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  justify-content: center;
+}
+.voice-conversation {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.voice-heading {
+  padding: 20px 20px 8px;
+}
+.voice-heading h2 {
+  font-size: 14px;
+  font-weight: 600;
+  outline: none;
+}
+.voice-heading span {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.voice-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
 }
 .voice-orb-stage {
   position: relative;
@@ -1732,18 +1765,63 @@ a {
   font-size: 13px;
   line-height: 1.6;
 }
-.voice-transcript {
+.voice-bubble-slot {
   width: 100%;
-  max-height: 100px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  border-radius: 12px;
+  max-width: 300px;
+  min-height: 120px;
+  padding-top: 16px;
+}
+.voice-thought-bubble {
+  position: relative;
+  border-radius: 18px;
   padding: 12px 16px;
-  background: var(--muted);
+  border: 1px solid var(--border);
+  background: var(--background);
+  box-shadow: 0 2px 8px #00000004;
+  text-align: left;
+}
+.voice-thought-bubble::before,
+.voice-thought-bubble::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--background);
+}
+.voice-thought-bubble::before {
+  width: 10px;
+  height: 10px;
+  top: -14px;
+  left: calc(50% - 5px);
+}
+.voice-thought-bubble::after {
+  width: 6px;
+  height: 6px;
+  top: -24px;
+  left: calc(50% - 3px);
+}
+.voice-thought-bubble[data-kind="thought"] {
+  background: color-mix(in oklch, var(--primary), var(--background) 95%);
+}
+.voice-thought-bubble > span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 600;
+}
+.voice-thought-bubble p {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  overflow-wrap: anywhere;
   font-size: 13px;
   line-height: 1.6;
-  text-align: left;
+}
+.voice-bubble-slot > button {
+  margin-top: 6px;
+  color: var(--primary);
 }
 .voice-error {
   color: var(--destructive);
