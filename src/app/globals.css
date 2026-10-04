@@ -583,25 +583,15 @@ a {
   height: 14px;
   color: var(--dashboard-text);
 }
+.sidebar-item > .project-folder-icon {
+  color: var(--folder-back);
+}
 .folder-art {
-  --folder-back: #d3d3cb;
-  --folder-front: #e5e5df;
-  --folder-edge: #c4c4bb;
   width: 132px;
   height: 88px;
   position: relative;
   perspective: 600px;
   margin-top: 7px;
-}
-.folder-tone-1 {
-  --folder-back: #aebfb5;
-  --folder-front: #ccd9d0;
-  --folder-edge: #a4b6a9;
-}
-.folder-tone-2 {
-  --folder-back: #c1bcaf;
-  --folder-front: #ddd8cd;
-  --folder-edge: #beb7a8;
 }
 .folder-back {
   position: absolute;

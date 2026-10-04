@@ -104,6 +104,7 @@ import {
   projectPath,
 } from "@/features/dashboard/routes";
 import { ProjectActionsMenu } from "./project-actions-menu";
+import { projectFolderColors } from "../project-folder-colors";
 import { OrganizationAvatar } from "./organization-avatar";
 import { DocumentEditor } from "./document-editor";
 import { DocumentActionsMenu } from "./document-actions-menu";
@@ -727,7 +728,12 @@ export function Dashboard({
                   aria-label={projectName(name)}
                   title={projectName(name)}
                 >
-                  <FolderIcon aria-hidden="true" />
+                  <FolderIcon
+                    aria-hidden="true"
+                    weight="fill"
+                    className="project-folder-icon"
+                    style={projectFolderColors(name)}
+                  />
                   <span className="sidebar-label truncate">
                     {projectName(name)}
                   </span>
@@ -1214,10 +1220,8 @@ export function Dashboard({
                               onNavigate={prepareNavigation}
                             >
                               <div
-                                className={cn(
-                                  "folder-art",
-                                  `folder-tone-${projects.indexOf(name) % 3}`,
-                                )}
+                                className="folder-art"
+                                style={projectFolderColors(name)}
                                 aria-hidden="true"
                               >
                                 <div className="folder-back" />
