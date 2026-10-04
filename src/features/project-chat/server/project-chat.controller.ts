@@ -4,6 +4,8 @@ import { askChatSchema, chatScopeSchema, createChatSchema } from "../contracts";
 import type { Dependencies } from "@/server/container";
 import { ApiError } from "@/server/errors";
 import { assertSameOrigin } from "@/features/planning/server/planning.controller";
+import { SSE_HEADERS } from "@/features/planning/server/sse";
+import { chatEventStream } from "./stream";
 
 async function body<T>(request: Request, schema: z.ZodType<T>): Promise<T> {
   if (
@@ -91,6 +93,40 @@ export class ProjectChatController {
         input,
         request.signal,
       ),
+    );
+  }
+  async stream(request: Request, id: string, release: () => Promise<void>) {
+    const user = await this.dependencies.authService.requireUser();
+    assertSameOrigin(request);
+    const input = await body(request, askChatSchema);
+    const actor = { userId: user.id, organizationId: input.organizationId };
+    const chat = chatId(id);
+    // Reject inaccessible private chats before sending any stream response.
+    await this.dependencies.projectChatService.get(
+      actor,
+      input.projectId,
+      chat,
+    );
+    return new Response(
+      chatEventStream({
+        run: (emit, signal) =>
+          this.dependencies.projectChatService.ask(
+            actor,
+            input.projectId,
+            chat,
+            input,
+            signal,
+            emit,
+          ),
+        signal: request.signal,
+        onClose: release,
+      }),
+      {
+        headers: {
+          ...SSE_HEADERS,
+          "Cache-Control": "private, no-store, no-transform",
+        },
+      },
     );
   }
 }

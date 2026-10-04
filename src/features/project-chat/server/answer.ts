@@ -15,15 +15,18 @@ export async function answerQuestion(
   history: ChatTurn[],
   evidence: SearchEvidence[],
   signal: AbortSignal,
+  onPartial?: (text: string) => void,
 ) {
   if (!evidence.length) {
+    const answer =
+      "I couldn’t find a recorded decision matching this question in this project. Try naming the document, technology, or change you want to understand.";
+    onPartial?.(answer);
     return {
-      answer:
-        "I couldn’t find a recorded decision matching this question in this project. Try naming the document, technology, or change you want to understand.",
+      answer,
       sources: [],
     };
   }
-  const result = await model.generateObject({
+  const request = {
     schema: z.object({
       answer: z.string().min(1).max(4000),
       sourceIds: z.array(z.string()).max(12),
@@ -35,10 +38,38 @@ export async function answerQuestion(
         { role: "user" as const, content: turn.question },
         { role: "assistant" as const, content: turn.answer },
       ]),
-      { role: "user", content: JSON.stringify({ question, evidence }) },
+      {
+        role: "user" as const,
+        content: JSON.stringify({ question, evidence }),
+      },
     ],
     signal,
-  });
+  };
+  let result: z.infer<typeof request.schema>;
+  if (onPartial) {
+    const stream = model.streamObject(request);
+    stream.result.catch(() => undefined);
+    let lastText = "";
+    for await (const event of stream.events) {
+      signal.throwIfAborted();
+      if (event.type !== "partial") continue;
+      const partial = z
+        .object({ answer: z.string().max(4000).optional() })
+        .safeParse(event.value);
+      if (
+        partial.success &&
+        partial.data.answer &&
+        partial.data.answer !== lastText
+      ) {
+        lastText = partial.data.answer;
+        onPartial(lastText);
+      }
+    }
+    result = request.schema.parse(await stream.result);
+  } else {
+    result = await model.generateObject(request);
+  }
+  signal.throwIfAborted();
   const ids = new Set(result.sourceIds);
   const citations = [...result.answer.matchAll(/\[(\d+)\]/g)].map(
     (match) => match[1],

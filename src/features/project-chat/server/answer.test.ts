@@ -72,4 +72,39 @@ describe("read-only project answers", () => {
       answerQuestion(model, "Why?", [], evidence, new AbortController().signal),
     ).rejects.toThrow();
   });
+  it("emits growing model text before returning the validated answer", async () => {
+    const model = new FakeModel({
+      object: { answer: "Concurrency drove the change [1].", sourceIds: ["1"] },
+      chunkSize: 3,
+    });
+    const partials: string[] = [];
+    const result = await answerQuestion(
+      model,
+      "Why?",
+      [],
+      evidence,
+      new AbortController().signal,
+      (text) => partials.push(text),
+    );
+    expect(partials.length).toBeGreaterThan(3);
+    expect(partials[0]).toBe("Con");
+    expect(partials.at(-1)).toBe(result.answer);
+  });
+  it("rejects invalid final citations even after provisional text has streamed", async () => {
+    const model = new FakeModel({
+      object: { answer: "Unverified [99].", sourceIds: ["99"] },
+    });
+    const partials: string[] = [];
+    await expect(
+      answerQuestion(
+        model,
+        "Why?",
+        [],
+        evidence,
+        new AbortController().signal,
+        (text) => partials.push(text),
+      ),
+    ).rejects.toThrow("unknown source");
+    expect(partials.length).toBeGreaterThan(1);
+  });
 });

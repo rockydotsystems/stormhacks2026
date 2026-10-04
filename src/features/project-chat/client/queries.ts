@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
-import type { ChatDetail, ChatTurn, ProjectChat } from "../contracts";
+import type { ChatDetail, ChatEvent, ProjectChat } from "../contracts";
+import { readChatStream } from "./stream";
 
 export type ChatScope = {
   userId: string;
@@ -49,22 +50,64 @@ export function useProjectChat(scope: ChatScope, id: string) {
       apiClient<ChatDetail>(`/api/project-chats/${id}?${scopeQuery(scope)}`),
   });
 }
-export function useAskProjectChat(scope: ChatScope, id: string) {
+export function useAskProjectChat(
+  scope: ChatScope,
+  id: string,
+  onEvent: (event: ChatEvent) => void,
+) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (input: {
+    mutationFn: async (input: {
       content: string;
       clientMessageId: string;
       via: "text" | "voice";
-    }) =>
-      apiClient<ChatTurn>(`/api/project-chats/${id}/messages`, {
+      signal: AbortSignal;
+    }) => {
+      const { signal, ...question } = input;
+      const response = await fetch(`/api/project-chats/${id}/messages/stream`, {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
+        signal,
         body: JSON.stringify({
-          ...input,
+          ...question,
           organizationId: scope.organizationId,
           projectId: scope.projectId,
         }),
-      }),
-    onSuccess: () => client.invalidateQueries({ queryKey: chatKey(scope) }),
+      });
+      return readChatStream(
+        response,
+        (event) => {
+          if (event.type === "title") {
+            client.setQueryData<ChatDetail>([...chatKey(scope), id], (chat) =>
+              chat ? { ...chat, title: event.title } : chat,
+            );
+            client.setQueryData<ProjectChat[]>(chatKey(scope), (chats) =>
+              chats?.map((chat) =>
+                chat.id === id ? { ...chat, title: event.title } : chat,
+              ),
+            );
+          }
+          onEvent(event);
+        },
+        signal,
+      );
+    },
+    onSuccess: (turn) => {
+      client.setQueryData<ChatDetail>([...chatKey(scope), id], (chat) =>
+        chat
+          ? {
+              ...chat,
+              turns: chat.turns.some((item) => item.id === turn.id)
+                ? chat.turns
+                : [...chat.turns, turn],
+            }
+          : chat,
+      );
+      return client.invalidateQueries({ queryKey: chatKey(scope) });
+    },
+    onError: () => client.invalidateQueries({ queryKey: chatKey(scope) }),
   });
 }

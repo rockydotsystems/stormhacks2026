@@ -11,6 +11,7 @@ import { searchProjectHistory } from "./search";
 import { AuthService } from "@/features/auth/server/auth.service";
 import type { ModelRequest } from "@/features/planning/server/model";
 import type { ChatDetail } from "../contracts";
+import type { ChatProgress } from "../contracts";
 
 const workos = fakeWorkOS();
 vi.mock("@workos-inc/authkit-nextjs", () => ({
@@ -44,6 +45,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         if (!input.evidence)
           return {
             terms: input.question.includes("overview") ? [] : ["Postgres"],
+            title: "Postgres concurrency",
           };
         const source = input.evidence.find(
           (item: { rationale: string | null }) =>
@@ -194,7 +196,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         db: drizzle(client),
         model,
       }).get(actor, projectId, chatId);
-      expect(reopened.title).toBe(input.content);
+      expect(reopened.title).toBe("Postgres concurrency");
       expect(reopened.turns.map((item) => item.via)).toEqual(["text", "voice"]);
       expect(await client`select * from doc_changes order by id`).toEqual(
         before,
@@ -317,6 +319,118 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       } finally {
         spy.mockRestore();
       }
+    });
+    it("streams partial answers, persists the generated first-question title, and keeps it for follow-ups", async () => {
+      const chat = await service.create(actor, projectId, "New chat");
+      const events: ChatProgress[] = [];
+      const input = {
+        content: "Why did we choose Postgres instead of SQLite?",
+        via: "text" as const,
+        clientMessageId: randomUUID(),
+      };
+      const turn = await service.ask(
+        actor,
+        projectId,
+        chat.id,
+        input,
+        new AbortController().signal,
+        (event) => events.push(event),
+      );
+      expect(events[0]).toEqual({
+        type: "title",
+        title: "Postgres concurrency",
+      });
+      const text = events.filter((event) => event.type === "answer");
+      expect(text.length).toBeGreaterThan(2);
+      expect(text[0].text.length).toBeLessThan(turn.answer.length);
+      const reopened = await service.get(actor, projectId, chat.id);
+      expect(reopened.title).toBe("Postgres concurrency");
+      expect(reopened.turns).toHaveLength(1);
+      const before = model.requests.length;
+      expect(await service.ask(actor, projectId, chat.id, input)).toEqual(turn);
+      expect(model.requests).toHaveLength(before);
+      await service.ask(actor, projectId, chat.id, {
+        ...input,
+        content: "What about maintenance?",
+        clientMessageId: randomUUID(),
+      });
+      expect((await service.get(actor, projectId, chat.id)).title).toBe(
+        reopened.title,
+      );
+      const lastPlan = JSON.parse(
+        model.requests.at(-2)!.messages.at(-1)!.content,
+      );
+      expect(lastPlan.firstQuestion).toBe(input.content);
+    });
+    it("drops interrupted partial turns and releases their lease so the same question can be retried", async () => {
+      const chat = await service.create(actor, projectId, "New chat");
+      const abort = new AbortController();
+      const input = {
+        content: "Why Postgres?",
+        via: "text" as const,
+        clientMessageId: randomUUID(),
+      };
+      await expect(
+        service.ask(actor, projectId, chat.id, input, abort.signal, (event) => {
+          if (event.type === "answer") abort.abort();
+        }),
+      ).rejects.toThrow();
+      expect((await service.get(actor, projectId, chat.id)).turns).toEqual([]);
+      expect(
+        (
+          await client`select turn_token from project_chats where id = ${chat.id}`
+        )[0].turn_token,
+      ).toBeNull();
+      await service.ask(actor, projectId, chat.id, input);
+      expect((await service.get(actor, projectId, chat.id)).turns).toHaveLength(
+        1,
+      );
+    });
+    it("streams the private controller endpoint and releases its request scope after finishing", async () => {
+      const chat = await service.create(actor, projectId, "New chat");
+      const controller = new ProjectChatController({
+        authService: {
+          requireUser: async () => ({ id: actor.userId }),
+        } as AuthService,
+        projectChatService: service,
+      });
+      const release = vi.fn(async () => undefined);
+      const makeRequest = () =>
+        new Request(
+          `https://app.test/api/project-chats/${chat.id}/messages/stream`,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              organizationId: actor.organizationId,
+              projectId,
+              content: "Why Postgres?",
+              via: "text",
+              clientMessageId: randomUUID(),
+            }),
+          },
+        );
+      const response = await controller.stream(makeRequest(), chat.id, release);
+      expect(response.headers.get("content-type")).toContain(
+        "text/event-stream",
+      );
+      expect(response.headers.get("cache-control")).toBe(
+        "private, no-store, no-transform",
+      );
+      const frames = await response.text();
+      expect(frames).toContain('"type":"title"');
+      expect(frames.match(/event: answer/g)!.length).toBeGreaterThan(2);
+      expect(frames).toContain('"type":"done"');
+      await vi.waitFor(() => expect(release).toHaveBeenCalledTimes(1));
+      const privateController = new ProjectChatController({
+        authService: {
+          requireUser: async () => ({ id: teammate.userId }),
+        } as AuthService,
+        projectChatService: service,
+      });
+      await expect(
+        privateController.stream(makeRequest(), chat.id, vi.fn()),
+      ).rejects.toMatchObject({ status: 404 });
     });
     it("revoked organization membership removes access even for the owner", async () => {
       workos.userManagement.deactivate(actor.organizationId, actor.userId);

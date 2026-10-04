@@ -137,6 +137,12 @@ in the project and sidebar. Only the creator can list, open, or ask questions in
 a chat, including when teammates know its URL. Active organization membership
 and project access are checked on every request.
 
+After the first successful question, a short topic-based title replaces
+“New chat” in the chat and sidebar. Follow-up questions keep that title.
+Answers stream into the conversation as the model generates them. Only the
+completed, validated answer and its source links are saved; **Stop generating**
+or leaving the chat cancels an unfinished reply, and the question can be retried.
+
 Chats are read-only: they search all non-deleted project document snapshots and
 the recorded conversations linked to changes. Retrieval includes the current
 snapshot of matching documents, so older decisions can be distinguished from

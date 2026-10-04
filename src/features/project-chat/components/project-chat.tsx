@@ -4,7 +4,6 @@ import { Fragment, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import {
   ArrowLeftIcon,
-  LockSimpleIcon,
   MicrophoneIcon,
   SpeakerHighIcon,
   StopIcon,
@@ -15,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { useVoiceRecorder } from "@/features/planning/client/use-voice-recorder";
 import { useSpeechPlayback } from "@/features/planning/client/use-speech-playback";
 import { projectPath } from "@/features/dashboard/routes";
-import type { ChatSource } from "../contracts";
+import type { ChatSource, ChatTurn } from "../contracts";
 import {
   useAskProjectChat,
   useProjectChat,
@@ -60,7 +59,12 @@ export function ProjectChat({
   projectName: string;
 }) {
   const chat = useProjectChat(scope, id);
-  const ask = useAskProjectChat(scope, id);
+  const [streamedAnswer, setStreamedAnswer] = useState("");
+  const [finished, setFinished] = useState(false);
+  const ask = useAskProjectChat(scope, id, (event) => {
+    if (event.type === "answer") setStreamedAnswer(event.text);
+    if (event.type === "done") setFinished(true);
+  });
   const [draft, setDraft] = useState("");
   const [via, setVia] = useState<"text" | "voice">("text");
   const retry = useRef<{
@@ -70,10 +74,12 @@ export function ProjectChat({
   } | null>(null);
   const end = useRef<HTMLDivElement>(null);
   const mounted = useRef(true);
+  const request = useRef<AbortController | null>(null);
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
+      request.current?.abort();
     };
   }, []);
   const playback = useSpeechPlayback();
@@ -83,13 +89,17 @@ export function ProjectChat({
   });
   useEffect(() => {
     end.current?.scrollIntoView({ block: "nearest" });
-  }, [chat.data?.turns.length, ask.isPending]);
+  }, [chat.data?.turns.length, ask.isPending, streamedAnswer]);
 
   async function send(event: FormEvent) {
     event.preventDefault();
     const content = draft.trim();
     if (!content || ask.isPending || recorder.status !== "idle") return;
     playback.stop();
+    setStreamedAnswer("");
+    setFinished(false);
+    const controller = new AbortController();
+    request.current = controller;
     if (
       !retry.current ||
       retry.current.content !== content ||
@@ -97,7 +107,10 @@ export function ProjectChat({
     )
       retry.current = { content, via, clientMessageId: crypto.randomUUID() };
     try {
-      const turn = await ask.mutateAsync(retry.current);
+      const turn = await ask.mutateAsync({
+        ...retry.current,
+        signal: controller.signal,
+      });
       if (!mounted.current) return;
       retry.current = null;
       setDraft("");
@@ -105,6 +118,8 @@ export function ProjectChat({
       if (turn.via === "voice") void playback.speak(turn.answer);
     } catch {
       /* Keep the question and retry ID intact. */
+    } finally {
+      if (request.current === controller) request.current = null;
     }
   }
   if (chat.isPending)
@@ -127,6 +142,21 @@ export function ProjectChat({
       </div>
     );
   const voiceBusy = recorder.status !== "idle";
+  const pending = ask.isPending && !finished;
+  const turns: ChatTurn[] =
+    pending && ask.variables
+      ? [
+          ...chat.data.turns,
+          {
+            id: "streaming",
+            question: ask.variables.content,
+            answer: streamedAnswer,
+            via: ask.variables.via,
+            sources: [],
+            createdAt: "",
+          },
+        ]
+      : chat.data.turns;
   return (
     <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col gap-6 p-4 sm:p-8">
       <header className="space-y-3">
@@ -141,44 +171,9 @@ export function ProjectChat({
         <h1 className="break-words text-2xl font-semibold tracking-tight">
           {chat.data.title}
         </h1>
-        <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          <LockSimpleIcon aria-hidden="true" />
-          Private to you · Read-only project search
-        </p>
       </header>
       <div className="flex-1 space-y-6" role="log" aria-label="Project chat">
-        {!chat.data.turns.length && (
-          <div className="rounded-xl border bg-muted/20 p-6">
-            <h2 className="mb-2 font-medium">
-              Understand what changed and why
-            </h2>
-            <p className="text-sm leading-6 text-muted-foreground">
-              Ask about decisions across {projectName}. Answers search document
-              history and the discussions behind changes, with links to the
-              evidence. This chat cannot edit documents and is not shared with
-              your team.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {[
-                "What changed recently, and why?",
-                "Which decisions have been reconsidered?",
-              ].map((question) => (
-                <Button
-                  key={question}
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setDraft(question);
-                    setVia("text");
-                  }}
-                >
-                  {question}
-                </Button>
-              ))}
-            </div>
-          </div>
-        )}
-        {chat.data.turns.map((turn) => (
+        {turns.map((turn) => (
           <section
             key={turn.id}
             className="space-y-4"
@@ -197,20 +192,28 @@ export function ProjectChat({
                 <h3 className="text-xs font-medium text-muted-foreground">
                   Project assistant
                 </h3>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={voiceBusy || ask.isPending}
-                  onClick={() => {
-                    playback.prepare();
-                    void playback.speak(turn.answer);
-                  }}
-                >
-                  <SpeakerHighIcon aria-hidden="true" />
-                  Read aloud
-                </Button>
+                {turn.id !== "streaming" && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={voiceBusy || ask.isPending}
+                    onClick={() => {
+                      playback.prepare();
+                      void playback.speak(turn.answer);
+                    }}
+                  >
+                    <SpeakerHighIcon aria-hidden="true" />
+                    Read aloud
+                  </Button>
+                )}
               </div>
-              <CitedAnswer text={turn.answer} sources={turn.sources} />
+              {turn.id === "streaming" && !turn.answer ? (
+                <p role="status" className="text-sm text-muted-foreground">
+                  Searching project history…
+                </p>
+              ) : (
+                <CitedAnswer text={turn.answer} sources={turn.sources} />
+              )}
               {turn.sources.length > 0 && (
                 <nav
                   aria-label="Answer sources"
@@ -239,14 +242,6 @@ export function ProjectChat({
             </div>
           </section>
         ))}
-        {ask.isPending && (
-          <div
-            role="status"
-            className="rounded-xl border p-4 text-sm text-muted-foreground"
-          >
-            Searching project decisions and their history…
-          </div>
-        )}
         <div ref={end} />
       </div>
       <form
@@ -267,11 +262,22 @@ export function ProjectChat({
         />
         {(ask.error || recorder.error || playback.error) && (
           <p role="alert" className="text-sm text-destructive">
-            {ask.error?.message || recorder.error || playback.error}
+            {ask.error && ask.variables?.signal.aborted
+              ? "Answer stopped. Send the question again to retry."
+              : ask.error?.message || recorder.error || playback.error}
           </p>
         )}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap gap-2">
+            {ask.isPending && (
+              <Button
+                variant="outline"
+                onClick={() => request.current?.abort()}
+              >
+                <StopIcon aria-hidden="true" />
+                Stop generating
+              </Button>
+            )}
             <Button
               variant="outline"
               disabled={
