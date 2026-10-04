@@ -8,6 +8,7 @@ import {
   SignOutIcon,
 } from "@phosphor-icons/react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import {
   Menu,
@@ -52,17 +53,26 @@ export function AccountMenu() {
 
   return (
     <Menu>
-      <MenuTrigger
-        render={<Button variant="ghost" className="profile-button" />}
-        aria-label="Open profile menu"
-      >
-        {avatar("size-8 shrink-0")}
-        <span className="account-identity">
-          <strong className="truncate">{name}</strong>
-          <small className="truncate">{email}</small>
-        </span>
-        <CaretUpDownIcon aria-hidden="true" />
-      </MenuTrigger>
+      <Tooltip>
+        <MenuTrigger
+          render={
+            <TooltipTrigger
+              render={<Button variant="ghost" className="profile-button" />}
+            />
+          }
+          aria-label="Open profile menu"
+        >
+          {avatar("size-8 shrink-0")}
+          <span className="account-identity">
+            <strong className="truncate">{name}</strong>
+            <small className="truncate">{email}</small>
+          </span>
+          <CaretUpDownIcon aria-hidden="true" />
+        </MenuTrigger>
+        <TooltipPopup side="right" sideOffset={12}>
+          Account and settings
+        </TooltipPopup>
+      </Tooltip>
       <MenuPopup side="top" align="start" className="account-menu-popup">
         <div className="account-menu-identity">
           {avatar("size-9 shrink-0")}

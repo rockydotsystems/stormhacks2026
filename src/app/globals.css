@@ -214,37 +214,33 @@ a {
 .dashboard-sidebar[data-collapsed="true"] .sidebar-count,
 .dashboard-sidebar[data-collapsed="true"] .account-identity,
 .dashboard-sidebar[data-collapsed="true"] .org-switcher > svg,
-.dashboard-sidebar[data-collapsed="true"] .profile-button > svg {
-  width: 0;
-  max-width: 0;
-  margin: 0;
-  opacity: 0;
-  overflow: hidden;
+.dashboard-sidebar[data-collapsed="true"] .profile-button > svg,
+.dashboard-sidebar[data-collapsed="true"] .sidebar-section h2,
+.dashboard-sidebar[data-collapsed="true"] .sidebar-shortcuts {
+  display: none;
 }
 .dashboard-sidebar[data-collapsed="true"] .sidebar-item,
 .dashboard-sidebar[data-collapsed="true"] .org-switcher,
 .dashboard-sidebar[data-collapsed="true"] .profile-button {
   justify-content: center;
   gap: 0;
+  min-height: 40px;
+  padding: 8px;
 }
-.dashboard-sidebar[data-collapsed="true"] .sidebar-section h2,
-.dashboard-sidebar[data-collapsed="true"] .sidebar-empty {
-  opacity: 0;
-  overflow: hidden;
-  white-space: nowrap;
+.dashboard-sidebar[data-collapsed="true"] .org-row {
+  margin-bottom: 12px;
+}
+.dashboard-sidebar[data-collapsed="true"] .settings-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.dashboard-sidebar[data-collapsed="true"] .sidebar-bottom {
+  padding-top: 12px;
 }
 @media (prefers-reduced-motion: no-preference) {
   .dashboard-sidebar {
-    transition: width 220ms cubic-bezier(0.2, 0, 0, 1);
-  }
-  .dashboard-sidebar .sidebar-label,
-  .dashboard-sidebar .sidebar-count,
-  .dashboard-sidebar .account-identity,
-  .dashboard-sidebar .sidebar-section h2,
-  .dashboard-sidebar .sidebar-empty,
-  .dashboard-sidebar .org-switcher > svg,
-  .dashboard-sidebar .profile-button > svg {
-    transition: opacity 140ms ease;
+    transition: width 220ms cubic-bezier(0.77, 0, 0.175, 1);
   }
 }
 .org-row {

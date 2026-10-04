@@ -84,6 +84,7 @@ import {
   SelectPopup,
   SelectItem,
 } from "@/components/ui/select";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@/components/ui/tooltip";
 import { Textarea } from "@/components/ui/textarea";
 import {
   filterDecisions,
@@ -503,18 +504,26 @@ export function Dashboard({
     <div className="dashboard-sidebar-content">
       <div className="org-row">
         <Menu>
-          <MenuTrigger
-            render={<Button variant="ghost" className="org-switcher" />}
-            aria-label="Switch organization"
-            title={`Switch organization: ${organizationName}`}
-          >
-            <span className="org-mark" aria-hidden="true">
-              {organizationName.charAt(0).toLowerCase()}
-              <span>•</span>
-            </span>
-            <span className="sidebar-label truncate">{organizationName}</span>
-            <CaretUpDownIcon aria-hidden="true" />
-          </MenuTrigger>
+          <Tooltip>
+            <MenuTrigger
+              render={
+                <TooltipTrigger
+                  render={<Button variant="ghost" className="org-switcher" />}
+                />
+              }
+              aria-label="Switch organization"
+            >
+              <span className="org-mark" aria-hidden="true">
+                {organizationName.charAt(0).toLowerCase()}
+                <span>•</span>
+              </span>
+              <span className="sidebar-label truncate">{organizationName}</span>
+              <CaretUpDownIcon aria-hidden="true" />
+            </MenuTrigger>
+            <TooltipPopup side="right" sideOffset={12}>
+              Switch organization: {organizationName}
+            </TooltipPopup>
+          </Tooltip>
           <MenuPopup align="start" className="w-60">
             <MenuGroup>
               <MenuGroupLabel>Organizations</MenuGroupLabel>
@@ -589,23 +598,31 @@ export function Dashboard({
               <h2>{category}</h2>
               <nav aria-label={`${category} settings`}>
                 {items.map(({ section, label, icon: Icon }) => (
-                  <Button
-                    key={section}
-                    variant="ghost"
-                    className={cn(
-                      "sidebar-item",
-                      settingsSection === section && "sidebar-item-active",
-                    )}
-                    render={<Link href={`/settings/${section}`} />}
-                    aria-current={
-                      settingsSection === section ? "page" : undefined
-                    }
-                    aria-label={label}
-                    title={label}
-                  >
-                    <Icon aria-hidden="true" />
-                    <span className="sidebar-label">{label}</span>
-                  </Button>
+                  <Tooltip key={section}>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          variant="ghost"
+                          className={cn(
+                            "sidebar-item",
+                            settingsSection === section &&
+                              "sidebar-item-active",
+                          )}
+                          render={<Link href={`/settings/${section}`} />}
+                          aria-current={
+                            settingsSection === section ? "page" : undefined
+                          }
+                          aria-label={label}
+                        >
+                          <Icon aria-hidden="true" />
+                          <span className="sidebar-label">{label}</span>
+                        </Button>
+                      }
+                    />
+                    <TooltipPopup side="right" sideOffset={12}>
+                      {label}
+                    </TooltipPopup>
+                  </Tooltip>
                 ))}
               </nav>
             </div>
@@ -631,31 +648,40 @@ export function Dashboard({
                 href: dashboardPaths.Documents,
               },
             ].map(({ name, icon: Icon, href }) => (
-              <Button
-                key={name}
-                variant="ghost"
-                className={cn(
-                  "sidebar-item",
-                  view === name && "sidebar-item-active",
-                )}
-                render={<Link href={href} onNavigate={prepareNavigation} />}
-                aria-label={name}
-                title={name}
-                aria-current={
-                  view === name && !selectedId && !projectId
-                    ? "page"
-                    : undefined
-                }
-              >
-                <Icon
-                  aria-hidden="true"
-                  weight={view === name ? "fill" : "regular"}
+              <Tooltip key={name}>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      className={cn(
+                        "sidebar-item",
+                        view === name && "sidebar-item-active",
+                      )}
+                      render={
+                        <Link href={href} onNavigate={prepareNavigation} />
+                      }
+                      aria-label={name}
+                      aria-current={
+                        view === name && !selectedId && !projectId
+                          ? "page"
+                          : undefined
+                      }
+                    >
+                      <Icon
+                        aria-hidden="true"
+                        weight={view === name ? "fill" : "regular"}
+                      />
+                      <span className="sidebar-label">{name}</span>
+                    </Button>
+                  }
                 />
-                <span className="sidebar-label">{name}</span>
-              </Button>
+                <TooltipPopup side="right" sideOffset={12}>
+                  {name}
+                </TooltipPopup>
+              </Tooltip>
             ))}
           </nav>
-          <div className="sidebar-section">
+          <div className="sidebar-section sidebar-shortcuts">
             <h2>Projects</h2>
             <nav aria-label="Projects">
               {projects.map((name) => (
@@ -693,7 +719,7 @@ export function Dashboard({
               ))}
             </nav>
           </div>
-          <div className="sidebar-section sidebar-recents">
+          <div className="sidebar-section sidebar-shortcuts sidebar-recents">
             <h2>Recently viewed</h2>
             <nav aria-label="Recently viewed documents">
               {recentDocuments.length ? (
@@ -747,22 +773,32 @@ export function Dashboard({
         data-collapsed={sidebarCollapsed}
         aria-label="Sidebar"
       >
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="sidebar-collapse-toggle"
-          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          aria-expanded={!sidebarCollapsed}
-          aria-controls="dashboard-sidebar"
-          onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
-        >
-          {sidebarCollapsed ? (
-            <CaretRightIcon aria-hidden="true" />
-          ) : (
-            <CaretLeftIcon aria-hidden="true" />
-          )}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="sidebar-collapse-toggle"
+                aria-label={
+                  sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
+                }
+                aria-expanded={!sidebarCollapsed}
+                aria-controls="dashboard-sidebar"
+                onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+              >
+                {sidebarCollapsed ? (
+                  <CaretRightIcon aria-hidden="true" />
+                ) : (
+                  <CaretLeftIcon aria-hidden="true" />
+                )}
+              </Button>
+            }
+          />
+          <TooltipPopup side="right" sideOffset={12}>
+            {sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          </TooltipPopup>
+        </Tooltip>
         {sidebar}
       </aside>
       <main id="dashboard-main" className="dashboard-main">
