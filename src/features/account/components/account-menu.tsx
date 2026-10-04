@@ -17,10 +17,17 @@ import {
   MenuPopup,
   MenuSeparator,
   MenuTrigger,
+  MenuSub,
+  MenuSubTrigger,
+  MenuSubPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
 } from "@/components/ui/menu";
 import { useSession } from "@/features/auth/client/queries";
+import { useTheme } from "./theme-provider";
 
 export function AccountMenu() {
+  const { preference, setPreference } = useTheme();
   const session = useSession();
   const user = session.data?.user;
   const name = user
@@ -65,6 +72,23 @@ export function AccountMenu() {
             <p>{email}</p>
           </div>
         </div>
+        <MenuSeparator />
+        <MenuSub>
+          <MenuSubTrigger>Color theme</MenuSubTrigger>
+          <MenuSubPopup>
+            <MenuRadioGroup
+              value={preference}
+              onValueChange={(next) => {
+                if (next === "light" || next === "dark" || next === "system")
+                  setPreference(next);
+              }}
+            >
+              <MenuRadioItem value="system">System</MenuRadioItem>
+              <MenuRadioItem value="light">Light</MenuRadioItem>
+              <MenuRadioItem value="dark">Dark</MenuRadioItem>
+            </MenuRadioGroup>
+          </MenuSubPopup>
+        </MenuSub>
         <MenuSeparator />
         <MenuLinkItem render={<Link href="/settings/profile" />}>
           <UserIcon aria-hidden="true" />

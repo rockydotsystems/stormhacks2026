@@ -6,6 +6,14 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  color-scheme: light;
+  --dashboard-chrome: #f5f5f4;
+  --dashboard-text: #676764;
+  --dashboard-active: #e8e8e5;
+  --project-surface: #fbfbfa;
+  --project-hover: #f7f7f5;
+  --project-hover-border: #cececa;
+  --document-hover: #fafaf9;
   --background: var(--color-white);
   --foreground: var(--color-neutral-800);
   --accent: --alpha(var(--color-black) / 4%);
@@ -101,6 +109,14 @@ a {
 }
 
 .dark {
+  color-scheme: dark;
+  --dashboard-chrome: #191b1a;
+  --dashboard-text: #a6aaa7;
+  --dashboard-active: #303431;
+  --project-surface: #252825;
+  --project-hover: #2c302d;
+  --project-hover-border: #525952;
+  --document-hover: #272b28;
   --accent: --alpha(var(--color-white) / 4%);
   --accent-foreground: var(--color-neutral-100);
   --background: color-mix(
@@ -142,8 +158,6 @@ a {
 
 /* Dashboard chrome stays quiet so documents carry the hierarchy. */
 .dashboard-shell {
-  --dashboard-chrome: #f5f5f4;
-  --dashboard-text: #676764;
   display: flex;
   height: 100dvh;
   min-height: 0;
@@ -295,7 +309,7 @@ a {
 }
 .sidebar-item-active {
   color: var(--foreground);
-  background: #e8e8e5;
+  background: var(--dashboard-active);
   font-weight: 500;
 }
 .sidebar-count {
@@ -452,13 +466,13 @@ a {
   align-items: center;
   min-width: 0;
   border: 1px solid var(--border);
-  background: #fbfbfa;
+  background: var(--project-surface);
   border-radius: 8px;
   padding: 21px 19px 15px;
 }
 .project-card:hover {
-  background: #f7f7f5;
-  border-color: #cececa;
+  background: var(--project-hover);
+  border-color: var(--project-hover-border);
 }
 .project-selected {
   outline: 2px solid var(--ring);
@@ -654,7 +668,7 @@ a {
   padding: 12px 9px;
 }
 .document-row:hover {
-  background: #fafaf9;
+  background: var(--document-hover);
 }
 .document-title-cell {
   display: flex;
