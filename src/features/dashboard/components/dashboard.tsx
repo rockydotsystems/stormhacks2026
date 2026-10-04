@@ -108,7 +108,7 @@ import { DocumentActionsMenu } from "./document-actions-menu";
 import { apiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
-const statuses = ["Draft", "Bound"];
+const statuses = ["Draft", "Published"];
 function documentCount(count: number) {
   return `${count} ${count === 1 ? "document" : "documents"}`;
 }
@@ -135,7 +135,7 @@ function Status({ status }: { status: DecisionStatus }) {
   return (
     <Badge
       variant={
-        status === "Bound"
+        status === "Published"
           ? "success"
           : status === "In review"
             ? "warning"
@@ -143,7 +143,7 @@ function Status({ status }: { status: DecisionStatus }) {
       }
       className="decision-status"
     >
-      {status === "Bound" ? (
+      {status === "Published" ? (
         <CheckCircleIcon aria-hidden="true" />
       ) : status === "In review" ? (
         <ClockIcon aria-hidden="true" />

@@ -108,6 +108,47 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       );
     });
 
+    it("attributes the conversation to the version that published it, and to the draft after", async () => {
+      const { agent, service } = build();
+      const userId = newUser();
+      agent.enqueue({}, generate, edit("Second."), edit("Third."));
+      const { id } = await service.createConversation(userId, {
+        projectName: "History",
+      });
+      await service.sendMessage(userId, id, { text: "pitch" });
+      await service.sendMessage(userId, id, { text: "that's enough" });
+      await service.sendMessage(userId, id, { text: "tweak it" });
+      await service.publish(userId, id);
+      await service.sendMessage(userId, id, { text: "one more tweak" });
+
+      const v1 = await service.getVersionSource(userId, id, 1);
+      expect(v1.number).toBe(1);
+      expect(v1.changes.map((change) => change.mode)).toEqual([
+        "generated",
+        "edited",
+      ]);
+      expect(v1.messages.map((message) => message.content)).toEqual([
+        "pitch",
+        "Noted.",
+        "that's enough",
+        "Here is the first draft.",
+        "tweak it",
+        "Updated.",
+      ]);
+
+      const draft = await service.getVersionSource(userId, id, null);
+      expect(draft.number).toBeNull();
+      expect(draft.changes.map((change) => change.mode)).toEqual(["edited"]);
+      expect(draft.messages.map((message) => message.content)).toEqual([
+        "one more tweak",
+        "Updated.",
+      ]);
+
+      await expect(
+        service.getVersionSource(userId, id, 2),
+      ).rejects.toMatchObject({ status: 404 });
+    });
+
     it("generation, edit, publish and revert create the right changes, links and ranges", async () => {
       const { agent, service } = build();
       const userId = newUser();

@@ -9,6 +9,7 @@ import {
 import {
   createConversation,
   getChangeSource,
+  getVersionSource,
   getConversation,
   getVersion,
   listChanges,
@@ -93,6 +94,20 @@ export function useChangeSource(id: string | null, changeId: string | null) {
     enabled: id !== null && changeId !== null,
     // A change's source never changes, so it is safe to keep for the whole session.
     staleTime: Infinity,
+  });
+}
+
+export function useVersionSource(
+  id: string | null,
+  number: number | "draft" | null,
+  // A draft keeps growing, so its source can go stale. A published version never does.
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: [...planningKeys.all, "version-source", id, number] as const,
+    queryFn: () => getVersionSource(id as string, number as number | "draft"),
+    enabled: id !== null && number !== null && enabled,
+    staleTime: number === "draft" ? 0 : Infinity,
   });
 }
 

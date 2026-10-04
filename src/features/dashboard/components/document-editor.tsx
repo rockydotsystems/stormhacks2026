@@ -5,15 +5,18 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   ChatCircleIcon,
   CheckCircleIcon,
+  ClockCounterClockwiseIcon,
   ClockIcon,
   FileTextIcon,
   GitBranchIcon,
-  LockSimpleIcon,
+  UploadSimpleIcon,
   UserIcon,
 } from "@phosphor-icons/react";
 import { useDocument, useDocumentAction } from "../client/queries";
 import type { DocumentData, Person } from "../contracts";
 import { PlanningSession } from "@/features/workspace/components/planning-session";
+import { DocumentHistoryDialog } from "./document-history-dialog";
+import { publishState } from "../lib/history";
 import { DocumentCanvas } from "@/features/workspace/components/document-canvas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,7 +84,7 @@ export function DocumentEditor({
         });
         void queryClient.invalidateQueries({ queryKey: ["dashboard", userId] });
       }}
-      onBind={(changeId) =>
+      onPublish={(changeId) =>
         mutation.mutateAsync({ action: "publish", changeId })
       }
     />
@@ -96,7 +99,7 @@ export function DocumentWorkspace({
   repositories,
   title,
   onDocumentChanged,
-  onBind,
+  onPublish,
   pending,
   error,
 }: {
@@ -107,7 +110,7 @@ export function DocumentWorkspace({
   creator: Person;
   repositories: string[];
   onDocumentChanged: () => void;
-  onBind: (changeId: string) => Promise<unknown>;
+  onPublish: (changeId: string) => Promise<unknown>;
   pending: boolean;
   error?: string;
 }) {
@@ -116,23 +119,30 @@ export function DocumentWorkspace({
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewers, setReviewers] = useState<string[]>([]);
   const [publishOpen, setPublishOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [versionId, setVersionId] = useState("draft");
   const version = data.versions.find((item) => item.id === versionId);
   const frozen = data.changes.find((item) => item.id === version?.changeId);
   const displayed = frozen || latest;
-  const bound = Boolean(frozen || latest?.immutable);
+  const state = publishState(data);
+  const unpublished = Boolean(latest) && !latest?.immutable;
+  const nextNumber = (data.versions.at(-1)?.number || 0) + 1;
   const hasDocument = Boolean(displayed?.content.trim());
   const versions = [
-    { label: "Current draft", value: "draft" },
-    ...data.versions
-      .toReversed()
-      .map((item) => ({ label: `${item.label} · Bound`, value: item.id })),
+    {
+      label: unpublished || !data.versions.length ? "Current draft" : "Latest",
+      value: "draft",
+    },
+    ...data.versions.toReversed().map((item) => ({
+      label: `${item.label} · Published`,
+      value: item.id,
+    })),
   ];
 
   async function publish() {
     if (!latest) return;
     try {
-      await onBind(latest.id);
+      await onPublish(latest.id);
       setPublishOpen(false);
     } catch {
       /* Keep the confirmation open for retry. */
@@ -205,22 +215,26 @@ export function DocumentWorkspace({
                       </SelectPopup>
                     </Select>
                   </div>
-                  <Badge
-                    variant={bound ? "success" : "secondary"}
-                    className="decision-status"
-                  >
-                    {bound ? (
-                      <CheckCircleIcon aria-hidden="true" />
-                    ) : (
-                      <span className="draft-dot" aria-hidden="true" />
-                    )}
-                    {bound ? "Bound" : "Draft"}
-                  </Badge>
+                  <VersionState
+                    state={state}
+                    viewing={
+                      frozen
+                        ? { label: frozen && version ? version.label : "" }
+                        : null
+                    }
+                  />
                   {pending && (
                     <span className="document-save-state" role="status">
-                      {publishOpen ? "Binding…" : "Saving…"}
+                      {publishOpen ? "Publishing…" : "Saving…"}
                     </span>
                   )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setHistoryOpen(true)}
+                  >
+                    <ClockCounterClockwiseIcon aria-hidden="true" /> History
+                  </Button>
                   {!frozen && (
                     <>
                       <Button
@@ -228,20 +242,17 @@ export function DocumentWorkspace({
                         variant="outline"
                         onClick={() => setReviewOpen(true)}
                       >
-                        {" "}
                         {reviewers.length
                           ? "Manage reviewers"
                           : "Request review"}
                       </Button>
-                      {(reviewers.length > 0 || data.versions.length > 0) && (
-                        <Button
-                          size="sm"
-                          onClick={() => setPublishOpen(true)}
-                          disabled={!latest || latest.immutable || pending}
-                        >
-                          <LockSimpleIcon aria-hidden="true" /> Bind version
-                        </Button>
-                      )}
+                      <Button
+                        size="sm"
+                        onClick={() => setPublishOpen(true)}
+                        disabled={!unpublished || pending}
+                      >
+                        <UploadSimpleIcon aria-hidden="true" /> Publish version
+                      </Button>
                     </>
                   )}
                 </div>
@@ -317,7 +328,7 @@ export function DocumentWorkspace({
             <DialogTitle>Request review</DialogTitle>
             <DialogDescription>
               Bring teammates into the conversation to challenge the plan before
-              binding it. This prototype does not send invitations or enable
+              publishing it. This prototype does not send invitations or enable
               shared chat yet.
             </DialogDescription>
           </DialogHeader>
@@ -362,14 +373,22 @@ export function DocumentWorkspace({
           </form>
         </DialogPopup>
       </Dialog>
+      <DocumentHistoryDialog
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+        data={data}
+        documentId={documentId}
+        organizationId={organizationId}
+        title={latest?.title || "this plan"}
+      />
       <Dialog open={publishOpen} onOpenChange={setPublishOpen}>
         <DialogPopup>
           <DialogHeader>
-            <DialogTitle>Bind this decision?</DialogTitle>
+            <DialogTitle>Publish this document?</DialogTitle>
             <DialogDescription>
-              Bind the saved snapshot “{latest?.title}” as v
-              {(data.versions.at(-1)?.number || 0) + 1}. This agreement will be
-              preserved as an immutable version.
+              Publish “{latest?.title}” as v{nextNumber}. A published version
+              cannot be edited or deleted. Later edits become a new draft, and
+              you can publish them as v{nextNumber + 1}.
             </DialogDescription>
           </DialogHeader>
           {error && (
@@ -382,11 +401,46 @@ export function DocumentWorkspace({
               Cancel
             </DialogClose>
             <Button onClick={publish} disabled={pending}>
-              Bind version
+              Publish v{nextNumber}
             </Button>
           </DialogFooter>
         </DialogPopup>
       </Dialog>
     </div>
+  );
+}
+
+// Where the document stands: never published, current with a version, or edited since one.
+function VersionState({
+  state,
+  viewing,
+}: {
+  state: ReturnType<typeof publishState>;
+  // Set while an older version is on screen instead of the working copy.
+  viewing: { label: string } | null;
+}) {
+  if (viewing)
+    return (
+      <Badge variant="success" className="decision-status">
+        <CheckCircleIcon aria-hidden="true" /> {viewing.label} · Published
+      </Badge>
+    );
+  if (state.kind === "published")
+    return (
+      <Badge variant="success" className="decision-status">
+        <CheckCircleIcon aria-hidden="true" /> Published {state.version.label}
+      </Badge>
+    );
+  if (state.kind === "edited")
+    return (
+      <Badge variant="warning" className="decision-status">
+        <span className="draft-dot" aria-hidden="true" /> Edited since{" "}
+        {state.version.label}
+      </Badge>
+    );
+  return (
+    <Badge variant="secondary" className="decision-status">
+      <span className="draft-dot" aria-hidden="true" /> Draft
+    </Badge>
   );
 }

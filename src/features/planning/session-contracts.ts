@@ -154,6 +154,17 @@ export const changeSourceDetailSchema = z.object({
 });
 export type ChangeSourceDetail = z.infer<typeof changeSourceDetailSchema>;
 
+// The conversation behind one published version, or behind the current draft: every message from
+// the first change after the previous version up to the last change in this one.
+export const versionSourceSchema = z.object({
+  conversationId: z.string().uuid(),
+  // Null for the current draft, which has no version number yet.
+  number: z.number().int().nullable(),
+  changes: z.array(z.object({ changeId: z.string(), mode: changeModeSchema })),
+  messages: z.array(messageSchema),
+});
+export type VersionSource = z.infer<typeof versionSourceSchema>;
+
 // Streaming. One envelope per event. `seq` counts from 1 inside one streamed turn and `id` is
 // `<userMessageId>:<seq>`. Only the final state is durable. After a dropped stream, reload the
 // conversation detail instead of replaying deltas, because the turn either committed or did not.

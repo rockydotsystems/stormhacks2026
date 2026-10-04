@@ -54,7 +54,7 @@ describe("dashboard document filters", () => {
       filterDecisions(initialDecisions, {
         ...defaults,
         myReviews: true,
-        status: ["Bound"],
+        status: ["Published"],
       }),
     ).toEqual([]);
   });

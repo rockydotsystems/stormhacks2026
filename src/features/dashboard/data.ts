@@ -1,4 +1,4 @@
-export type DecisionStatus = "Draft" | "In review" | "Bound";
+export type DecisionStatus = "Draft" | "In review" | "Published";
 export type Decision = {
   id: string;
   title: string;

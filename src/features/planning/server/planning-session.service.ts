@@ -28,6 +28,7 @@ import {
   sendMessageSchema,
   type ChangeMode,
   type ChangeSourceDetail,
+  type VersionSource,
   type ChangeSummary,
   type ConversationDetail,
   type ConversationListItem,
@@ -365,6 +366,69 @@ export class PlanningSessionService {
         startMessageId: source.rangeStartMessageId,
         endMessageId: source.rangeEndMessageId,
       },
+      messages: messages.map((row) =>
+        messageDto(row, produced.get(row.id) ?? null),
+      ),
+    };
+  }
+
+  // The conversation behind one version, or behind the draft when `number` is null. A version
+  // owns the changes after the previous version up to its own change. The draft owns the rest.
+  async getVersionSource(
+    userId: string,
+    id: string,
+    number: number | null,
+  ): Promise<VersionSource> {
+    const { actor, conversation } = await this.load(userId, id);
+    if (!conversation.docId) throw new ApiError(404, "Version not found.");
+    const versions = await this.docs.listVersions(actor, conversation.docId);
+    let lower = BigInt(0);
+    let upper: bigint | null = null;
+    if (number === null) {
+      const latest = versions.at(-1);
+      if (latest) lower = BigInt(latest.changeId);
+    } else {
+      const index = versions.findIndex((version) => version.number === number);
+      if (index === -1) throw new ApiError(404, "Version not found.");
+      upper = BigInt(versions[index].changeId);
+      if (index > 0) lower = BigInt(versions[index - 1].changeId);
+    }
+    const sources = (
+      await this.store.listChangeSources(conversation.id)
+    ).filter((row) => {
+      const changeId = BigInt(row.changeId);
+      return changeId > lower && (upper === null || changeId <= upper);
+    });
+    const base = { conversationId: conversation.id, number };
+    if (sources.length === 0) return { ...base, changes: [], messages: [] };
+    // Ranges chain from one linked change to the next, so the segment is one run of messages.
+    const start = sources.reduce(
+      (min, row) =>
+        BigInt(row.rangeStartMessageId) < BigInt(min)
+          ? row.rangeStartMessageId
+          : min,
+      sources[0].rangeStartMessageId,
+    );
+    const end = sources.reduce(
+      (max, row) =>
+        BigInt(row.rangeEndMessageId) > BigInt(max)
+          ? row.rangeEndMessageId
+          : max,
+      sources[0].rangeEndMessageId,
+    );
+    const [messages, allSources] = await Promise.all([
+      this.store.listMessageRange(conversation.id, start, end),
+      this.store.listChangeSources(conversation.id),
+    ]);
+    const produced = new Map(
+      allSources.map((row) => [row.resultMessageId, row.changeId]),
+    );
+    return {
+      ...base,
+      changes: sources.map((row) => ({
+        changeId: row.changeId,
+        mode: row.mode,
+      })),
       messages: messages.map((row) =>
         messageDto(row, produced.get(row.id) ?? null),
       ),

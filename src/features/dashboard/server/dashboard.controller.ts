@@ -164,7 +164,7 @@ export class DashboardController {
       description: row.description,
       creator: creators.get(row.id) || "unknown",
       reviewers: [],
-      status: boundaries.get(row.id) === row.changeId ? "Bound" : "Draft",
+      status: boundaries.get(row.id) === row.changeId ? "Published" : "Draft",
       updated: row.updated.toISOString(),
       organization: organizationId,
     }));

@@ -41,6 +41,7 @@ type SessionService = Pick<
   | "listVersions"
   | "getVersion"
   | "getChangeSource"
+  | "getVersionSource"
   | "sendMessage"
   | "streamMessage"
   | "publish"
@@ -205,6 +206,22 @@ export class PlanningSessionController {
   async versions(id: string) {
     const user = await this.dependencies.authService.requireUser();
     return json(await this.service.listVersions(user.id, conversationId(id)));
+  }
+
+  // `number` is a version number, or "draft" for the changes after the latest version.
+  async versionSource(id: string, number: string) {
+    const user = await this.dependencies.authService.requireUser();
+    const conversation = conversationId(id);
+    if (number !== "draft" && !versionNumberSchema.safeParse(number).success) {
+      throw new ApiError(400, "Version number is invalid.");
+    }
+    return json(
+      await this.service.getVersionSource(
+        user.id,
+        conversation,
+        number === "draft" ? null : Number(number),
+      ),
+    );
   }
 
   async version(id: string, number: string) {

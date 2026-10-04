@@ -70,7 +70,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         ),
       );
 
-    it("persists projects, repository links, snapshots and immutable bound versions", async () => {
+    it("persists projects, repository links, snapshots and immutable published versions", async () => {
       expect(
         ((await (await list()).json()) as DashboardData).organizations,
       ).toEqual([]);
@@ -148,7 +148,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         doc.id,
       );
       data = (await (await list(organizationId)).json()) as DashboardData;
-      expect(data.documents[0].status).toBe("Bound");
+      expect(data.documents[0].status).toBe("Published");
       await controller.updateDocument(
         request({
           action: "save",

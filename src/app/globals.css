@@ -2128,3 +2128,194 @@ a {
   gap: 6px;
   overflow-wrap: anywhere;
 }
+
+/* Document history dialog */
+.history-body {
+  display: grid;
+  grid-template-columns: 17rem minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  border-top: 1px solid var(--border);
+}
+.history-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 12px;
+  border-right: 1px solid var(--border);
+}
+.history-scope {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.history-scope strong {
+  color: var(--foreground);
+  font-weight: 600;
+}
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+.history-list button {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  text-align: left;
+  cursor: pointer;
+}
+.history-list button:hover,
+.history-list button[data-active] {
+  background: var(--muted);
+}
+.history-list button[data-active] {
+  box-shadow: inset 2px 0 0 var(--foreground);
+}
+.history-item-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.history-list small {
+  overflow: hidden;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.history-main-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.history-main-head p {
+  font-size: 13px;
+  font-weight: 600;
+}
+.history-pane {
+  flex: 1;
+  min-height: 0;
+  padding: 12px 16px 16px;
+  overflow-y: auto;
+}
+.history-compare {
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.history-added {
+  color: var(--success-foreground);
+  font-weight: 600;
+}
+.history-removed {
+  color: var(--destructive-foreground);
+  font-weight: 600;
+}
+.history-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 8rem;
+  font-size: 13px;
+  color: var(--muted-foreground);
+  text-align: center;
+}
+.history-raw {
+  margin: 0;
+  font: 12px/1.6 var(--font-mono, ui-monospace, monospace);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.history-diff {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  font: 12px/1.6 var(--font-mono, ui-monospace, monospace);
+}
+.history-diff-line {
+  display: grid;
+  grid-template-columns: 1.75rem minmax(0, 1fr);
+}
+.history-diff-line > span:first-child {
+  text-align: center;
+  user-select: none;
+}
+.history-diff-line code {
+  font: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.history-diff-line[data-kind="added"] {
+  background: color-mix(in srgb, var(--success) 14%, transparent);
+}
+.history-diff-line[data-kind="added"] > span:first-child {
+  color: var(--success-foreground);
+}
+.history-diff-line[data-kind="removed"] {
+  background: color-mix(in srgb, var(--destructive) 14%, transparent);
+}
+.history-diff-line[data-kind="removed"] > span:first-child {
+  color: var(--destructive-foreground);
+}
+.history-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.history-messages li {
+  display: grid;
+  gap: 2px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--muted);
+}
+.history-messages li[data-role="user"] {
+  background: var(--secondary);
+}
+.history-messages li > span {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+.history-messages p {
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+.history-messages small {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+@media (max-width: 720px) {
+  .history-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 12rem) minmax(0, 1fr);
+  }
+  .history-sidebar {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+}
