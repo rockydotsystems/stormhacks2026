@@ -332,6 +332,10 @@ Both upstream agent skills are included in `.agents/skills`: `using-coss-ui` (co
 
 ## Database workflow
 
+The organization-scoped docs foundation, snapshot/publication rules, service
+operations, and MCP integration boundary are documented in
+[`docs/mcp-data-layer.md`](docs/mcp-data-layer.md).
+
 Docker Compose binds Postgres to loopback and persists data in a named volume. Its hardcoded credentials are **local development defaults only**. Use a managed database, private networking, and separate secrets in production.
 
 ```sh

@@ -2,6 +2,8 @@ import "server-only";
 import { asClass, asFunction, createContainer, InjectionMode } from "awilix";
 import { AuthController } from "@/features/auth/server/auth.controller";
 import { AuthService } from "@/features/auth/server/auth.service";
+import { DocsService } from "@/features/docs/server/docs.service";
+import { OrganizationsService } from "@/features/organizations/server/organizations.service";
 import { NotesController } from "@/features/notes/server/notes.controller";
 import { NotesService } from "@/features/notes/server/notes.service";
 import { createDatabase, type Database } from "@/server/db";
@@ -12,6 +14,8 @@ export type Dependencies = {
   authController: AuthController;
   notesService: NotesService;
   notesController: NotesController;
+  docsService: DocsService;
+  organizationsService: OrganizationsService;
 };
 
 export const container = createContainer<Dependencies>({
@@ -27,4 +31,6 @@ container.register({
   authController: asClass(AuthController).scoped(),
   notesService: asClass(NotesService).scoped(),
   notesController: asClass(NotesController).scoped(),
+  docsService: asClass(DocsService).scoped(),
+  organizationsService: asClass(OrganizationsService).scoped(),
 });
