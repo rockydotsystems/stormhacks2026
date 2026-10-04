@@ -1125,8 +1125,11 @@ a {
   }
 }
 
+.dashboard-heading:has(+ .project-context) {
+  margin-bottom: 8px;
+}
 .project-context {
-  margin: -20px 0 32px;
+  margin: 0 0 32px;
   color: var(--muted-foreground);
   font-size: 13px;
   line-height: 1.6;
@@ -1134,7 +1137,7 @@ a {
 .project-repositories {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 18px;
+  gap: 8px;
   font-size: 12px;
   overflow-wrap: anywhere;
 }
@@ -1217,12 +1220,13 @@ a {
 .project-repository-metadata {
   display: flex;
   gap: 12px 24px;
-  align-items: baseline;
+  align-items: flex-start;
   border-top: 1px solid var(--border);
   margin-top: 24px;
   padding-top: 16px;
 }
 .project-repository-label {
+  min-height: 28px;
   display: inline-flex;
   gap: 7px;
   align-items: center;
@@ -1234,12 +1238,21 @@ a {
   height: 14px;
 }
 .project-repositories a {
+  max-width: 100%;
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--muted);
+  line-height: 18px;
   display: inline-flex;
   gap: 5px;
   align-items: center;
   min-width: 0;
 }
 .project-repositories a:hover {
+  background: var(--accent);
+  border-color: var(--input);
   color: var(--foreground);
 }
 .project-repositories svg {
