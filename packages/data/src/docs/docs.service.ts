@@ -1,6 +1,7 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import {
   changeIdSchema,
+  docMetadataSchema,
   snapshotSchema,
   type DocChange,
   type DocVersion,
@@ -38,7 +39,11 @@ export class DocsService {
       .select()
       .from(docs)
       .where(
-        and(eq(docs.id, docId), eq(docs.organizationId, actor.organizationId)),
+        and(
+          eq(docs.id, docId),
+          eq(docs.organizationId, actor.organizationId),
+          isNull(docs.deletedAt),
+        ),
       );
     const [doc] = await (lock ? query.for("update") : query);
     if (!doc) throw new ApiError(404, "Doc not found.");
@@ -64,7 +69,13 @@ export class DocsService {
       await tx
         .insert(docChanges)
         .values({ docId: doc.id, ...snapshot, createdBy: actor.userId });
-      return { ...doc, createdAt: doc.createdAt.toISOString() };
+      return {
+        id: doc.id,
+        organizationId: doc.organizationId,
+        projectId: doc.projectId,
+        description: doc.description,
+        createdAt: doc.createdAt.toISOString(),
+      };
     });
   }
 
@@ -77,6 +88,7 @@ export class DocsService {
         and(
           eq(docs.organizationId, actor.organizationId),
           eq(docs.projectId, projectId),
+          isNull(docs.deletedAt),
         ),
       )
       .orderBy(asc(docs.createdAt), asc(docs.id));
@@ -223,7 +235,7 @@ export class DocsService {
         createdAt: docs.createdAt,
         latestTitle: sql<
           string | null
-        >`(select title from doc_changes where doc_id = docs.id order by id desc limit 1)`,
+        >`coalesce(docs.title, (select title from doc_changes where doc_id = docs.id order by id desc limit 1))`,
         latestChangeId: sql<
           string | null
         >`(select id::text from doc_changes where doc_id = docs.id order by id desc limit 1)`,
@@ -245,7 +257,11 @@ export class DocsService {
       })
       .from(docs)
       .where(
-        and(eq(docs.id, docId), eq(docs.organizationId, actor.organizationId)),
+        and(
+          eq(docs.id, docId),
+          eq(docs.organizationId, actor.organizationId),
+          isNull(docs.deletedAt),
+        ),
       );
     if (!row) throw new ApiError(404, "Doc not found.");
     return {
@@ -257,6 +273,60 @@ export class DocsService {
       latestVersion:
         row.latestVersionNumber === null ? null : `v${row.latestVersionNumber}`,
     };
+  }
+
+  /** Display title: an explicit rename wins over the latest snapshot title. */
+  private async displayTitle(
+    db: Database | Transaction,
+    doc: typeof docs.$inferSelect,
+  ) {
+    if (doc.title) return doc.title;
+    const [latest] = await db
+      .select({ title: docChanges.title })
+      .from(docChanges)
+      .where(eq(docChanges.docId, doc.id))
+      .orderBy(desc(docChanges.id))
+      .limit(1);
+    return latest?.title ?? "Untitled document";
+  }
+
+  async updateMetadata(
+    actor: OrganizationActor,
+    docId: string,
+    input: { title?: string; description?: string },
+  ) {
+    const changes = docMetadataSchema.parse(input);
+    return this.dependencies.db.transaction(async (tx) => {
+      await this.requireDoc(tx, actor, docId, true);
+      const [row] = await tx
+        .update(docs)
+        .set(changes)
+        .where(eq(docs.id, docId))
+        .returning();
+      return {
+        id: row.id,
+        title: await this.displayTitle(tx, row),
+        description: row.description,
+      };
+    });
+  }
+
+  /** Soft delete: hides the doc and keeps every snapshot and version. */
+  async deleteDoc(
+    actor: OrganizationActor,
+    docId: string,
+    confirmTitle: string,
+  ) {
+    return this.dependencies.db.transaction(async (tx) => {
+      const doc = await this.requireDoc(tx, actor, docId, true);
+      if (confirmTitle.trim() !== (await this.displayTitle(tx, doc)))
+        throw new ApiError(400, "Type the document name to confirm.");
+      await tx
+        .update(docs)
+        .set({ deletedAt: sql`now()` })
+        .where(eq(docs.id, docId));
+      return { id: docId };
+    });
   }
 
   async deleteChange(

@@ -5,6 +5,17 @@ export const snapshotSchema = z.object({
   content: z.string(),
 });
 
+export const docMetadataSchema = z
+  .object({
+    title: z.string().trim().min(1).max(180),
+    description: z.string().trim().max(1000),
+  })
+  .partial()
+  .refine(
+    (value) => value.title !== undefined || value.description !== undefined,
+    "Change the title or description.",
+  );
+
 export const changeIdSchema = z
   .string()
   .regex(/^[1-9][0-9]*$/)

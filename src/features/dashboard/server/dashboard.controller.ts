@@ -1,11 +1,12 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { getWorkOS } from "@workos-inc/authkit-nextjs";
-import { asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   dashboardActionSchema,
   documentActionSchema,
+  projectActionSchema,
   type DashboardData,
 } from "../contracts";
 import { organizationIdSchema } from "@/features/organizations/contracts";
@@ -100,7 +101,7 @@ export class DashboardController {
           .selectDistinctOn([docs.id], {
             id: docs.id,
             projectId: docs.projectId,
-            title: sql<string>`coalesce(${docChanges.title}, 'Untitled document')`,
+            title: sql<string>`coalesce(${docs.title}, ${docChanges.title}, 'Untitled document')`,
             description: sql<string>`coalesce(nullif(${docs.description}, ''), left(${docChanges.content}, 300))`,
             changeId: sql<string>`${docChanges.id}::text`,
             updated:
@@ -110,7 +111,12 @@ export class DashboardController {
           })
           .from(docs)
           .leftJoin(docChanges, eq(docs.id, docChanges.docId))
-          .where(eq(docs.organizationId, organizationId))
+          .where(
+            and(
+              eq(docs.organizationId, organizationId),
+              isNull(docs.deletedAt),
+            ),
+          )
           .orderBy(asc(docs.id), desc(docChanges.id)),
         db
           .selectDistinctOn([docs.id], {
@@ -119,7 +125,12 @@ export class DashboardController {
           })
           .from(docs)
           .leftJoin(docChanges, eq(docs.id, docChanges.docId))
-          .where(eq(docs.organizationId, organizationId))
+          .where(
+            and(
+              eq(docs.organizationId, organizationId),
+              isNull(docs.deletedAt),
+            ),
+          )
           .orderBy(asc(docs.id), asc(docChanges.id)),
         db
           .selectDistinctOn([docs.id], {
@@ -128,7 +139,12 @@ export class DashboardController {
           })
           .from(docs)
           .innerJoin(docVersions, eq(docs.id, docVersions.docId))
-          .where(eq(docs.organizationId, organizationId))
+          .where(
+            and(
+              eq(docs.organizationId, organizationId),
+              isNull(docs.deletedAt),
+            ),
+          )
           .orderBy(asc(docs.id), desc(docVersions.number)),
       ]);
     result.projects = projectRows.map((project) => ({
@@ -230,6 +246,17 @@ export class DashboardController {
     return json(project, 201);
   }
 
+  async updateProject(request: Request, id: string) {
+    const user = await this.dependencies.authService.requireUser();
+    const projectId = uuid(id);
+    const input = await readBody(request, projectActionSchema);
+    const actor = { userId: user.id, organizationId: input.organizationId };
+    const service = this.dependencies.projectsService;
+    if (input.action === "delete")
+      return json(await service.delete(actor, projectId, input.confirmName));
+    return json(await service.update(actor, projectId, input));
+  }
+
   async document(request: Request, id: string) {
     const user = await this.dependencies.authService.requireUser();
     const docId = uuid(id);
@@ -253,6 +280,10 @@ export class DashboardController {
     const input = await readBody(request, documentActionSchema);
     const actor = { userId: user.id, organizationId: input.organizationId };
     const service = this.dependencies.docsService;
+    if (input.action === "update")
+      return json(await service.updateMetadata(actor, docId, input));
+    if (input.action === "delete")
+      return json(await service.deleteDoc(actor, docId, input.confirmTitle));
     return json(
       input.action === "save"
         ? await service.addChange(actor, docId, input)

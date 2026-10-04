@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { OrganizationActor } from "../organizations/contracts";
 import { requireOrganizationMember } from "../organizations/membership";
 import { projects } from "./schema";
@@ -19,6 +19,7 @@ export async function requireProject(
       and(
         eq(projects.id, projectId),
         eq(projects.organizationId, actor.organizationId),
+        isNull(projects.deletedAt),
       ),
     );
   const [project] = await (lock ? query.for("update") : query);

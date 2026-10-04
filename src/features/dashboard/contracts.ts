@@ -44,6 +44,24 @@ export const dashboardActionSchema = z.discriminatedUnion("action", [
   }),
 ]);
 export type DashboardAction = z.input<typeof dashboardActionSchema>;
+export const projectActionSchema = z.discriminatedUnion("action", [
+  z
+    .object({
+      action: z.literal("update"),
+      organizationId,
+      name: projectSchema.shape.name.optional(),
+      description: z.string().trim().max(1000).optional(),
+    })
+    .refine(
+      (value) => value.name !== undefined || value.description !== undefined,
+      "Change the name or description.",
+    ),
+  z.object({
+    action: z.literal("delete"),
+    organizationId,
+    confirmName: z.string().max(80),
+  }),
+]);
 export const documentActionSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("save"),
@@ -55,5 +73,21 @@ export const documentActionSchema = z.discriminatedUnion("action", [
     action: z.literal("publish"),
     organizationId,
     changeId: changeIdSchema,
+  }),
+  z
+    .object({
+      action: z.literal("update"),
+      organizationId,
+      title: z.string().trim().min(1).max(180).optional(),
+      description: z.string().trim().max(1000).optional(),
+    })
+    .refine(
+      (value) => value.title !== undefined || value.description !== undefined,
+      "Change the title or description.",
+    ),
+  z.object({
+    action: z.literal("delete"),
+    organizationId,
+    confirmTitle: z.string().max(180),
   }),
 ]);

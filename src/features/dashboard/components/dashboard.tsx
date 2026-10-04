@@ -32,7 +32,7 @@ import { useDefaultDocumentSort } from "@/features/account/preferences";
 const AccountSettings = dynamic(
   () => import("@/features/account/components/account-settings"),
 );
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -89,7 +89,9 @@ import {
 } from "@/features/dashboard/client/queries";
 import type { Person } from "@/features/dashboard/contracts";
 import { useRecentDocuments } from "@/features/dashboard/client/recent-documents";
+import { ProjectActionsMenu } from "./project-actions-menu";
 import { DocumentEditor } from "./document-editor";
+import { DocumentActionsMenu } from "./document-actions-menu";
 import { apiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
@@ -388,6 +390,21 @@ export function Dashboard({
     recordRecent(id);
     setMobileOpen(false);
   }
+  // Opens a shared `/?document=<id>` link once the document list has loaded.
+  const linkedDocument = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (!workspace.data) return;
+    linkedDocument.current ??= new URLSearchParams(window.location.search).get(
+      "document",
+    );
+    const id = linkedDocument.current;
+    if (!id) return;
+    linkedDocument.current = "";
+    if (workspace.data.documents.some((document) => document.id === id))
+      openDocument(id);
+    window.history.replaceState(null, "", window.location.pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace.data]);
   function resetFilters() {
     setMyReviews(false);
     setQuery("");
@@ -805,6 +822,19 @@ export function Dashboard({
               </ol>
             </nav>
           )}
+          {selected && !settingsSection && session.data?.user && (
+            <div className="dashboard-topbar-actions">
+              <DocumentActionsMenu
+                key={selected.id}
+                id={selected.id}
+                organizationId={organization}
+                userId={session.data.user.id}
+                title={selected.title}
+                description={selected.description}
+                onDeleted={() => setSelectedId(null)}
+              />
+            </div>
+          )}
         </header>
         <div
           className={cn(
@@ -913,6 +943,7 @@ export function Dashboard({
               userId={session.data!.user!.id}
               creator={people[selected.creator]}
               repositories={selectedRepositories}
+              title={selected.title}
             />
           ) : (
             <div className="dashboard-content">
@@ -1008,58 +1039,80 @@ export function Dashboard({
                     <div className="project-grid">
                       {(view === "Overview" ? frequentProjects : projects).map(
                         (name) => (
-                          <button
-                            key={name}
-                            type="button"
-                            className={cn(
-                              "project-card",
-                              activeProject === name && "project-selected",
-                            )}
-
-                            onClick={() => openProject(name)}
-                          >
-                            <div
+                          <div key={name} className="project-card-wrap">
+                            <button
+                              type="button"
                               className={cn(
-                                "folder-art",
-                                `folder-tone-${projects.indexOf(name) % 3}`,
+                                "project-card",
+                                activeProject === name && "project-selected",
                               )}
-                              aria-hidden="true"
+
+                              onClick={() => openProject(name)}
                             >
-                              <div className="folder-back" />
-                              <div className="folder-paper paper-back">
-                                <i />
-                                <i />
-                                <i />
+                              <div
+                                className={cn(
+                                  "folder-art",
+                                  `folder-tone-${projects.indexOf(name) % 3}`,
+                                )}
+                                aria-hidden="true"
+                              >
+                                <div className="folder-back" />
+                                <div className="folder-paper paper-back">
+                                  <i />
+                                  <i />
+                                  <i />
+                                </div>
+                                <div className="folder-paper paper-front">
+                                  <i />
+                                  <i />
+                                  <i />
+                                </div>
+                                <div className="folder-flap">
+                                  <span className="folder-seam" />
+                                </div>
                               </div>
-                              <div className="folder-paper paper-front">
-                                <i />
-                                <i />
-                                <i />
+                              <div className="project-card-label">
+                                <span>
+                                  <strong>{projectName(name)}</strong>
+                                  <small className="project-description">
+                                    {
+                                      orgProjects.find(
+                                        (item) => item.id === name,
+                                      )?.description
+                                    }
+                                  </small>
+                                  <small className="project-document-count">
+                                    {documentCount(
+                                      orgDocuments.filter(
+                                        (decision) => decision.project === name,
+                                      ).length,
+                                    )}
+                                  </small>
+                                </span>
+                                <ArrowUpRightIcon aria-hidden="true" />
                               </div>
-                              <div className="folder-flap">
-                                <span className="folder-seam" />
-                              </div>
-                            </div>
-                            <div className="project-card-label">
-                              <span>
-                                <strong>{projectName(name)}</strong>
-                                <small className="project-description">
-                                  {
-                                    orgProjects.find((item) => item.id === name)
-                                      ?.description
-                                  }
-                                </small>
-                                <small className="project-document-count">
-                                  {documentCount(
-                                    orgDocuments.filter(
-                                      (decision) => decision.project === name,
-                                    ).length,
-                                  )}
-                                </small>
-                              </span>
-                              <ArrowUpRightIcon aria-hidden="true" />
-                            </div>
-                          </button>
+                            </button>
+                            <ProjectActionsMenu
+                              className="project-card-menu"
+                              id={name}
+                              organizationId={organization}
+                              userId={session.data!.user!.id}
+                              name={projectName(name)}
+                              description={
+                                orgProjects.find((item) => item.id === name)
+                                  ?.description ?? ""
+                              }
+                              documentCount={
+                                orgDocuments.filter(
+                                  (decision) => decision.project === name,
+                                ).length
+                              }
+                              onDeleted={() => {
+                                if (activeProject === name)
+                                  setActiveProject(null);
+                              }}
+                            />
+                          </div>
                         ),
                       )}
                     </div>
@@ -1151,6 +1204,7 @@ export function Dashboard({
                         <span>Created by</span>
                         <span>Reviewers</span>
                         <span>Updated</span>
+                        <span />
                       </div>
                       {(view === "Overview" ? recentDocuments : filtered).map(
                         (decision) => (
@@ -1204,6 +1258,22 @@ export function Dashboard({
                                 timeZone: "America/Edmonton",
                               }).format(new Date(decision.updated))}
                             </time>
+                            {session.data?.user && (
+                              <div className="document-actions-cell">
+                                <DocumentActionsMenu
+                                  id={decision.id}
+                                  organizationId={organization}
+                                  userId={session.data.user.id}
+                                  title={decision.title}
+                                  description={decision.description}
+                                  onDeleted={() =>
+                                    setSelectedId((current) =>
+                                      current === decision.id ? null : current,
+                                    )
+                                  }
+                                />
+                              </div>
+                            )}
                           </div>
                         ),
                       )}

@@ -55,7 +55,9 @@ export function useDocumentAction(
     mutationFn: (
       input:
         | { action: "save"; title: string; content: string }
-        | { action: "publish"; changeId: string },
+        | { action: "publish"; changeId: string }
+        | { action: "update"; title?: string; description?: string }
+        | { action: "delete"; confirmTitle: string },
     ) =>
       apiClient(`/api/documents/${id}`, {
         method: "POST",
@@ -68,5 +70,25 @@ export function useDocumentAction(
           queryKey: ["document", userId, organizationId, id],
         }),
       ]),
+  });
+}
+export function useProjectAction(
+  userId: string,
+  organizationId: string,
+  id: string,
+) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (
+      input:
+        | { action: "update"; name?: string; description?: string }
+        | { action: "delete"; confirmName: string },
+    ) =>
+      apiClient(`/api/projects/${id}`, {
+        method: "POST",
+        body: JSON.stringify({ ...input, organizationId }),
+      }),
+    onSuccess: () =>
+      client.invalidateQueries({ queryKey: ["dashboard", userId] }),
   });
 }

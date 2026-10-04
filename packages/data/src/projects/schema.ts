@@ -22,6 +22,7 @@ export const projects = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (table) => [
     unique("projects_org_id_unique").on(table.organizationId, table.id),

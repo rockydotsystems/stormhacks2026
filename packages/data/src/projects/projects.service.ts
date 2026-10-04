@@ -1,14 +1,17 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import type { OrganizationActor } from "../organizations/contracts";
 import { requireOrganizationMember } from "../organizations/membership";
 import {
   githubRepositorySchema,
   projectSchema,
+  updateProjectSchema,
   type CreateProject,
   type GithubRepositoryInput,
   type Project,
+  type UpdateProject,
 } from "./contracts";
 import { requireProject } from "./access";
+import { docs } from "../docs/schema";
 import { githubRepositories, projectRepositories, projects } from "./schema";
 import type { Database, Page } from "../db";
 import { ApiError } from "../errors";
@@ -37,7 +40,12 @@ export class ProjectsService {
     const query = this.dependencies.db
       .select()
       .from(projects)
-      .where(eq(projects.organizationId, actor.organizationId))
+      .where(
+        and(
+          eq(projects.organizationId, actor.organizationId),
+          isNull(projects.deletedAt),
+        ),
+      )
       .orderBy(asc(projects.createdAt), asc(projects.id));
     const rows = await (page
       ? query.limit(page.limit).offset(page.offset)
@@ -51,6 +59,45 @@ export class ProjectsService {
   async get(actor: OrganizationActor, projectId: string): Promise<Project> {
     const row = await requireProject(this.dependencies.db, actor, projectId);
     return { ...row, createdAt: row.createdAt.toISOString() };
+  }
+
+  async update(
+    actor: OrganizationActor,
+    projectId: string,
+    input: UpdateProject,
+  ): Promise<Project> {
+    const changes = updateProjectSchema.parse(input);
+    return this.dependencies.db.transaction(async (tx) => {
+      await requireProject(tx, actor, projectId, true);
+      const [row] = await tx
+        .update(projects)
+        .set(changes)
+        .where(eq(projects.id, projectId))
+        .returning();
+      return { ...row, createdAt: row.createdAt.toISOString() };
+    });
+  }
+
+  /** Soft delete: hides the project and its documents. Snapshots and versions are kept. */
+  async delete(
+    actor: OrganizationActor,
+    projectId: string,
+    confirmName: string,
+  ) {
+    return this.dependencies.db.transaction(async (tx) => {
+      const project = await requireProject(tx, actor, projectId, true);
+      if (confirmName.trim() !== project.name)
+        throw new ApiError(400, "Type the project name to confirm.");
+      await tx
+        .update(docs)
+        .set({ deletedAt: sql`now()` })
+        .where(and(eq(docs.projectId, projectId), isNull(docs.deletedAt)));
+      await tx
+        .update(projects)
+        .set({ deletedAt: sql`now()` })
+        .where(eq(projects.id, projectId));
+      return { id: projectId };
+    });
   }
 
   async connectRepository(

@@ -468,5 +468,52 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         expect(history).toHaveLength(0);
       }
     });
+
+    it("renames and redescribes a doc without touching published history", async () => {
+      const { actor, doc } = await fixture();
+      const [first] = await docs.listChanges(actor, doc.id);
+      await docs.publish(actor, doc.id, first.id);
+      expect(
+        await docs.updateMetadata(actor, doc.id, {
+          title: "  Renamed  ",
+          description: "New description",
+        }),
+      ).toEqual({
+        id: doc.id,
+        title: "Renamed",
+        description: "New description",
+      });
+      expect(await docs.getMetadata(actor, doc.id)).toMatchObject({
+        latestTitle: "Renamed",
+      });
+      expect((await docs.listChanges(actor, doc.id))[0]).toMatchObject({
+        title: "First title",
+        immutable: true,
+      });
+      await expect(docs.updateMetadata(actor, doc.id, {})).rejects.toThrow();
+    });
+
+    it("soft deletes only after the exact name is confirmed", async () => {
+      const { actor, doc, project } = await fixture();
+      await expect(
+        docs.deleteDoc(actor, doc.id, "wrong"),
+      ).rejects.toMatchObject({ status: 400 });
+      await docs.updateMetadata(actor, doc.id, { title: "Doomed" });
+      await docs.deleteDoc(actor, doc.id, "Doomed");
+      await expect(docs.getMetadata(actor, doc.id)).rejects.toMatchObject({
+        status: 404,
+      });
+      await expect(docs.listChanges(actor, doc.id)).rejects.toMatchObject({
+        status: 404,
+      });
+      await expect(
+        docs.updateMetadata(actor, doc.id, { title: "Back" }),
+      ).rejects.toMatchObject({ status: 404 });
+      expect(await docs.list(actor, project.id)).toEqual([]);
+      const stranger = await fixture();
+      await expect(
+        docs.deleteDoc(stranger.actor, doc.id, "Doomed"),
+      ).rejects.toThrow();
+    });
   },
 );

@@ -46,6 +46,7 @@ export function DocumentEditor({
   id: string;
   organizationId: string;
   userId: string;
+  title: string;
   creator: Person;
   repositories: string[];
 }) {
@@ -93,6 +94,7 @@ export function DocumentWorkspace({
   organizationId,
   creator,
   repositories,
+  title,
   onDocumentChanged,
   onBind,
   pending,
@@ -101,6 +103,7 @@ export function DocumentWorkspace({
   data: DocumentData;
   documentId: string;
   organizationId: string;
+  title?: string;
   creator: Person;
   repositories: string[];
   onDocumentChanged: () => void;
@@ -174,7 +177,10 @@ export function DocumentWorkspace({
           <section className="document-surface" aria-label="Decision document">
             <div className="document-paper-scroll">
               <article className="document-paper">
-                <h1>{displayed?.title || "Untitled document"}</h1>
+                <h1>
+                  {(frozen ? frozen.title : title || latest?.title) ||
+                    "Untitled document"}
+                </h1>
                 <div className="document-paper-actions">
                   <div className="document-workspace-version">
                     <Select

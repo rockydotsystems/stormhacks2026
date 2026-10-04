@@ -23,10 +23,14 @@ export const docs = pgTable(
       .notNull()
       .references(() => organizations.id),
     projectId: uuid("project_id").notNull(),
+    // Mutable display name. Null falls back to the latest snapshot title.
+    title: text("title"),
     description: text("description").notNull().default(""),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
+    // Soft delete. History stays intact and the doc disappears from every read.
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (table) => [
     unique("docs_org_id_unique").on(table.organizationId, table.id),
