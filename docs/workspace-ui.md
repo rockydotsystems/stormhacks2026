@@ -109,7 +109,7 @@ Recently viewed document IDs are stored on the device, scoped by authenticated
 user and organization.
 
 The organization switcher lists active WorkOS memberships. Creating an organization
-creates it in WorkOS and adds the authenticated creator with the WorkOS default role.
+creates it in WorkOS and adds the authenticated creator as an Admin.
 Switching refreshes the AuthKit session and returns the dashboard to Overview;
 account settings reload in place. The retained
 team management implementation uses the same selected organization as project and document data. SSO/MFA
@@ -123,10 +123,35 @@ Legacy organizations need a separately reviewed mapping to a WorkOS organization
 they are never adopted by matching names or automatically granted to WorkOS users.
 The local development database had no legacy organization records at migration time.
 
-The account menu uses real WorkOS identity and links to `/settings/profile`,
-`/settings/security`, and `/settings/preferences`. Team settings is temporarily
-hidden; direct visits to `/settings/team` redirect to `/settings/profile`. Configure the
-`widgets:users-table:manage` permission on the appropriate administrator role in WorkOS.
+The account menu uses real WorkOS identity. `/settings/team` shows the selected
+organization's members and pending invitations. Both Admins and Members can
+collaborate, invite teammates, resend invitations, and connect GitHub repositories
+they can access. No workspace member needs a GitHub account or GitHub org membership
+to participate in document decisions. Inviting a teammate shares all workspace
+content, including repository-derived context; it does not grant GitHub access.
+
+There are only two roles, `admin` and `member`, and no owners. Only Admins can
+promote, demote, remove members, or revoke pending invitations. Invitations always
+grant `member`; promotion is a separate Admin action after acceptance. Removal
+deactivates the WorkOS membership without deleting the user's contributions.
+Team actions recheck active membership and current WorkOS roles on every request;
+they do not trust roles cached in session tokens or Postgres.
+
+Role changes and removals acquire a transaction-scoped Postgres advisory lock per
+organization before rereading WorkOS membership. Demoting or removing the last
+active Admin returns 409, including self-demotion/removal and concurrent requests.
+This safeguard applies to application actions, not out-of-band WorkOS dashboard,
+API, SSO, or Directory Sync changes. Directory-managed memberships cannot be
+changed here. Do not grant `widgets:users-table:manage` to either role: direct
+widget mutations bypass the application safeguard. WorkOS remains the membership
+authority; the database lock coordinates requests, not a separate role store.
+
+Configure both roles in each WorkOS environment, keep `member` as the default,
+and do not attach additional privileges to Admin. Seed existing organizations with
+at least one Admin explicitly; no user is automatically promoted by name or email.
+Set the WorkOS invitation URL to the app's `/invite` route. It forwards the email
+token to hosted AuthKit while preserving SDK-generated state and PKCE. WorkOS
+handles invitation acceptance and email identity rules.
 
 Verify project creation with multiple repositories, its empty state, creating a
 document with inherited repositories, combined document filters, and organization

@@ -1,5 +1,3 @@
-import type { OrganizationActor } from "./contracts";
-import { requireOrganizationMember } from "./membership";
 import { getWorkOS } from "./workos";
 import { z } from "zod";
 import { organizations, users } from "./schema";
@@ -17,6 +15,7 @@ export class OrganizationsService {
     await workos.userManagement.createOrganizationMembership({
       organizationId: organization.id,
       userId,
+      roleSlug: "admin",
     });
     await this.mirror(organization);
     await this.dependencies.db
@@ -41,18 +40,6 @@ export class OrganizationsService {
     );
     await Promise.all(rows.map((row) => this.mirror(row)));
     return rows;
-  }
-
-  async addMember(actor: OrganizationActor, userId: string) {
-    await requireOrganizationMember(this.dependencies.db, actor);
-    await getWorkOS().userManagement.createOrganizationMembership({
-      organizationId: actor.organizationId,
-      userId,
-    });
-    await this.dependencies.db
-      .insert(users)
-      .values({ id: userId })
-      .onConflictDoNothing();
   }
 
   private async mirror(organization: {

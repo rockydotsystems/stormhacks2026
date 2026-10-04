@@ -15,17 +15,16 @@ export async function requireOrganizationMember(
       statuses: ["active"],
       limit: 1,
     });
-  if (
-    !memberships.data.some(
-      (membership) =>
-        membership.status === "active" &&
-        membership.organizationId === actor.organizationId &&
-        membership.userId === actor.userId,
-    )
-  )
-    throw new ApiError(404, "Organization not found.");
+  const membership = memberships.data.find(
+    (membership) =>
+      membership.status === "active" &&
+      membership.organizationId === actor.organizationId &&
+      membership.userId === actor.userId,
+  );
+  if (!membership) throw new ApiError(404, "Organization not found.");
   // New and invited WorkOS users must be present for document creator foreign keys.
   await db.insert(users).values({ id: actor.userId }).onConflictDoNothing();
   // Planning foreign keys need a local mirror; WorkOS remains the access authority.
   await db.insert(organizationMembers).values(actor).onConflictDoNothing();
+  return membership;
 }

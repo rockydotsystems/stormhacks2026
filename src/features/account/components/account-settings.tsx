@@ -1,12 +1,11 @@
 "use client";
 
-import { useAccessToken, useAuth } from "@workos-inc/authkit-nextjs/components";
+import { useAccessToken } from "@workos-inc/authkit-nextjs/components";
 import {
   WorkOsWidgets,
   UserProfile,
   UserSecurity,
   UserSessions,
-  UsersManagement,
 } from "@workos-inc/widgets";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
@@ -24,6 +23,7 @@ import { useSession } from "@/features/auth/client/queries";
 import { useDefaultDocumentSort } from "@/features/account/preferences";
 import { GitHubSettings } from "@/features/github/components/github-settings";
 import { McpSettings } from "@/features/account/components/mcp-settings";
+import { TeamSettings } from "@/features/organizations/components/team-settings";
 import { ThemeSelect } from "./theme-select";
 import { useTheme } from "./theme-provider";
 
@@ -41,9 +41,8 @@ const headings = {
 function AuthenticatedWidgets({
   section,
 }: {
-  section: Exclude<SettingsSection, "preferences" | "github" | "mcp">;
+  section: "profile" | "security";
 }) {
-  const { organizationId, permissions } = useAuth();
   const { resolvedTheme } = useTheme();
   const { getAccessToken } = useAccessToken();
   const queryClient = useQueryClient();
@@ -52,21 +51,6 @@ function AuthenticatedWidgets({
     if (!accessToken) throw new Error("Sign in to manage your account.");
     return accessToken;
   }
-  if (section === "team" && !organizationId)
-    return (
-      <p className="settings-description">
-        Sign in to an organization to manage its team.
-      </p>
-    );
-  if (
-    section === "team" &&
-    !permissions?.includes("widgets:users-table:manage")
-  )
-    return (
-      <p className="settings-description">
-        An organization administrator can manage members and roles.
-      </p>
-    );
   return (
     <WorkOsWidgets
       queryClient={queryClient}
@@ -89,7 +73,6 @@ function AuthenticatedWidgets({
           </div>
         </>
       )}
-      {section === "team" && <UsersManagement authToken={token} />}
     </WorkOsWidgets>
   );
 }
@@ -171,6 +154,12 @@ export default function AccountSettings({
             userId={session.data.user.id}
             organizationId={organizationId}
             outcome={githubOutcome}
+          />
+        ) : section === "team" ? (
+          <TeamSettings
+            key={organizationId}
+            userId={session.data.user.id}
+            organizationId={organizationId}
           />
         ) : (
           <AuthenticatedWidgets section={section} />

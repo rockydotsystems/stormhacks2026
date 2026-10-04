@@ -230,7 +230,9 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         creator: "unknown",
       });
       // A stale local membership must not grant access after WorkOS revokes it.
-      await client`INSERT INTO organization_members (organization_id, user_id) VALUES (${organizationId}, ${user.id})`;
+      expect(
+        await client`SELECT user_id FROM organization_members WHERE organization_id = ${organizationId} AND user_id = ${user.id}`,
+      ).toHaveLength(1);
       workos.userManagement.deactivate(organizationId, user.id);
       await expect(list(organizationId)).rejects.toMatchObject({ status: 404 });
       await expect(

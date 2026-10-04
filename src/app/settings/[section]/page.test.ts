@@ -7,15 +7,12 @@ vi.mock("@/features/dashboard/components/dashboard", () => ({
 
 afterEach(() => vi.unstubAllEnvs());
 
-it("temporarily redirects team settings to profile", async () => {
-  await expect(
-    SettingsPage({
-      params: Promise.resolve({ section: "team" }),
-      searchParams: Promise.resolve({}),
-    }),
-  ).rejects.toMatchObject({
-    digest: "NEXT_REDIRECT;replace;/settings/profile;307;",
+it("opens WorkOS team settings", async () => {
+  const page = await SettingsPage({
+    params: Promise.resolve({ section: "team" }),
+    searchParams: Promise.resolve({}),
   });
+  expect(page.props.settingsSection).toBe("team");
 });
 
 describe("personal MCP setup endpoint", () => {

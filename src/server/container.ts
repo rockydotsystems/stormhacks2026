@@ -7,6 +7,8 @@ import { GitHubService } from "@/features/github/server/github.service";
 import { GitHubController } from "@/features/github/server/github.controller";
 import { DocsService } from "@/features/docs/server/docs.service";
 import { OrganizationsService } from "@/features/organizations/server/organizations.service";
+import { TeamService } from "@stormhacks/data/organizations/team.service";
+import { TeamController } from "@/features/organizations/server/team.controller";
 import { ProjectsService } from "@/features/projects/server/projects.service";
 import { NotesController } from "@/features/notes/server/notes.controller";
 import { NotesService } from "@/features/notes/server/notes.service";
@@ -42,6 +44,8 @@ export type Dependencies = {
   notesController: NotesController;
   docsService: DocsService;
   organizationsService: OrganizationsService;
+  teamService: TeamService;
+  teamController: TeamController;
   projectsService: ProjectsService;
 };
 
@@ -72,5 +76,7 @@ container.register({
   notesController: asClass(NotesController).scoped(),
   docsService: asClass(DocsService).scoped(),
   organizationsService: asClass(OrganizationsService).scoped(),
+  teamService: asClass(TeamService).scoped(),
+  teamController: asClass(TeamController).scoped(),
   projectsService: asClass(ProjectsService).scoped(),
 });

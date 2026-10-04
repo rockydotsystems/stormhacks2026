@@ -8,7 +8,14 @@ export function fakeWorkOS() {
   >();
   const memberships = new Map<
     string,
-    { id: string; userId: string; organizationId: string; status: string }
+    {
+      id: string;
+      userId: string;
+      organizationId: string;
+      status: string;
+      role: { slug: string };
+      directoryManaged: boolean;
+    }
   >();
   return {
     organizations: {
@@ -29,15 +36,19 @@ export function fakeWorkOS() {
       async createOrganizationMembership({
         organizationId,
         userId,
+        roleSlug = "member",
       }: {
         organizationId: string;
         userId: string;
+        roleSlug?: string;
       }) {
         const membership = {
           id: `om_${randomUUID()}`,
           organizationId,
           userId,
           status: "active",
+          role: { slug: roleSlug },
+          directoryManaged: false,
         };
         memberships.set(`${organizationId}:${userId}`, membership);
         return membership;
@@ -58,6 +69,34 @@ export function fakeWorkOS() {
             statuses.includes(row.status),
         );
         return { data, autoPagination: async () => data };
+      },
+      async updateOrganizationMembership(
+        id: string,
+        { roleSlug }: { roleSlug: string },
+      ) {
+        const membership = [...memberships.values()].find(
+          (row) => row.id === id,
+        )!;
+        membership.role = { slug: roleSlug };
+        return membership;
+      },
+      async deactivateOrganizationMembership(id: string) {
+        const membership = [...memberships.values()].find(
+          (row) => row.id === id,
+        )!;
+        membership.status = "inactive";
+        return membership;
+      },
+      async getUser(id: string) {
+        return {
+          id,
+          email: `${id}@example.com`,
+          firstName: null,
+          lastName: null,
+        };
+      },
+      async listInvitations() {
+        return { data: [], autoPagination: async () => [] };
       },
       deactivate(organizationId: string, userId: string) {
         memberships.get(`${organizationId}:${userId}`)!.status = "inactive";

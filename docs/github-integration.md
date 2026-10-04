@@ -20,8 +20,14 @@ GitHub connection. If no installations are available, install the app on a
 personal account or organization and authorize again. Suspended installations
 and installations linked to another workspace are disabled in the picker.
 
-An installation belongs to one local organization. Any local member can connect
-or refresh it; the current data layer has no administrator roles. A user with
+Workspace membership is managed independently in WorkOS. Teammates without
+GitHub accounts or access to the linked GitHub organization can still read and
+contribute to shared documents, planning conversations, and decisions. Linking
+repositories shares their enrolled context with the whole WorkOS workspace;
+it does not grant those teammates GitHub access or import GitHub members.
+
+An installation belongs to one WorkOS organization. Any active WorkOS member can connect
+or refresh it; this is not an Admin-only action. A user with
 GitHub read access can share those repositories with the local organization.
 Choose that organization deliberately. No repositories outside that user's access
 are enrolled. Reconnecting replaces the installation's active repository set

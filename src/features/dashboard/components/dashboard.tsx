@@ -566,6 +566,7 @@ export function Dashboard({
             {[
               { section: "profile", label: "Profile", icon: UserIcon },
               { section: "security", label: "Security", icon: ShieldCheckIcon },
+              { section: "team", label: "Team", icon: UsersIcon },
               { section: "github", label: "GitHub", icon: GitBranchIcon },
               { section: "mcp", label: "MCP", icon: PlugsConnectedIcon },
               {
@@ -875,7 +876,7 @@ export function Dashboard({
           ref={scrollRef}
         >
           {settingsSection ? (
-            settingsSection === "github" ? (
+            settingsSection === "github" || settingsSection === "team" ? (
               <div className="settings-content">
                 {organization && (
                   <div className="space-y-1">
