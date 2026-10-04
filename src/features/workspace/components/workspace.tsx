@@ -33,6 +33,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { AgentActivity } from "@/features/workspace/components/agent-activity";
 import { ConnectionsDialog } from "@/features/workspace/components/connections-dialog";
 import { DocumentViewer } from "@/features/workspace/components/document-viewer";
+import { usePlanningSync } from "@/features/planning/client/use-planning-sync";
+import { PlanningConversation } from "@/features/planning/components/planning-conversation";
+import { PlanningDocumentPanel } from "@/features/planning/components/planning-document-panel";
 import {
   documents,
   initialConversations,
@@ -54,6 +57,15 @@ export function Workspace() {
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(true);
+  const [planningDraftOpen, setPlanningDraftOpen] = useState(true);
+  // Saved planning conversations load from the server and join the list after a reload.
+  usePlanningSync<Conversation>(setConversations, (item) => ({
+    id: item.id,
+    title: item.title,
+    messages: [],
+    kind: "planning",
+    serverId: item.id,
+  }));
   const [running, setRunning] = useState(false);
   const [stopped, setStopped] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -62,9 +74,10 @@ export function Workspace() {
   const active = conversations.find(
     (conversation) => conversation.id === activeId,
   )!;
-  const selectedDocument = documents.find(
-    (document) => document.id === documentId,
-  );
+  const isPlanning = active.kind === "planning";
+  const selectedDocument = isPlanning
+    ? undefined
+    : documents.find((document) => document.id === documentId);
 
   useEffect(
     () => () => {
@@ -95,7 +108,7 @@ export function Workspace() {
   function newConversation() {
     const id = crypto.randomUUID();
     setConversations((items) => [
-      { id, title: "New conversation", messages: [] },
+      { id, title: "New conversation", messages: [], kind: "planning" },
       ...items,
     ]);
     selectConversation(id);
@@ -369,7 +382,33 @@ export function Workspace() {
               <FileTextIcon />
             </Button>
           </header>
+          {conversations
+            .filter((conversation) => conversation.kind === "planning")
+            .map((conversation) => (
+              <PlanningConversation
+                key={conversation.id}
+                serverId={conversation.serverId}
+                active={conversation.id === activeId}
+                onServerId={(serverId, title) =>
+                  setConversations((items) =>
+                    items.map((item) =>
+                      item.id === conversation.id
+                        ? { ...item, serverId, title }
+                        : item,
+                    ),
+                  )
+                }
+                onDocument={() => setPlanningDraftOpen(true)}
+                onOpenDraft={() => {
+                  setPlanningDraftOpen(true);
+                  setDocumentFocused(
+                    window.matchMedia("(max-width: 1023px)").matches,
+                  );
+                }}
+              />
+            ))}
           <div
+            hidden={isPlanning}
             className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5"
             role="log"
             aria-label="Conversation messages"
@@ -489,7 +528,10 @@ export function Workspace() {
               <div ref={messageEnd} />
             </div>
           </div>
-          <div className="shrink-0 px-4 pb-4 sm:px-6 sm:pb-5">
+          <div
+            hidden={isPlanning}
+            className="shrink-0 px-4 pb-4 sm:px-6 sm:pb-5"
+          >
             <form
               className="mx-auto max-w-2xl rounded-2xl border bg-background p-3 shadow-[0_2px_12px_rgb(0_0_0/3%)] focus-within:border-ring/40"
               onSubmit={(event) => {
@@ -563,6 +605,17 @@ export function Workspace() {
             </p>
           </div>
         </section>
+        {isPlanning && (
+          <PlanningDocumentPanel
+            serverId={active.serverId}
+            open={planningDraftOpen}
+            focused={documentFocused}
+            onClose={() => {
+              setPlanningDraftOpen(false);
+              setDocumentFocused(false);
+            }}
+          />
+        )}
         {selectedDocument && (
           <aside
             className={cn(
