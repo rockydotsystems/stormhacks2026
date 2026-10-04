@@ -9,6 +9,11 @@ describe("request scopes", () => {
     const second = container.createScope();
     expect(first.cradle.authService).toBe(first.cradle.authService);
     expect(first.cradle.authService).not.toBe(second.cradle.authService);
+    expect(first.cradle.docsService).toBe(first.cradle.docsService);
+    expect(first.cradle.docsService === second.cradle.docsService).toBe(false);
+    expect(
+      first.cradle.organizationsService === second.cradle.organizationsService,
+    ).toBe(false);
     // Compare identity without asking the assertion library to inspect the DI proxy.
     expect(first.cradle.notesController === second.cradle.notesController).toBe(
       false,
