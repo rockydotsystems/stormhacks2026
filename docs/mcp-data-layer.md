@@ -2,6 +2,13 @@
 
 ## Scope
 
+The shared schemas, contracts, and services now live in `packages/data` as the
+`@stormhacks/data` pnpm workspace package. The existing web feature paths are
+compatibility exports; web service entrypoints retain their `server-only` guards.
+Database construction and disposal remain the responsibility of each app.
+Drizzle discovers the shared schema alongside the web-only notes schema; all
+apps use the single migration history at the repository root.
+
 Implemented the persisted foundation for MCP and UI callers. ADRs are called
 **docs** throughout the new schema and services. No MCP transport, HTTP endpoints,
 GitHub OAuth/API calls, or UI persistence wiring are included in this phase.

@@ -1,1 +1,1 @@
-export type OrganizationActor = { organizationId: string; userId: string };
+export type { OrganizationActor } from "@stormhacks/data";

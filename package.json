@@ -27,6 +27,7 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@stormhacks/data": "workspace:*",
     "@base-ui/react": "^1.8.0",
     "@phosphor-icons/react": "^2.1.10",
     "@radix-ui/themes": "^3.3.0",
