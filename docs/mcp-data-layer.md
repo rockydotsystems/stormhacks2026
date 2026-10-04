@@ -10,9 +10,11 @@ Drizzle discovers the shared schema alongside the web-only notes schema; all
 apps use the single migration history at the repository root.
 
 Implemented the persisted foundation for MCP and UI callers. ADRs are called
-**docs** throughout the new schema and services. No MCP transport, HTTP endpoints,
-GitHub OAuth/API calls, or UI persistence wiring are included in this phase.
-The existing starter notes feature remains unchanged.
+**docs** throughout the new schema and services. The initial data-layer phase
+included no MCP transport, HTTP endpoints, GitHub OAuth/API calls or UI
+persistence wiring.
+The existing starter notes feature remains unchanged. The separate MCP app is
+now implemented; see [MCP server](mcp-server.md) for its tools and OAuth flow.
 
 ## Model
 
@@ -37,6 +39,9 @@ GitHub owner/name pairs are normalized to lowercase by the service and unique
 within an org. Connecting a repository records its identity only; it does not
 verify GitHub access.
 
+The schema retains many-to-many membership, but the MCP app currently requires
+exactly one local organization per signed-in person and rejects ambiguity.
+
 Docs obtain their repository context from their project; they have no direct
 repository links. Project repository links are live metadata, not part of a
 published content snapshot. Published title/content remain unchanged when a
@@ -47,6 +52,10 @@ project's repository links are added or removed.
 - Creating a doc also writes its initial full snapshot.
 - Every subsequent save inserts another full title/content snapshot. Content
   does not depend on reconstructing earlier changes or applying diffs.
+- `proposeChange` appends a snapshot with `proposed: true`; ordinary saves and
+  legacy snapshots have `proposed: false`. The marker records origin, not a
+  mutable approval status, and remains true if later frozen by publication.
+  Proposing alone does not create a permanent version.
 - Snapshots are append-only: even unpublished snapshots are not edited in place.
   Save a new snapshot or delete an eligible draft instead.
 - The snapshot's global bigint primary key is a stable identity/order key,
@@ -79,7 +88,7 @@ same independent full-snapshot representation.
 request-scoped Awilix services. They reuse the existing request-scoped Drizzle/Postgres.js connection;
 the scope disposer closes it, and Hyperdrive owns pooling.
 
-Future adapters must authenticate first and construct an `OrganizationActor`
+Adapters must authenticate first and construct an `OrganizationActor`
 using the authenticated user ID and selected org ID. Never accept a user ID from
 MCP tool arguments or browser input as proof of identity. Every docs/project operation
 checks membership and scopes lookups to the selected org. Doc creation and listing

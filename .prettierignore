@@ -11,3 +11,5 @@ dist
 .wrangler
 .vinext
 worker-configuration.d.ts
+**/dist
+**/.wrangler

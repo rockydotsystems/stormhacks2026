@@ -9,7 +9,7 @@ let
     pname = "stormhacks2026";
     inherit src pnpm;
     fetcherVersion = 4;
-    hash = "sha256-UIHOs5yhO1DPiyZiOl4nSsHc5P+dYfWw+kBZ/j8M0mg=";
+    hash = "sha256-AUm4UIcHPhLqnk9Srh8YUK1diS0Nf/juuI2vjMqHDjY=";
   };
 in
 pkgs.stdenvNoCC.mkDerivation {

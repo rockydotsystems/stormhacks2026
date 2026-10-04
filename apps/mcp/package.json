@@ -1,0 +1,26 @@
+{
+  "name": "@stormhacks/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --config wrangler.jsonc --port 3001",
+    "typecheck": "pnpm worker:types && tsc --noEmit -p tsconfig.json",
+    "worker:types": "wrangler types worker-configuration.d.ts --config wrangler.jsonc --include-runtime=false",
+    "build": "wrangler deploy --config wrangler.jsonc --dry-run --outdir dist",
+    "deploy": "wrangler deploy --config wrangler.jsonc"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.0",
+    "@stormhacks/data": "workspace:*",
+    "drizzle-orm": "^0.45.3",
+    "jose": "^6.2.12",
+    "postgres": "^3.4.9",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261001.1",
+    "typescript": "^5",
+    "wrangler": "4.147.0"
+  }
+}

@@ -370,6 +370,10 @@ Both upstream agent skills are included in `.agents/skills`: `using-coss-ui` (co
 
 ## Database workflow
 
+The TypeScript MCP app is in `apps/mcp`; the web app remains at the root. Shared
+data services live in `packages/data`. See [MCP server](docs/mcp-server.md) for
+tools, human OAuth sign-in, local development, and deployment prerequisites.
+
 The organization/project-scoped docs foundation, snapshot/publication rules, service
 operations, and MCP integration boundary are documented in
 [`docs/mcp-data-layer.md`](docs/mcp-data-layer.md).
