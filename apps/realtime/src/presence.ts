@@ -42,7 +42,8 @@ export function startLeaving(
 
 export function stopLeaving(leaving: Leaving, userId: string): Leaving {
   if (!(userId in leaving)) return leaving;
-  const { [userId]: _removed, ...rest } = leaving;
+  const rest = { ...leaving };
+  delete rest[userId];
   return rest;
 }
 

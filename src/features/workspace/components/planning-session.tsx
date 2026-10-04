@@ -1,10 +1,18 @@
 "use client";
 
-import { useEffect, useReducer, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useReducer,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+} from "react";
 import {
   ArrowUpIcon,
   FileTextIcon,
   MicrophoneIcon,
+  MoonIcon,
   SparkleIcon,
 } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
@@ -16,8 +24,12 @@ import {
   parseAnswers,
   type Answer,
 } from "@/features/planning/client/answers";
+import { useSession } from "@/features/auth/client/queries";
 import { PlanningApiError } from "@/features/planning/client/api";
+import { authorHue, initials, nameList } from "@/features/planning/client/live";
+import { useLiveConversation } from "@/features/planning/client/use-live-conversation";
 import {
+  useApplyStandby,
   useConversation,
   useDocumentConversation,
   useSendMessage,
@@ -85,17 +97,32 @@ export function PlanningSession({
   const composer = useRef<HTMLTextAreaElement>(null);
 
   const conversation = detail.data ?? binding.data;
+  // Other people can share this chat. Their messages show on the left under their name, and the
+  // agent goes quiet while two or more of them are here.
+  const viewerId = useSession().data?.user?.id ?? null;
+  const standby = conversation?.mode === "standby";
+  const participants = conversation?.participants ?? [];
+  const names = new Map(participants.map((p) => [p.userId, p.displayName]));
+  const live = useLiveConversation({
+    conversationId,
+    mode: conversation?.mode,
+    shared: participants.length > 1,
+  });
+  const applyStandby = useApplyStandby(conversationId ?? "");
   const messages = conversation?.messages ?? [];
   const phase = conversation?.phase ?? "grilling";
   const items = chatItems(messages, ui);
   const questions = activeQuestions(messages, ui);
-  const lastAssistant = messages.findLast((m) => m.role === "assistant");
+  const lastAssistant = messages.findLast(
+    (m) => m.role === "assistant" && m.kind === "chat",
+  );
   const busy = isBusy(ui);
   const popupOpen =
     questions.length > 0 &&
     lastAssistant?.id !== closedFor &&
     !busy &&
-    !voiceOpen;
+    !voiceOpen &&
+    !standby;
   const loading = binding.isPending || (conversationId && detail.isPending);
   const loadError = binding.error ?? detail.error;
   const workingDocument = conversation?.workingDocument;
@@ -179,6 +206,7 @@ export function PlanningSession({
       busy ||
       voiceOpen ||
       !conversationId ||
+      standby ||
       ui.status !== "idle"
     )
       return;
@@ -186,7 +214,7 @@ export function PlanningSession({
     autoFired.current = conversationId;
     send(GENERATE_TEXT);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [coveredAll, busy, voiceOpen, conversationId, ui.status]);
+  }, [coveredAll, busy, voiceOpen, standby, conversationId, ui.status]);
 
   useEffect(() => {
     end.current?.scrollIntoView({ block: "nearest" });
@@ -202,13 +230,14 @@ export function PlanningSession({
   // Each assistant message may carry questions, which the answers message refers to by number.
   function questionsBefore(index: number): Question[] {
     for (let i = index - 1; i >= 0; i -= 1) {
-      if (items[i].role === "assistant") return items[i].questions;
+      if (items[i].role === "assistant" && items[i].kind === "chat")
+        return items[i].questions;
     }
     return [];
   }
 
   const lastAssistantKey = items.findLast(
-    (item) => item.role === "assistant",
+    (item) => item.role === "assistant" && item.kind === "chat",
   )?.key;
   const thinking = busy && showTyping(ui);
   // The generate message starts the first draft, which takes much longer than a normal reply.
@@ -293,6 +322,38 @@ export function PlanningSession({
         ) : null}
 
         {items.map((item, index) => {
+          if (item.kind !== "chat") {
+            return (
+              <div key={item.key} className="planning-notice" role="status">
+                <MoonIcon weight="fill" aria-hidden="true" />
+                <span>{item.content}</span>
+              </div>
+            );
+          }
+          const author = item.authorUserId;
+          if (
+            item.role === "user" &&
+            author !== null &&
+            viewerId !== null &&
+            author !== viewerId
+          ) {
+            const name = names.get(author) || "Teammate";
+            return (
+              <div
+                key={item.key}
+                className="planning-message planning-message-teammate"
+                style={{ "--hue": authorHue(author) } as CSSProperties}
+              >
+                <div className="planning-author">
+                  <span className="planning-avatar" aria-hidden="true">
+                    {initials(name)}
+                  </span>
+                  <strong>{name}</strong>
+                </div>
+                <p>{item.content}</p>
+              </div>
+            );
+          }
           const answers =
             item.role === "user" ? parseAnswers(item.content) : null;
           const pairs = answers
@@ -388,13 +449,60 @@ export function PlanningSession({
             onDismiss={() => dispatch({ type: "dismiss" })}
           />
         ) : null}
+        {participants.length > 1 && live.users.length > 0 ? (
+          <div
+            className="planning-presence"
+            role="status"
+            aria-label="People in this chat"
+          >
+            <span className="planning-avatars" aria-hidden="true">
+              {live.users.map((user) => (
+                <span
+                  key={user.userId}
+                  className="planning-avatar"
+                  style={{ "--hue": authorHue(user.userId) } as CSSProperties}
+                >
+                  {initials(user.displayName)}
+                </span>
+              ))}
+            </span>
+            <span>
+              {nameList(live.users.map((user) => user.displayName))}{" "}
+              {live.users.length === 1 ? "is" : "are"} here
+            </span>
+          </div>
+        ) : null}
+        {standby ? (
+          <div className="planning-standby" role="status">
+            <MoonIcon weight="fill" aria-hidden="true" />
+            <span>
+              <strong>Standby mode</strong>
+              <small>
+                The agent is listening and will update the document once you
+                agree.
+              </small>
+              {applyStandby.error ? (
+                <small data-error="true">{applyStandby.error.message}</small>
+              ) : null}
+            </span>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={busy || applyStandby.isPending || !conversationId}
+              onClick={() => applyStandby.mutate()}
+            >
+              {applyStandby.isPending ? "Applying…" : "Apply now"}
+            </Button>
+          </div>
+        ) : null}
         {conversation && phase !== "generated" && items.length > 0 ? (
           <ChecklistStrip checklist={conversation.checklist}>
             <Button
               type="button"
               size="sm"
               variant="outline"
-              disabled={busy || !conversationId}
+              disabled={busy || !conversationId || standby}
               onClick={() => send(GENERATE_TEXT)}
             >
               <SparkleIcon aria-hidden="true" /> Skip ahead &amp; draft
@@ -418,9 +526,11 @@ export function PlanningSession({
             ref={composer}
             aria-label="Message planning agent"
             placeholder={
-              phase === "generated"
-                ? "Ask for a change to the document…"
-                : "Describe your idea, or answer the agent…"
+              standby
+                ? "Talk it through with your team…"
+                : phase === "generated"
+                  ? "Ask for a change to the document…"
+                  : "Describe your idea, or answer the agent…"
             }
             value={draft}
             maxLength={8000}
@@ -443,9 +553,15 @@ export function PlanningSession({
               variant="ghost"
               size="icon-sm"
               className="voice-trigger"
-              disabled={busy || !conversationId || ui.status === "error"}
+              disabled={
+                busy || !conversationId || ui.status === "error" || standby
+              }
               aria-label="Start AI voice conversation"
-              title="Talk to the AI"
+              title={
+                standby
+                  ? "Voice is off while the team is talking"
+                  : "Talk to the AI"
+              }
               onClick={() => setVoiceOpen(true)}
             >
               <MicrophoneIcon weight="bold" aria-hidden="true" />
