@@ -1,3 +1,4 @@
+import { organizationIdSchema } from "@/features/organizations/contracts";
 import { z } from "zod";
 import {
   projectSchema,
@@ -17,7 +18,7 @@ export type DashboardData = {
   people: Record<string, Person>;
 };
 export type DocumentData = { changes: DocChange[]; versions: DocVersion[] };
-const organizationId = z.uuid();
+const organizationId = organizationIdSchema;
 export const dashboardActionSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("createOrganization"),

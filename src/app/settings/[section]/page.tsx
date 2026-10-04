@@ -21,11 +21,6 @@ export default async function SettingsPage({
   return (
     <Dashboard
       settingsSection={section as SettingsSection}
-      initialOrganization={
-        typeof query.organizationId === "string"
-          ? query.organizationId
-          : undefined
-      }
       githubOutcome={
         typeof query.github === "string" ? query.github : undefined
       }

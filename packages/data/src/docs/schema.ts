@@ -19,7 +19,7 @@ export const docs = pgTable(
   "docs",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id")
+    organizationId: text("organization_id")
       .notNull()
       .references(() => organizations.id),
     projectId: uuid("project_id").notNull(),

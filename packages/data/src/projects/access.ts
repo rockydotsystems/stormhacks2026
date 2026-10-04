@@ -6,7 +6,7 @@ import type { Database } from "../db";
 import { ApiError } from "../errors";
 
 export async function requireProject(
-  db: Pick<Database, "select">,
+  db: Pick<Database, "select" | "insert">,
   actor: OrganizationActor,
   projectId: string,
   lock = false,

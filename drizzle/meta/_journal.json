@@ -50,6 +50,13 @@
       "when": 1791082698502,
       "tag": "0006_github_integration",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791085641597,
+      "tag": "0007_workos_organizations",
+      "breakpoints": true
     }
   ]
 }

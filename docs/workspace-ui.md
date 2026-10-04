@@ -63,7 +63,7 @@ Dashboard records come from authenticated `/api/dashboard` requests. Organizatio
 projects, descriptions, repository associations, and documents persist in Postgres.
 Repository entries are explicit `owner/name` associations, not GitHub installation
 access or fetched repository contents. Project creation and repository links share
-one transaction. Apply migration `0003_quiet_randall_flagg.sql` before running this UI.
+one transaction. Apply migrations through `0007_workos_organizations.sql` before running this UI.
 
 Document details load `/api/documents/[id]`. Saving appends a complete snapshot;
 binding publishes the saved snapshot as an immutable version. Published versions
@@ -72,12 +72,23 @@ is the latest published version; otherwise it shows Draft. Reviewers are not inv
 Descriptions are excerpts of the latest document body. Recently viewed document IDs
 are stored on the device, scoped by authenticated user and organization.
 
-The organization switcher uses the backend's membership list. New organization
-creation adds its creator as a member. The backend currently provisions memberships
-locally; it does not sync them from WorkOS. The account menu uses real WorkOS identity
-and links to `/settings/profile`, `/settings/security`, `/settings/preferences`, and
-`/settings/team`. Team management still uses the authenticated WorkOS organization,
-which is separate from the selected database organization.
+The organization switcher lists active WorkOS memberships. Creating an organization
+creates it in WorkOS and adds the authenticated creator with the WorkOS default role.
+Switching refreshes the AuthKit session and reloads the current page; Team settings
+therefore uses the same selected organization as project and document data. SSO/MFA
+requirements return the user to hosted sign-in. All data operations verify active
+WorkOS membership, so revoked or pending memberships cannot use stale local grants.
+
+Postgres mirrors WorkOS IDs/names for foreign keys; it does not provision independent
+organizations or memberships. The legacy membership table remains for historical
+data only. Migration 0004 preserves existing UUID-owned data and immutable history.
+Legacy organizations need a separately reviewed mapping to a WorkOS organization;
+they are never adopted by matching names or automatically granted to WorkOS users.
+The local development database had no legacy organization records at migration time.
+
+The account menu uses real WorkOS identity and links to `/settings/profile`,
+`/settings/security`, `/settings/preferences`, and `/settings/team`. Configure the
+`widgets:users-table:manage` permission on the appropriate administrator role in WorkOS.
 
 Verify project creation with multiple repositories, its empty state, creating a
 document with inherited repositories, combined document filters, and organization

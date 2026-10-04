@@ -7,9 +7,10 @@ import { ApiError } from "@/server/errors";
 export class AuthService {
   async getSession(): Promise<Session> {
     if (!isAuthConfigured()) return { configured: false, user: null };
-    const { user } = await withAuth();
+    const { user, organizationId } = await withAuth();
     return {
       configured: true,
+      organizationId: organizationId || null,
       user: user
         ? {
             id: user.id,

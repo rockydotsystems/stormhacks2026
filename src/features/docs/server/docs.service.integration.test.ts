@@ -1,5 +1,6 @@
+import { fakeWorkOS } from "../../../../tests/workos";
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
@@ -9,6 +10,12 @@ import { ProjectsService } from "@/features/projects/server/projects.service";
 import type { OrganizationActor } from "@/features/organizations/contracts";
 
 // Creates and drops only its own database; requires local CREATEDB privileges.
+const workos = fakeWorkOS();
+vi.mock("@workos-inc/authkit-nextjs", () => ({ getWorkOS: () => workos }));
+vi.mock("@stormhacks/data/organizations/workos", () => ({
+  getWorkOS: () => workos,
+}));
+
 describe.skipIf(!process.env.TEST_DATABASE_URL)(
   "docs data layer with real Postgres",
   () => {
@@ -114,8 +121,14 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       const { actor, doc, project } = await fixture();
       const other = await fixture();
       const memberId = `test-${randomUUID()}`;
-      await organizations.addMember(actor, memberId);
-      await organizations.addMember(actor, memberId);
+      await workos.userManagement.createOrganizationMembership({
+        organizationId: actor.organizationId,
+        userId: memberId,
+      });
+      await workos.userManagement.createOrganizationMembership({
+        organizationId: actor.organizationId,
+        userId: memberId,
+      });
       const member = { ...actor, userId: memberId };
       const second = await docs.create(member, project.id, {
         title: "Another doc",
@@ -135,8 +148,11 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         docs.addChange(other.actor, doc.id, { title: "Forged", content: "" }),
       ).rejects.toMatchObject({ status: 404 });
       await expect(
-        organizations.addMember(other.actor, memberId),
-      ).resolves.toBeUndefined();
+        workos.userManagement.createOrganizationMembership({
+          organizationId: other.actor.organizationId,
+          userId: memberId,
+        }),
+      ).resolves.toMatchObject({ userId: memberId });
       expect(await organizations.list(memberId)).toHaveLength(2);
       const anotherProject = await projects.create(actor, {
         name: "Second project",

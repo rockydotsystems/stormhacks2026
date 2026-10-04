@@ -1,3 +1,4 @@
+import { fakeWorkOS } from "../../../../tests/workos";
 import { generateKeyPairSync, randomUUID } from "node:crypto";
 import {
   afterAll,
@@ -15,6 +16,11 @@ import postgres from "postgres";
 import { OrganizationsService, ProjectsService } from "@stormhacks/data";
 import { GitHubService, webhookSchema } from "./github.service";
 import type { Database } from "@/server/db";
+
+const workos = fakeWorkOS();
+vi.mock("@stormhacks/data/organizations/workos", () => ({
+  getWorkOS: () => workos,
+}));
 
 describe.skipIf(!process.env.TEST_DATABASE_URL)(
   "GitHub integration with real Postgres",
@@ -154,14 +160,14 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
 
     it("rechecks membership after OAuth, before GitHub exchange", async () => {
       const { state } = await service.begin(actor, "githuborg");
-      await client`DELETE FROM organization_members WHERE user_id = ${actor.userId}`;
+      workos.userManagement.deactivate(actor.organizationId, actor.userId);
       try {
         await expect(
           service.complete(actor.userId, state, "code"),
         ).rejects.toMatchObject({ status: 404 });
         expect(fetcher).not.toHaveBeenCalled();
       } finally {
-        await client`INSERT INTO organization_members (organization_id, user_id) VALUES (${actor.organizationId}, ${actor.userId})`;
+        await workos.userManagement.createOrganizationMembership(actor);
       }
     });
 

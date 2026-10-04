@@ -1,5 +1,28 @@
 # MCP data layer
 
+## Current organization ownership
+
+WorkOS owns organizations, roles, invitations, and active membership. UI and service
+actors use WorkOS `org_*` IDs. `OrganizationsService.list` lists all active memberships
+and mirrors provider names/IDs into Postgres for foreign keys. `create` creates a
+WorkOS organization and its creator membership. Member management uses the WorkOS
+widget; the unrestricted local `addMember` service was removed.
+
+Every data operation checks active WorkOS membership. Local `organization_members`
+rows are retained only for legacy data and are never read for authorization. New
+WorkOS users are inserted into the local identity-reference table when authorized.
+Organization switching refreshes the AuthKit session through `/api/auth/organization`,
+keeping dashboard data and Team settings on the same WorkOS organization. Provider
+outages fail closed. Organization creation and provider membership creation are
+separate WorkOS requests; a failed membership request can leave an empty organization
+in WorkOS, but grants no application access.
+
+Migration `0007_workos_organizations.sql` converts organization keys to text, preserves
+legacy UUID values and all document/version history, and restores foreign keys.
+Legacy data requires an explicit, reviewed ownership mapping before it is opened
+under a WorkOS organization. Matching by organization name is not safe. The sections
+below describe the historical foundation and earlier verification.
+
 ## Scope
 
 The shared schemas, contracts, and services now live in `packages/data` as the

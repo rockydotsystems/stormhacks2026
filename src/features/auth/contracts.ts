@@ -1,5 +1,6 @@
 export type Session = {
   configured: boolean;
+  organizationId?: string | null;
   user: {
     id: string;
     email: string;

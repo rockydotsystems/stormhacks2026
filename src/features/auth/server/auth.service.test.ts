@@ -62,6 +62,7 @@ describe("AuthService", () => {
     const service = new AuthService();
     expect(await service.getSession()).toEqual({
       configured: true,
+      organizationId: null,
       user: {
         id: "user-a",
         email: "a@example.com",

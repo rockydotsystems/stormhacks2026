@@ -1,3 +1,4 @@
+import { organizationIdSchema } from "@/features/organizations/contracts";
 import "server-only";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -145,7 +146,7 @@ export class GitHubController {
     }
     const input = z
       .object({
-        organizationId: z.uuid(),
+        organizationId: organizationIdSchema,
         installationId: z
           .string()
           .regex(/^[1-9][0-9]*$/)

@@ -87,6 +87,7 @@ import {
 import type { Person } from "@/features/dashboard/contracts";
 import { useRecentDocuments } from "@/features/dashboard/client/recent-documents";
 import { DocumentEditor } from "./document-editor";
+import { apiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 const statuses = ["Draft", "Bound"];
@@ -247,20 +248,21 @@ function MultiFilter({
 
 export function Dashboard({
   settingsSection,
-  initialOrganization,
   githubOutcome,
 }: {
   settingsSection?: SettingsSection;
-  initialOrganization?: string;
   githubOutcome?: string;
 }) {
   const session = useSession();
   const [defaultSort] = useDefaultDocumentSort(session.data?.user?.id);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [organizationOverride, setOrganization] = useState<string | null>(
-    initialOrganization || null,
+
+  const workspace = useDashboard(
+    session.data?.user?.id,
+    session.data?.organizationId || null,
   );
-  const workspace = useDashboard(session.data?.user?.id, organizationOverride);
+  const [switchError, setSwitchError] = useState<string | null>(null);
+  const [switching, setSwitching] = useState(false);
   const mutation = useDashboardAction(session.data?.user?.id);
   const organization = workspace.data?.organizationId || "";
   const organizationName =
@@ -331,6 +333,24 @@ export function Dashboard({
     userId: session.data?.user?.id,
   });
 
+  async function switchOrganization(organizationId: string) {
+    setSwitchError(null);
+    setSwitching(true);
+    try {
+      const result = await apiClient<{
+        organizationId?: string;
+        redirectUrl?: string;
+      }>("/api/auth/organization", {
+        method: "POST",
+        body: JSON.stringify({ organizationId }),
+      });
+      if (result.redirectUrl) window.location.assign(result.redirectUrl);
+      else window.location.reload();
+    } catch (error) {
+      setSwitchError((error as Error).message);
+      setSwitching(false);
+    }
+  }
   function startDocument() {
     if (!projects.length) {
       startProject();
@@ -424,7 +444,7 @@ export function Dashboard({
         action: "createOrganization",
         name: String(fields.get("name")),
       });
-      setOrganization(result.id);
+      await switchOrganization(result.id);
       setOrganizationCreateOpen(false);
       navigate("Overview");
     } catch (error) {
@@ -478,10 +498,8 @@ export function Dashboard({
               {workspace.data?.organizations.map((org) => (
                 <MenuItem
                   key={org.id}
-                  onClick={() => {
-                    setOrganization(org.id);
-                    navigate("Overview");
-                  }}
+                  disabled={switching}
+                  onClick={() => switchOrganization(org.id)}
                 >
                   <span className="flex-1">{org.name}</span>
                   {organization === org.id && <CheckIcon aria-hidden="true" />}
@@ -501,6 +519,11 @@ export function Dashboard({
           </MenuPopup>
         </Menu>
       </div>
+      {switchError && (
+        <p role="alert" className="px-3 text-sm text-destructive">
+          {switchError}
+        </p>
+      )}
       {settingsSection ? (
         <>
           <Button
@@ -775,6 +798,23 @@ export function Dashboard({
               <h1>Could not load your workspace</h1>
               <p>{workspace.error.message}</p>
               <Button onClick={() => workspace.refetch()}>Try again</Button>
+            </div>
+          ) : !organization && workspace.data?.organizations.length ? (
+            <div className="documents-empty">
+              <h1>Choose your organization</h1>
+              <p>Open a workspace to see its projects and decisions.</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {workspace.data.organizations.map((org) => (
+                  <Button
+                    key={org.id}
+                    variant="outline"
+                    disabled={switching}
+                    onClick={() => switchOrganization(org.id)}
+                  >
+                    {org.name}
+                  </Button>
+                ))}
+              </div>
             </div>
           ) : !organization ? (
             <div className="documents-empty">

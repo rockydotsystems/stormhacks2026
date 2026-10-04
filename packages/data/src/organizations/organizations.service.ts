@@ -1,58 +1,75 @@
-import { eq } from "drizzle-orm";
-import { z } from "zod";
 import type { OrganizationActor } from "./contracts";
 import { requireOrganizationMember } from "./membership";
-import { organizationMembers, organizations, users } from "./schema";
+import { getWorkOS } from "./workos";
+import { z } from "zod";
+import { organizations, users } from "./schema";
 import type { Database } from "../db";
 
 export class OrganizationsService {
   constructor(private readonly dependencies: { db: Database }) {}
 
   async create(userId: string, name: string) {
-    const parsedName = z.string().trim().min(1).parse(name);
-    return this.dependencies.db.transaction(async (tx) => {
-      await tx.insert(users).values({ id: userId }).onConflictDoNothing();
-      const [organization] = await tx
-        .insert(organizations)
-        .values({ name: parsedName })
-        .returning();
-      await tx
-        .insert(organizationMembers)
-        .values({ organizationId: organization.id, userId });
-      return {
-        ...organization,
-        createdAt: organization.createdAt.toISOString(),
-      };
+    const parsedName = z.string().trim().min(1).max(80).parse(name);
+    const workos = getWorkOS();
+    const organization = await workos.organizations.createOrganization({
+      name: parsedName,
     });
+    await workos.userManagement.createOrganizationMembership({
+      organizationId: organization.id,
+      userId,
+    });
+    await this.mirror(organization);
+    await this.dependencies.db
+      .insert(users)
+      .values({ id: userId })
+      .onConflictDoNothing();
+    return organization;
   }
 
   async list(userId: string) {
-    const rows = await this.dependencies.db
-      .select({
-        id: organizations.id,
-        name: organizations.name,
-        createdAt: organizations.createdAt,
+    const workos = getWorkOS();
+    const memberships = await (
+      await workos.userManagement.listOrganizationMemberships({
+        userId,
+        statuses: ["active"],
       })
-      .from(organizations)
-      .innerJoin(
-        organizationMembers,
-        eq(organizationMembers.organizationId, organizations.id),
-      )
-      .where(eq(organizationMembers.userId, userId));
-    return rows.map((row) => ({
-      ...row,
-      createdAt: row.createdAt.toISOString(),
-    }));
+    ).autoPagination();
+    const rows = await Promise.all(
+      memberships.map((membership) =>
+        workos.organizations.getOrganization(membership.organizationId),
+      ),
+    );
+    await Promise.all(rows.map((row) => this.mirror(row)));
+    return rows;
   }
 
   async addMember(actor: OrganizationActor, userId: string) {
-    return this.dependencies.db.transaction(async (tx) => {
-      await requireOrganizationMember(tx, actor);
-      await tx.insert(users).values({ id: userId }).onConflictDoNothing();
-      await tx
-        .insert(organizationMembers)
-        .values({ organizationId: actor.organizationId, userId })
-        .onConflictDoNothing();
+    await requireOrganizationMember(this.dependencies.db, actor);
+    await getWorkOS().userManagement.createOrganizationMembership({
+      organizationId: actor.organizationId,
+      userId,
     });
+    await this.dependencies.db
+      .insert(users)
+      .values({ id: userId })
+      .onConflictDoNothing();
+  }
+
+  private async mirror(organization: {
+    id: string;
+    name: string;
+    createdAt: string;
+  }) {
+    await this.dependencies.db
+      .insert(organizations)
+      .values({
+        id: organization.id,
+        name: organization.name,
+        createdAt: new Date(organization.createdAt),
+      })
+      .onConflictDoUpdate({
+        target: organizations.id,
+        set: { name: organization.name },
+      });
   }
 }

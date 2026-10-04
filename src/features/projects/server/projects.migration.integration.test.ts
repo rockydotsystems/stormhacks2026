@@ -1,13 +1,20 @@
+import { fakeWorkOS } from "../../../../tests/workos";
 import { randomUUID } from "node:crypto";
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 import { DocsService } from "@/features/docs/server/docs.service";
 import { ProjectsService } from "@/features/projects/server/projects.service";
+
+const workos = fakeWorkOS();
+vi.mock("@workos-inc/authkit-nextjs", () => ({ getWorkOS: () => workos }));
+vi.mock("@stormhacks/data/organizations/workos", () => ({
+  getWorkOS: () => workos,
+}));
 
 describe.skipIf(!process.env.TEST_DATABASE_URL)(
   "project hierarchy upgrade with real Postgres",
@@ -88,6 +95,15 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       const beforeVersions =
         await client`SELECT * FROM doc_versions ORDER BY id`;
 
+      // Legacy data stays intact; WorkOS alone supplies the permission grants.
+      await workos.userManagement.createOrganizationMembership({
+        organizationId: org.id as string,
+        userId,
+      });
+      await workos.userManagement.createOrganizationMembership({
+        organizationId: otherOrg.id as string,
+        userId,
+      });
       const db = drizzle(client);
       // Simulate an installation that already applied the dashboard's migration.
       const dashboardJournal = JSON.parse(

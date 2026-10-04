@@ -1,3 +1,4 @@
+import { fakeWorkOS } from "../../../../tests/workos";
 import type { DashboardData, DocumentData } from "../contracts";
 import { randomUUID } from "node:crypto";
 import { beforeAll, afterAll, describe, expect, it, vi } from "vitest";
@@ -9,7 +10,11 @@ import { OrganizationsService } from "@/features/organizations/server/organizati
 import { ProjectsService } from "@/features/projects/server/projects.service";
 import { DocsService } from "@/features/docs/server/docs.service";
 
-vi.mock("@workos-inc/authkit-nextjs", () => ({ getWorkOS: vi.fn() }));
+const workos = fakeWorkOS();
+vi.mock("@workos-inc/authkit-nextjs", () => ({ getWorkOS: () => workos }));
+vi.mock("@stormhacks/data/organizations/workos", () => ({
+  getWorkOS: () => workos,
+}));
 
 describe.skipIf(!process.env.TEST_DATABASE_URL)(
   "dashboard with Postgres",
@@ -222,6 +227,21 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         status: "Draft",
         creator: "unknown",
       });
+      // A stale local membership must not grant access after WorkOS revokes it.
+      await client`INSERT INTO organization_members (organization_id, user_id) VALUES (${organizationId}, ${user.id})`;
+      workos.userManagement.deactivate(organizationId, user.id);
+      await expect(list(organizationId)).rejects.toMatchObject({ status: 404 });
+      await expect(
+        controller.updateDocument(
+          request({
+            action: "save",
+            organizationId,
+            title: "Revoked",
+            content: "",
+          }),
+          doc.id,
+        ),
+      ).rejects.toMatchObject({ status: 404 });
       requireUser.mockResolvedValueOnce({ ...user, id: "outsider" });
       await expect(list(organizationId)).rejects.toMatchObject({ status: 404 });
     });

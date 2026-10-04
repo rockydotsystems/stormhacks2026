@@ -1,7 +1,8 @@
+import { organizationIdSchema } from "@/features/organizations/contracts";
 import { z } from "zod";
 
 export const connectGitHubSchema = z.object({
-  organizationId: z.uuid(),
+  organizationId: organizationIdSchema,
   accountLogin: z
     .string()
     .trim()

@@ -15,7 +15,7 @@ export const githubInstallations = pgTable(
   "github_installations",
   {
     id: text("id").primaryKey(),
-    organizationId: uuid("organization_id")
+    organizationId: text("organization_id")
       .notNull()
       .references(() => organizations.id),
     accountLogin: text("account_login").notNull(),
@@ -42,7 +42,7 @@ export const githubRepositoryAccess = pgTable(
   "github_repository_access",
   {
     repositoryId: uuid("repository_id").primaryKey(),
-    organizationId: uuid("organization_id").notNull(),
+    organizationId: text("organization_id").notNull(),
     installationId: text("installation_id").notNull(),
     githubId: text("github_id").notNull(),
     authorized: boolean("authorized").notNull().default(true),
@@ -79,7 +79,7 @@ export const githubOAuthStates = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id),
-    organizationId: uuid("organization_id")
+    organizationId: text("organization_id")
       .notNull()
       .references(() => organizations.id),
     accountLogin: text("account_login").notNull(),

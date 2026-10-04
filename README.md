@@ -140,9 +140,10 @@ The account menu reads WorkOS names, email, and profile images from the session.
 and UserSessions widgets with AuthKit's refreshable access token.
 `/settings/team` uses UsersManagement for the authenticated organization; it
 requires the `widgets:users-table:manage` permission. The dashboard organization
-switcher uses database memberships and does not change the WorkOS session. Local
-organization membership is separate from WorkOS membership; UsersManagement
-manages the organization in the authenticated WorkOS session.
+switcher lists active WorkOS memberships and refreshes the AuthKit session when
+switching. Projects, documents, and UsersManagement all use the selected WorkOS
+organization. New organization creators receive the role configured as the WorkOS
+default; configure administrator roles and widget permissions in WorkOS.
 
 In the WorkOS application's Sessions settings, add your exact app origin (for
 example `http://localhost:3000`) to the allowed web origins for Widget CORS.

@@ -4,7 +4,6 @@ import {
   primaryKey,
   text,
   timestamp,
-  uuid,
 } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
@@ -13,7 +12,7 @@ export const users = pgTable("users", {
 });
 
 export const organizations = pgTable("organizations", {
-  id: uuid("id").defaultRandom().primaryKey(),
+  id: text("id").primaryKey(),
   name: text("name").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
@@ -23,7 +22,7 @@ export const organizations = pgTable("organizations", {
 export const organizationMembers = pgTable(
   "organization_members",
   {
-    organizationId: uuid("organization_id")
+    organizationId: text("organization_id")
       .notNull()
       .references(() => organizations.id),
     userId: text("user_id")

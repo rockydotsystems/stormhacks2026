@@ -8,6 +8,7 @@ import {
   documentActionSchema,
   type DashboardData,
 } from "../contracts";
+import { organizationIdSchema } from "@/features/organizations/contracts";
 import { requireOrganizationMember } from "@/features/organizations/server/membership";
 import {
   projectRepositories,
@@ -41,6 +42,12 @@ function uuid(value: string | null) {
     throw new ApiError(400, "Use a valid organization or document ID.");
   return parsed.data;
 }
+function workosOrganizationId(value: string | null) {
+  const parsed = organizationIdSchema.safeParse(value);
+  if (!parsed.success)
+    throw new ApiError(400, "Use a valid WorkOS organization ID.");
+  return parsed.data;
+}
 const json = (data: unknown, status = 200) =>
   NextResponse.json(data, { status, headers: { "Cache-Control": "no-store" } });
 
@@ -61,9 +68,7 @@ export class DashboardController {
     const { organizationsService, db, projectsService } = this.dependencies;
     const organizations = await organizationsService.list(user.id);
     const requested = new URL(request.url).searchParams.get("organizationId");
-    const organizationId = requested
-      ? uuid(requested)
-      : organizations[0]?.id || null;
+    const organizationId = requested ? workosOrganizationId(requested) : null;
     const result: DashboardData = {
       organizations,
       organizationId,
@@ -215,7 +220,7 @@ export class DashboardController {
     const docId = uuid(id);
     const actor = {
       userId: user.id,
-      organizationId: uuid(
+      organizationId: workosOrganizationId(
         new URL(request.url).searchParams.get("organizationId"),
       ),
     };

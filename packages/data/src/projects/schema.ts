@@ -14,7 +14,7 @@ export const projects = pgTable(
   "projects",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id")
+    organizationId: text("organization_id")
       .notNull()
       .references(() => organizations.id),
     name: text("name").notNull(),
@@ -32,7 +32,7 @@ export const githubRepositories = pgTable(
   "github_repositories",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id")
+    organizationId: text("organization_id")
       .notNull()
       .references(() => organizations.id),
     owner: text("owner").notNull(),
@@ -54,7 +54,7 @@ export const githubRepositories = pgTable(
 export const projectRepositories = pgTable(
   "project_repositories",
   {
-    organizationId: uuid("organization_id").notNull(),
+    organizationId: text("organization_id").notNull(),
     projectId: uuid("project_id").notNull(),
     repositoryId: uuid("repository_id").notNull(),
   },

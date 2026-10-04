@@ -23,12 +23,12 @@ import {
   users,
 } from "@/features/organizations/server/schema";
 
-// Each user gets one hidden personal organization until real organizations arrive.
+// Remembers the WorkOS organization used by the standalone planning workspace.
 export const personalWorkspaces = pgTable("personal_workspaces", {
   userId: text("user_id")
     .primaryKey()
     .references(() => users.id),
-  organizationId: uuid("organization_id")
+  organizationId: text("organization_id")
     .notNull()
     .unique("personal_workspaces_organization_unique")
     .references(() => organizations.id),
@@ -42,7 +42,7 @@ export const planningConversations = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     userId: text("user_id").notNull(),
-    organizationId: uuid("organization_id").notNull(),
+    organizationId: text("organization_id").notNull(),
     // Set when the first working document is generated. One conversation owns at most one doc.
     docId: uuid("doc_id"),
     title: text("title").notNull(),

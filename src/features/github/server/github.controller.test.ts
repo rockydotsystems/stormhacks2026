@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GitHubController } from "./github.controller";
 import { ApiError } from "@/server/errors";
 
-const organizationId = "f21f884a-71cf-41fc-ae62-15e6485b7937";
+const organizationId = "org_testgithub";
 const state = "a".repeat(43);
 function setup() {
   const authService = {
