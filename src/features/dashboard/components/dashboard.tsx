@@ -4,6 +4,8 @@ import {
   ArrowLeftIcon,
   ArrowUpRightIcon,
   CaretDownIcon,
+  CaretLeftIcon,
+  CaretRightIcon,
   CaretUpDownIcon,
   CheckCircleIcon,
   CheckIcon,
@@ -291,6 +293,7 @@ export function Dashboard({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeProject, setActiveProject] = useState<string | null>(null);
   const [myReviews, setMyReviews] = useState(false);
   const selected = decisions.find((decision) => decision.id === selectedId);
@@ -488,12 +491,13 @@ export function Dashboard({
           <MenuTrigger
             render={<Button variant="ghost" className="org-switcher" />}
             aria-label="Switch organization"
+            title={`Switch organization: ${organizationName}`}
           >
             <span className="org-mark" aria-hidden="true">
               {organizationName.charAt(0).toLowerCase()}
               <span>•</span>
             </span>
-            <span className="truncate">{organizationName}</span>
+            <span className="sidebar-label truncate">{organizationName}</span>
             <CaretUpDownIcon aria-hidden="true" />
           </MenuTrigger>
           <MenuPopup align="start" className="w-60">
@@ -534,9 +538,11 @@ export function Dashboard({
             variant="ghost"
             className="sidebar-item back-to-app"
             render={<Link href="/" />}
+            aria-label="Back to app"
+            title="Back to app"
           >
             <ArrowLeftIcon aria-hidden="true" />
-            Back to app
+            <span className="sidebar-label">Back to app</span>
           </Button>
           <nav
             aria-label="Account settings"
@@ -561,9 +567,11 @@ export function Dashboard({
                 )}
                 render={<Link href={`/settings/${section}`} />}
                 aria-current={settingsSection === section ? "page" : undefined}
+                aria-label={label}
+                title={label}
               >
                 <Icon aria-hidden="true" />
-                {label}
+                <span className="sidebar-label">{label}</span>
               </Button>
             ))}
             {settingsSection === "team" && (
@@ -572,9 +580,11 @@ export function Dashboard({
                 className="sidebar-item sidebar-item-active"
                 render={<Link href="/settings/team" />}
                 aria-current="page"
+                aria-label="Team settings"
+                title="Team settings"
               >
                 <UsersIcon aria-hidden="true" />
-                Team settings
+                <span className="sidebar-label">Team settings</span>
               </Button>
             )}
           </nav>
@@ -595,6 +605,8 @@ export function Dashboard({
                   view === name && "sidebar-item-active",
                 )}
                 onClick={() => navigate(name)}
+                aria-label={name}
+                title={name}
                 aria-current={
                   view === name && !selected && !activeProject
                     ? "page"
@@ -605,7 +617,7 @@ export function Dashboard({
                   aria-hidden="true"
                   weight={view === name ? "fill" : "regular"}
                 />
-                <span>{name}</span>
+                <span className="sidebar-label">{name}</span>
               </Button>
             ))}
           </nav>
@@ -621,9 +633,13 @@ export function Dashboard({
                     activeProject === name && "sidebar-item-active",
                   )}
                   onClick={() => openProject(name)}
+                  aria-label={projectName(name)}
+                  title={projectName(name)}
                 >
                   <FolderIcon aria-hidden="true" />
-                  <span className="truncate">{projectName(name)}</span>
+                  <span className="sidebar-label truncate">
+                    {projectName(name)}
+                  </span>
                   <span className="sidebar-count">
                     {
                       orgDocuments.filter(
@@ -649,9 +665,12 @@ export function Dashboard({
                     )}
                     onClick={() => openDocument(decision.id)}
                     title={decision.title}
+                    aria-label={decision.title}
                   >
                     <FileTextIcon aria-hidden="true" />
-                    <span className="truncate">{decision.title}</span>
+                    <span className="sidebar-label truncate">
+                      {decision.title}
+                    </span>
                   </Button>
                 ))
               ) : (
@@ -675,7 +694,30 @@ export function Dashboard({
       <a className="dashboard-skip" href="#dashboard-main">
         Skip to content
       </a>
-      <aside className="dashboard-sidebar">{sidebar}</aside>
+      <aside
+        id="dashboard-sidebar"
+        className="dashboard-sidebar"
+        data-collapsed={sidebarCollapsed}
+        aria-label="Sidebar"
+      >
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="sidebar-collapse-toggle"
+          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!sidebarCollapsed}
+          aria-controls="dashboard-sidebar"
+          onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+        >
+          {sidebarCollapsed ? (
+            <CaretRightIcon aria-hidden="true" />
+          ) : (
+            <CaretLeftIcon aria-hidden="true" />
+          )}
+        </Button>
+        {sidebar}
+      </aside>
       <main id="dashboard-main" className="dashboard-main">
         <header className="dashboard-topbar">
           <Button

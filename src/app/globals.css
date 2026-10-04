@@ -177,6 +177,64 @@ a {
   flex-direction: column;
   padding: 12px 12px 4px;
 }
+.sidebar-collapse-toggle {
+  position: absolute;
+  top: 18px;
+  right: -12px;
+  z-index: 2;
+  color: var(--dashboard-text);
+  background: var(--dashboard-chrome);
+  border-color: var(--border);
+  border-radius: 6px;
+}
+.dashboard-sidebar[data-collapsed="true"] {
+  width: 76px;
+}
+.dashboard-sidebar .sidebar-label,
+.dashboard-sidebar .sidebar-count,
+.dashboard-sidebar .account-identity {
+  min-width: 0;
+  overflow: hidden;
+}
+.dashboard-sidebar[data-collapsed="true"] .sidebar-label,
+.dashboard-sidebar[data-collapsed="true"] .sidebar-count,
+.dashboard-sidebar[data-collapsed="true"] .account-identity,
+.dashboard-sidebar[data-collapsed="true"] .org-switcher > svg,
+.dashboard-sidebar[data-collapsed="true"] .profile-button > svg {
+  width: 0;
+  max-width: 0;
+  margin: 0;
+  opacity: 0;
+  overflow: hidden;
+}
+.dashboard-sidebar[data-collapsed="true"] .sidebar-item,
+.dashboard-sidebar[data-collapsed="true"] .org-switcher,
+.dashboard-sidebar[data-collapsed="true"] .profile-button {
+  justify-content: center;
+  gap: 0;
+}
+.dashboard-sidebar[data-collapsed="true"] .sidebar-section h2,
+.dashboard-sidebar[data-collapsed="true"] .sidebar-empty,
+.dashboard-sidebar[data-collapsed="true"] .product-wordmark {
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .dashboard-sidebar {
+    transition: width 220ms cubic-bezier(0.2, 0, 0, 1);
+  }
+  .dashboard-sidebar .sidebar-label,
+  .dashboard-sidebar .sidebar-count,
+  .dashboard-sidebar .account-identity,
+  .dashboard-sidebar .sidebar-section h2,
+  .dashboard-sidebar .sidebar-empty,
+  .dashboard-sidebar .product-wordmark,
+  .dashboard-sidebar .org-switcher > svg,
+  .dashboard-sidebar .profile-button > svg {
+    transition: opacity 140ms ease;
+  }
+}
 .org-row {
   margin-bottom: 18px;
 }
@@ -194,6 +252,7 @@ a {
   color: var(--dashboard-text);
 }
 .org-mark {
+  flex-shrink: 0;
   width: 25px;
   height: 25px;
   background: #303b36;
