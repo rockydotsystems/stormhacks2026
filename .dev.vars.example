@@ -31,3 +31,11 @@ GITHUB_WEBHOOK_SECRET=
 TYPESAFE_API_KEY=
 # Optional. Pinned to a model version in code, because the alias moves with each release.
 TYPESAFE_MODEL=
+
+# Slack decision bot. See docs/slack-integration.md.
+SLACK_SIGNING_SECRET=
+SLACK_APP_ID=
+# Optional single-workspace demo fallback. Otherwise uses the shared WorkOS Pipes connection.
+SLACK_BOT_TOKEN=
+SLACK_APP_ORIGIN=https://whydidwechoosethis.tech
+SLACK_BINDINGS=[]
