@@ -1034,6 +1034,7 @@ export function Dashboard({
               organizationId={organization}
               userId={session.data!.user!.id}
               creator={people[selected.creator]}
+              creatorId={selected.creator}
               repositories={selectedRepositories}
               title={selected.title}
             />

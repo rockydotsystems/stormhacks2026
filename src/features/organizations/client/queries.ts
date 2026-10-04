@@ -2,10 +2,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import type { TeamAction, TeamData } from "../contracts";
 
-export function useTeam(userId: string, organizationId: string) {
+export function useTeam(
+  userId: string,
+  organizationId: string,
+  enabled = true,
+) {
   return useQuery({
     queryKey: ["team", userId, organizationId],
-    enabled: Boolean(organizationId),
+    enabled: Boolean(organizationId) && enabled,
     queryFn: () =>
       apiClient<TeamData>(
         `/api/organizations/team?organizationId=${organizationId}`,

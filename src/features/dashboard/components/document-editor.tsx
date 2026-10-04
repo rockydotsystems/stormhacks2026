@@ -12,15 +12,17 @@ import {
   UserIcon,
 } from "@phosphor-icons/react";
 import { ChatTeardropTextIcon } from "@phosphor-icons/react/dist/csr/ChatTeardropText";
+import { UsersIcon } from "@phosphor-icons/react/dist/csr/Users";
+import type { TeamData } from "@/features/organizations/contracts";
+import { initials } from "@/features/planning/client/live";
 import { useDocument, useDocumentAction } from "../client/queries";
 import type { DocumentData, Person } from "../contracts";
 import { PlanningSession } from "@/features/workspace/components/planning-session";
 import { DocumentHistoryDialog } from "./document-history-dialog";
+import { DocumentReviewersPicker } from "./document-reviewers-picker";
 import { publishState } from "../lib/history";
 import { DocumentCanvas } from "@/features/workspace/components/document-canvas";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -52,6 +54,7 @@ export function DocumentEditor({
   title: string;
   projectId: string | null;
   creator: Person;
+  creatorId: string;
   repositories: string[];
 }) {
   const queryClient = useQueryClient();
@@ -75,6 +78,7 @@ export function DocumentEditor({
       {...context}
       documentId={id}
       organizationId={organizationId}
+      userId={userId}
       data={document.data}
       pending={mutation.isPending}
       error={mutation.error?.message}
@@ -96,7 +100,9 @@ export function DocumentWorkspace({
   data,
   documentId,
   organizationId,
+  userId,
   creator,
+  creatorId,
   repositories,
   title,
   projectId,
@@ -108,9 +114,11 @@ export function DocumentWorkspace({
   data: DocumentData;
   documentId: string;
   organizationId: string;
+  userId: string;
   title?: string;
   projectId: string | null;
   creator: Person;
+  creatorId: string;
   repositories: string[];
   onDocumentChanged: () => void;
   onPublish: (changeId: string) => Promise<unknown>;
@@ -119,8 +127,7 @@ export function DocumentWorkspace({
 }) {
   const latest = data.changes.at(-1);
   const [pane, setPane] = useState("conversation");
-  const [reviewOpen, setReviewOpen] = useState(false);
-  const [reviewers, setReviewers] = useState<string[]>([]);
+  const [reviewers, setReviewers] = useState<TeamData["members"]>([]);
   const [publishOpen, setPublishOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [versionId, setVersionId] = useState("draft");
@@ -191,11 +198,33 @@ export function DocumentWorkspace({
           <section className="document-surface" aria-label="Decision document">
             <div className="document-paper-scroll">
               <article className="document-paper">
-                <h1>
-                  {(frozen ? frozen.title : title || latest?.title) ||
-                    "Untitled document"}
-                </h1>
-                <div className="document-paper-version">
+                <header className="document-paper-header">
+                  <h1>
+                    {(frozen ? frozen.title : title || latest?.title) ||
+                      "Untitled document"}
+                  </h1>
+                  <div className="document-publish-actions">
+                    <VersionState
+                      state={state}
+                      viewing={version ? { label: version.label } : null}
+                    />
+                    {pending && (
+                      <span className="document-save-state" role="status">
+                        {publishOpen ? "Publishing…" : "Saving…"}
+                      </span>
+                    )}
+                    {!frozen && (
+                      <Button
+                        size="sm"
+                        onClick={() => setPublishOpen(true)}
+                        disabled={!unpublished || pending}
+                      >
+                        <UploadSimpleIcon aria-hidden="true" /> Publish version
+                      </Button>
+                    )}
+                  </div>
+                </header>
+                <div className="document-paper-actions">
                   <div className="document-workspace-version">
                     <Select
                       items={versions}
@@ -219,21 +248,6 @@ export function DocumentWorkspace({
                       </SelectPopup>
                     </Select>
                   </div>
-                  <VersionState
-                    state={state}
-                    viewing={
-                      frozen
-                        ? { label: frozen && version ? version.label : "" }
-                        : null
-                    }
-                  />
-                  {pending && (
-                    <span className="document-save-state" role="status">
-                      {publishOpen ? "Publishing…" : "Saving…"}
-                    </span>
-                  )}
-                </div>
-                <div className="document-paper-actions">
                   <Button
                     size="sm"
                     variant="outline"
@@ -241,41 +255,7 @@ export function DocumentWorkspace({
                   >
                     <ClockCounterClockwiseIcon aria-hidden="true" /> History
                   </Button>
-                  {!frozen && (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setReviewOpen(true)}
-                      >
-                        {reviewers.length
-                          ? "Manage reviewers"
-                          : "Request review"}
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => setPublishOpen(true)}
-                        disabled={!unpublished || pending}
-                      >
-                        <UploadSimpleIcon aria-hidden="true" /> Publish version
-                      </Button>
-                    </>
-                  )}
                 </div>
-                {reviewers.length > 0 && (
-                  <div className="document-reviewers" aria-label="Reviewers">
-                    {reviewers.map((email) => (
-                      <span key={email}>
-                        <Avatar className="size-5">
-                          <AvatarFallback>
-                            {email.slice(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        {email}
-                      </span>
-                    ))}
-                  </div>
-                )}
 
                 <dl className="document-properties">
                   <div>
@@ -289,11 +269,46 @@ export function DocumentWorkspace({
                           src={creator.picture || undefined}
                           alt=""
                         />
-                        <AvatarFallback>{creator.initials}</AvatarFallback>
+                        <AvatarFallback className="text-[9px]">
+                          {creator.initials}
+                        </AvatarFallback>
                       </Avatar>
                       {creator.name}
                     </dd>
                   </div>
+                  {!frozen && (
+                    <div>
+                      <dt>
+                        <UsersIcon aria-hidden="true" /> Reviewers
+                      </dt>
+                      <dd>
+                        {reviewers.map((member) => (
+                          <span
+                            className="document-reviewer"
+                            key={member.userId}
+                          >
+                            <Avatar className="size-5">
+                              <AvatarImage
+                                src={member.picture || undefined}
+                                alt=""
+                              />
+                              <AvatarFallback className="text-[9px]">
+                                {initials(member.name)}
+                              </AvatarFallback>
+                            </Avatar>
+                            {member.name}
+                          </span>
+                        ))}
+                        <DocumentReviewersPicker
+                          userId={userId}
+                          organizationId={organizationId}
+                          creatorId={creatorId}
+                          reviewers={reviewers}
+                          onSelect={setReviewers}
+                        />
+                      </dd>
+                    </div>
+                  )}
                   <div>
                     <dt>
                       <GitBranchIcon aria-hidden="true" /> Repositories
@@ -328,57 +343,6 @@ export function DocumentWorkspace({
           </section>
         )}
       </div>
-      <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
-        <DialogPopup>
-          <DialogHeader>
-            <DialogTitle>Request review</DialogTitle>
-            <DialogDescription>
-              Bring teammates into the conversation to challenge the plan before
-              publishing it. This prototype does not send invitations or enable
-              shared chat yet.
-            </DialogDescription>
-          </DialogHeader>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              const fields = new FormData(event.currentTarget);
-              setReviewers([
-                ...new Set(
-                  String(fields.get("reviewers"))
-                    .split(",")
-                    .map((email) => email.trim())
-                    .filter(Boolean),
-                ),
-              ]);
-              setReviewOpen(false);
-            }}
-          >
-            <div className="px-6 pb-5 space-y-2">
-              <Label htmlFor="reviewer-emails">Reviewers</Label>
-              <Input
-                id="reviewer-emails"
-                name="reviewers"
-                type="email"
-                multiple
-                required
-                defaultValue={reviewers.join(", ")}
-                placeholder="teammate@company.com"
-              />
-              <p className="text-xs text-muted-foreground">
-                Separate email addresses with commas.
-              </p>
-            </div>
-            <DialogFooter>
-              <DialogClose render={<Button variant="outline" />}>
-                Cancel
-              </DialogClose>
-              <Button type="submit">
-                {reviewers.length ? "Update reviewers" : "Request review"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogPopup>
-      </Dialog>
       <DocumentHistoryDialog
         open={historyOpen}
         onOpenChange={setHistoryOpen}

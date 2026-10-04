@@ -44,6 +44,7 @@ describe("WorkOS teams", () => {
   const db = { insert, execute, transaction } as unknown as Database;
 
   beforeEach(async () => {
+    vi.restoreAllMocks();
     vi.clearAllMocks();
     listInvitations.mockResolvedValue({ autoPagination: async () => [] });
     transaction.mockImplementation((fn) => fn(db));
@@ -67,6 +68,26 @@ describe("WorkOS teams", () => {
 
   it("creates an admin, not an owner, for a new workspace", () => {
     expect(admin.role.slug).toBe("admin");
+  });
+
+  it("includes WorkOS profile photos and a null fallback in the member roster", async () => {
+    const picture = "https://workoscdn.com/profile.jpg";
+    vi.spyOn(workos.userManagement, "getUser").mockImplementation(
+      async (id) => ({
+        id,
+        email: `${id}@example.com`,
+        firstName: null,
+        lastName: null,
+        profilePictureUrl: id === actor.userId ? picture : null,
+      }),
+    );
+    const { members } = await service.list(actor);
+    expect(members.find((row) => row.userId === actor.userId)?.picture).toBe(
+      picture,
+    );
+    expect(
+      members.find((row) => row.userId === member.userId)?.picture,
+    ).toBeNull();
   });
 
   it("lets a non-GitHub member read the roster and invite only as a member", async () => {

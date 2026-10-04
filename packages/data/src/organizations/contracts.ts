@@ -7,6 +7,7 @@ export type TeamData = {
     userId: string;
     name: string;
     email: string;
+    picture: string | null;
     role: "admin" | "member";
     directoryManaged: boolean;
   }>;

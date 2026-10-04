@@ -58,6 +58,7 @@ export class TeamService {
           [user.firstName, user.lastName].filter(Boolean).join(" ") ||
           user.email,
         email: user.email,
+        picture: user.profilePictureUrl ?? null,
         role: isAdmin(row) ? "admin" : "member",
         directoryManaged: row.directoryManaged,
       });
