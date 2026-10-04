@@ -559,39 +559,57 @@ export function Dashboard({
             <ArrowLeftIcon aria-hidden="true" />
             <span className="sidebar-label">Back to app</span>
           </Button>
-          <nav
-            aria-label="Account settings"
-            className="sidebar-navigation settings-navigation"
-          >
-            {[
-              { section: "profile", label: "Profile", icon: UserIcon },
-              { section: "security", label: "Security", icon: ShieldCheckIcon },
-              { section: "team", label: "Team", icon: UsersIcon },
-              { section: "github", label: "GitHub", icon: GitBranchIcon },
-              { section: "mcp", label: "MCP", icon: PlugsConnectedIcon },
-              {
-                section: "preferences",
-                label: "Preferences",
-                icon: SlidersHorizontalIcon,
-              },
-            ].map(({ section, label, icon: Icon }) => (
-              <Button
-                key={section}
-                variant="ghost"
-                className={cn(
-                  "sidebar-item",
-                  settingsSection === section && "sidebar-item-active",
-                )}
-                render={<Link href={`/settings/${section}`} />}
-                aria-current={settingsSection === section ? "page" : undefined}
-                aria-label={label}
-                title={label}
-              >
-                <Icon aria-hidden="true" />
-                <span className="sidebar-label">{label}</span>
-              </Button>
-            ))}
-          </nav>
+          {[
+            {
+              category: "Personal",
+              items: [
+                { section: "profile", label: "Profile", icon: UserIcon },
+                {
+                  section: "security",
+                  label: "Security",
+                  icon: ShieldCheckIcon,
+                },
+                { section: "mcp", label: "MCP", icon: PlugsConnectedIcon },
+                {
+                  section: "preferences",
+                  label: "Preferences",
+                  icon: SlidersHorizontalIcon,
+                },
+              ],
+            },
+            {
+              category: "Team",
+              items: [
+                { section: "team", label: "Team", icon: UsersIcon },
+                { section: "github", label: "GitHub", icon: GitBranchIcon },
+              ],
+            },
+          ].map(({ category, items }) => (
+            <div key={category} className="sidebar-section settings-section">
+              <h2>{category}</h2>
+              <nav aria-label={`${category} settings`}>
+                {items.map(({ section, label, icon: Icon }) => (
+                  <Button
+                    key={section}
+                    variant="ghost"
+                    className={cn(
+                      "sidebar-item",
+                      settingsSection === section && "sidebar-item-active",
+                    )}
+                    render={<Link href={`/settings/${section}`} />}
+                    aria-current={
+                      settingsSection === section ? "page" : undefined
+                    }
+                    aria-label={label}
+                    title={label}
+                  >
+                    <Icon aria-hidden="true" />
+                    <span className="sidebar-label">{label}</span>
+                  </Button>
+                ))}
+              </nav>
+            </div>
+          ))}
         </>
       ) : (
         <>
@@ -876,38 +894,22 @@ export function Dashboard({
           ref={scrollRef}
         >
           {settingsSection ? (
-            settingsSection === "github" || settingsSection === "team" ? (
+            (settingsSection === "github" || settingsSection === "team") &&
+            session.data?.user &&
+            workspace.isPending ? (
               <div className="settings-content">
-                {organization && (
-                  <div className="space-y-1">
-                    <p className="text-sm text-muted-foreground">
-                      Organization
-                    </p>
-                    <h2 className="text-xl font-semibold">
-                      {organizationName}
-                    </h2>
-                  </div>
-                )}
-                {switchError && <p role="alert">{switchError}</p>}
-                {session.data?.user && workspace.isPending ? (
-                  <p role="status">Loading your organizations…</p>
-                ) : workspace.isError ? (
-                  <div role="alert">
-                    <p>{workspace.error.message}</p>
-                    <Button
-                      variant="outline"
-                      onClick={() => void workspace.refetch()}
-                    >
-                      Try again
-                    </Button>
-                  </div>
-                ) : (
-                  <AccountSettings
-                    section={settingsSection}
-                    organizationId={organization}
-                    githubOutcome={githubOutcome}
-                  />
-                )}
+                <p role="status">Loading your organizations…</p>
+              </div>
+            ) : (settingsSection === "github" || settingsSection === "team") &&
+              workspace.isError ? (
+              <div className="settings-content" role="alert">
+                <p>{workspace.error.message}</p>
+                <Button
+                  variant="outline"
+                  onClick={() => void workspace.refetch()}
+                >
+                  Try again
+                </Button>
               </div>
             ) : (
               <AccountSettings
