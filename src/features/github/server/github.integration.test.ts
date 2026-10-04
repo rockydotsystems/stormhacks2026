@@ -272,8 +272,8 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         await projects.listProjectRepositories(actor, project.id),
       ).toHaveLength(1);
       const [columns] =
-        await client`SELECT count(*)::int AS count FROM information_schema.columns WHERE table_name LIKE 'github_%' AND column_name LIKE '%token%'`;
-      expect(columns.count).toBe(1); // Only the expiring encrypted selection credential.
+        await client`SELECT count(*)::int AS count FROM information_schema.columns WHERE table_name LIKE 'github_%' AND column_name LIKE '%token%' AND column_name <> 'lease_token'`;
+      expect(columns.count).toBe(1); // Only the expiring encrypted selection credential; job lease UUIDs are not credentials.
     });
 
     it("prevents cross-organization claims, reads and syncs", async () => {

@@ -56,11 +56,12 @@ The initial implementation supports installations of up to 500 repositories.
 | SSL verification                               | Enabled                                                                               |
 | Installation audience                          | Any account                                                                           |
 
-Repository permissions: Metadata, Contents, Issues, and Pull requests, all
-**read-only**. Organization/account permissions are not required. The integration
-requests only these read permissions when minting installation tokens, even if
-the app registration grants additional write permissions. No write-back feature
-is implemented.
+Repository permissions: Metadata, Contents, and Issues **read-only**; Pull requests
+**read and write** for advisory reviews. Organization/account permissions are not
+required. Connection/refresh tokens still request only read permissions. Review
+tokens request Pull requests write access and are restricted to the one enrolled
+repository being reviewed. Existing installations must accept the app's updated
+permissions before reviews can be posted.
 
 Subscribe to Push, Repository, Issues, Issue comment, Pull request, Pull request
 review, and Pull request review comment. GitHub automatically sends installation
@@ -112,7 +113,7 @@ Rotating that secret invalidates pending selections, not existing connections.
   cleaned up on subsequent authorization starts. Refresh tokens are discarded;
   user tokens are never returned to the browser or logged. Restarting
   authorization invalidates previous selections. No long-term user token is kept.
-- Read-only installation tokens are short-lived and request-local. Database
+- Installation tokens are short-lived and request-local. Database
   clients use the existing scoped Hyperdrive lifecycle.
 - Webhooks verify HMAC-SHA256 over raw bytes before JSON parsing. Bodies are
   limited to 1 MiB. Signed pings and unhandled event types are acknowledged without
@@ -123,16 +124,79 @@ Rotating that secret invalidates pending selections, not existing connections.
   GitHub does not automatically redeliver failed webhooks; use the app's Recent
   deliveries page to inspect and manually redeliver failures.
 - Only enrolled repository events are retained. Activity stores event/action,
-  repository reference, and receipt time—not code, issue/PR bodies, or raw payloads.
+  repository reference, and receipt time. ADR review jobs additionally retain the
+  PR title/body, exact head/base commits, frozen published decisions, and generated
+  findings. Diffs are sent to the configured model but are not stored wholesale.
 - Removal, deletion, transfer, suspension, and uninstall disable relevant access.
   Restoration requires reconnecting. Names update without changing local
   repository IDs or project links. Conflicting repository names fail rather than
   silently merging distinct GitHub identities; resolve the conflicting manual
   reference before redelivery.
 
-The current feature records repository activity; it does not ingest repository
-files, run planning jobs, mirror complete issues/PRs, or write to GitHub. Transfers
-of installations between local organizations are not implemented.
+Transfers of installations between local organizations are not implemented.
+
+## Published ADR reviews
+
+PR `opened`, `reopened`, `synchronize`, `ready_for_review`, and `edited` events
+transactionally enqueue `github_review_jobs` alongside delivery deduplication.
+The repository's existing project links determine scope: every non-deleted linked
+project contributes the latest published version of each non-deleted document.
+Documents without a publication never enter the review. If a repository belongs
+to several projects, all their published ADRs apply. Nothing chooses ADRs from
+the PR's text.
+
+The job captures immutable version IDs and their frozen title/content in one
+database read, together with the PR head/base commits and description. Later draft
+edits or publication cannot alter a queued review. An equivalent event for the
+same commits, description, and version set does not create a duplicate job. A new
+publication changes the version set for the next PR event; publish v2 and reopen
+the PR or push another commit to review against v2. Publication alone does not
+trigger a review.
+
+The main Worker's scheduled handler processes one job per minute. This durable
+Postgres outbox needs no separately provisioned queue. Pending jobs survive
+restarts. Ten-minute leases serialize reviews of a given PR; expired leases are
+recovered, and failures retry up to three times with increasing minute delays.
+An exhausted job remains `failed` with a safe diagnostic reason. The processor
+creates/disposes its own scoped Postgres client, independent of HTTP requests.
+
+The reviewer uses the existing `AI_PROVIDER`, `OPENROUTER_API_KEY`, and
+`OPENROUTER_MODEL`. It reads paginated PR files, never executes submitted code,
+and checks for contradictions, consequential scope/architecture changes, missing
+requirements in the PR's stated scope, and ambiguity. Ordinary implementation
+choices remain discretionary. Every finding must quote an actual published ADR
+passage and code from the named diff line. Invalid citations are rejected rather
+than posted. Missing or incomplete textual diffs become explicit limitations.
+
+The bot submits one GitHub `COMMENT` review containing a version/commit summary
+and inline findings. It never approves, requests changes, or creates a merge
+gate. Publication citations link to authenticated
+`GET /api/github/decisions/:versionId`, which returns the frozen snapshot and
+checks WorkOS membership. Readers need access to the workspace to open it.
+
+Repository access and PR commit/description/draft state are rechecked before
+posting. Obsolete jobs are skipped. Results persist before the GitHub write;
+retries look for this app's review marker to recover a lost response without
+duplicating comments. GitHub has no atomic compare-and-post API: a push arriving
+between the final read and write can still produce a review on the old commit,
+but its explicit `commit_id` keeps it attached to that commit.
+
+Limits: 50 published ADRs, 200 changed files, 150,000 characters of queued context,
+200,000 characters of model evidence, and a two-minute model call. Inputs beyond
+these bounds are skipped or fail explicitly, never reported compliant. Files are
+reviewed through their diff context; missing requirements or broader architectural
+effects outside that context cannot be established confidently. An empty finding
+list is not a correctness certification.
+
+Apply migration `0015_github_adr_reviews.sql` through the existing migration
+workflow, update/accept the GitHub App permission, then deploy the Worker with
+its cron trigger. No additional runtime secret is required. Deployment still
+requires explicit approval.
+
+For local development, the Vite plugin exposes the scheduled handler at
+`http://localhost:3000/cdn-cgi/handler/scheduled`; production scheduling starts
+only after deployment. Inspect `github_review_jobs.status`, `reason`, `attempts`,
+`review_id`, and the pinned `input` to diagnose a pending, skipped, or failed review.
 
 ## Verification
 
@@ -140,6 +204,10 @@ of installations between local organizations are not implemented.
 pnpm test src/features/github
 pnpm check
 pnpm deploy:check
+# Disposable local Postgres integration tests:
+TEST_DATABASE_URL=postgres://stormhacks:stormhacks@127.0.0.1:5432/stormhacks pnpm test src/features/github
+# Optional synthetic live model eval; reads ignored local model configuration:
+GITHUB_REVIEW_LIVE=1 pnpm test src/features/github/server/review.live.test.ts
 ```
 
 With a disposable local `TEST_DATABASE_URL`, tests exercise the actual migration,

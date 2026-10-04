@@ -23,6 +23,11 @@ import {
 } from "./github.client";
 import { challenge, hashState, randomState } from "./security";
 import { openToken, sealToken } from "./selection-token";
+import {
+  reviewActions,
+  reviewPullRequestSchema,
+} from "@stormhacks/data/github-review/contracts";
+import { enqueueReview } from "./github-review.service";
 
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 const remoteId = z
@@ -36,6 +41,7 @@ export const webhookSchema = z.object({
   installation: z.object({ id: remoteId }).optional(),
   repository: remoteRepositorySchema.optional(),
   repositories_removed: z.array(z.object({ id: remoteId })).optional(),
+  pull_request: reviewPullRequestSchema.optional(),
 });
 export type WebhookPayload = z.infer<typeof webhookSchema>;
 export const supportedEvents = new Set([
@@ -553,6 +559,26 @@ export class GitHubService {
       }
       // Unsuspension and newly selected repositories require a fresh OAuth connection; no automatic access expansion.
       if (!installation.active) return;
+      if (
+        event === "pull_request" &&
+        repository &&
+        payload.repository &&
+        reviewActions.has(payload.action || "") &&
+        payload.pull_request
+      ) {
+        await enqueueReview(
+          tx,
+          deliveryId,
+          {
+            organizationId: installation.organizationId,
+            installationId,
+            repositoryId: repository.repositoryId,
+            owner: payload.repository.owner.login,
+            repository: payload.repository.name,
+          },
+          payload.pull_request,
+        );
+      }
       if (event === "installation_repositories") {
         const removedIds =
           payload.repositories_removed?.map((repo) => repo.id) || [];

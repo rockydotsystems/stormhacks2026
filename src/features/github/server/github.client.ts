@@ -4,6 +4,10 @@ import { z } from "zod";
 import { getGitHubConfig } from "./config";
 import { ApiError } from "@/server/errors";
 import { readLimitedBody } from "./security";
+import {
+  reviewFileSchema,
+  reviewPullRequestSchema,
+} from "@stormhacks/data/github-review/contracts";
 
 async function readProviderJson(response: Response): Promise<unknown> {
   try {
@@ -203,7 +207,7 @@ export class GitHubClient {
     );
   }
 
-  async installationToken(installationId: string) {
+  async installationToken(installationId: string, reviewRepositoryId?: number) {
     const config = getGitHubConfig();
     const now = Math.floor(Date.now() / 1000);
     const encode = (value: unknown) =>
@@ -217,12 +221,21 @@ export class GitHubClient {
       {
         method: "POST",
         body: JSON.stringify({
-          permissions: {
-            metadata: "read",
-            contents: "read",
-            issues: "read",
-            pull_requests: "read",
-          },
+          ...(reviewRepositoryId
+            ? { repository_ids: [reviewRepositoryId] }
+            : {}),
+          permissions: reviewRepositoryId
+            ? {
+                metadata: "read",
+                contents: "read",
+                pull_requests: "write",
+              }
+            : {
+                metadata: "read",
+                contents: "read",
+                issues: "read",
+                pull_requests: "read",
+              },
         }),
       },
     );
@@ -235,6 +248,101 @@ export class GitHubClient {
       token,
       "repositories",
       remoteRepositorySchema,
+    );
+  }
+
+  pullRequest(token: string, owner: string, repo: string, number: number) {
+    return this.request(
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${number}`,
+      token,
+      reviewPullRequestSchema.extend({
+        changed_files: z.number().int().nonnegative(),
+      }),
+    );
+  }
+
+  async pullRequestFiles(
+    token: string,
+    owner: string,
+    repo: string,
+    number: number,
+    expected: number,
+  ) {
+    if (expected > 200)
+      throw new ApiError(422, "Review supports at most 200 changed files.");
+    const files = [];
+    for (let page = 1; page <= Math.max(1, Math.ceil(expected / 100)); page++) {
+      files.push(
+        ...(await this.request(
+          `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${number}/files?per_page=100&page=${page}`,
+          token,
+          z.array(reviewFileSchema),
+        )),
+      );
+    }
+    if (files.length !== expected)
+      throw new ApiError(
+        502,
+        "Pull request file coverage changed while reading.",
+      );
+    return files;
+  }
+
+  async findReview(
+    token: string,
+    owner: string,
+    repo: string,
+    number: number,
+    marker: string,
+  ) {
+    for (let page = 1; page <= 10; page++) {
+      const reviews = await this.request(
+        `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${number}/reviews?per_page=100&page=${page}`,
+        token,
+        z.array(
+          z.object({
+            id,
+            body: z.string().nullable(),
+            user: z.object({ type: z.string(), login: z.string() }),
+          }),
+        ),
+      );
+      const found = reviews.find(
+        (review) =>
+          review.user.type === "Bot" &&
+          review.user.login === `${getGitHubConfig().slug}[bot]` &&
+          review.body?.includes(marker),
+      );
+      if (found) return found.id;
+      if (reviews.length < 100) return null;
+    }
+    throw new ApiError(
+      422,
+      "Review history is too large to deduplicate safely.",
+    );
+  }
+
+  createReview(
+    token: string,
+    owner: string,
+    repo: string,
+    number: number,
+    review: {
+      commit_id: string;
+      body: string;
+      comments: {
+        path: string;
+        line: number;
+        side: "LEFT" | "RIGHT";
+        body: string;
+      }[];
+    },
+  ) {
+    return this.request(
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${number}/reviews`,
+      token,
+      z.object({ id }),
+      { method: "POST", body: JSON.stringify({ ...review, event: "COMMENT" }) },
     );
   }
 }

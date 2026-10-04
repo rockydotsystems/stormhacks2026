@@ -7,6 +7,7 @@ import { AuthController } from "@/features/auth/server/auth.controller";
 import { AuthService } from "@/features/auth/server/auth.service";
 import { GitHubService } from "@/features/github/server/github.service";
 import { GitHubController } from "@/features/github/server/github.controller";
+import { GitHubReviewService } from "@/features/github/server/github-review.service";
 import { DocsService } from "@/features/docs/server/docs.service";
 import { OrganizationsService } from "@/features/organizations/server/organizations.service";
 import { TeamService } from "@stormhacks/data/organizations/team.service";
@@ -42,6 +43,7 @@ export type Dependencies = {
   projectChatController: ProjectChatController;
   githubService: GitHubService;
   githubController: GitHubController;
+  githubReviewService: GitHubReviewService;
   dashboardController: DashboardController;
   db: Database;
   model: ModelPort;
@@ -76,6 +78,7 @@ container.register({
   projectChatController: asClass(ProjectChatController).scoped(),
   githubService: asClass(GitHubService).scoped(),
   githubController: asClass(GitHubController).scoped(),
+  githubReviewService: asClass(GitHubReviewService).scoped(),
   dashboardController: asClass(DashboardController).scoped(),
   db: asFunction(createDatabase)
     .scoped()

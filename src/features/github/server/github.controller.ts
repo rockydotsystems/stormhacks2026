@@ -8,6 +8,7 @@ import { readLimitedBody, verifySignature } from "./security";
 import { supportedEvents, webhookSchema } from "./github.service";
 import type { Dependencies } from "@/server/container";
 import { ApiError } from "@/server/errors";
+import { reviewActions } from "@stormhacks/data/github-review/contracts";
 
 const cookieName = "github_oauth_state";
 const selectionCookie = "github_installation_selection";
@@ -270,6 +271,14 @@ export class GitHubController {
     const payload = webhookSchema.safeParse(value);
     if (!payload.success)
       throw new ApiError(400, "Invalid GitHub webhook payload.");
+    if (
+      event === "pull_request" &&
+      reviewActions.has(payload.data.action || "") &&
+      (!payload.data.pull_request ||
+        !payload.data.repository ||
+        !payload.data.installation)
+    )
+      throw new ApiError(400, "Pull request review payload is incomplete.");
     await this.dependencies.githubService.webhook(
       delivery.data,
       event,
