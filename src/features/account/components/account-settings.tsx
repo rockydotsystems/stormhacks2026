@@ -135,10 +135,12 @@ export default function AccountSettings({
   section,
   organizationId = "",
   githubOutcome,
+  mcpEndpoint,
 }: {
   section: SettingsSection;
   organizationId?: string;
   githubOutcome?: string;
+  mcpEndpoint?: string;
 }) {
   const session = useSession();
   return (
@@ -147,7 +149,7 @@ export default function AccountSettings({
       {section === "preferences" ? (
         <Preferences userId={session.data?.user?.id} />
       ) : section === "mcp" ? (
-        <McpSettings />
+        <McpSettings endpoint={mcpEndpoint} />
       ) : session.isPending ? (
         <p role="status">Loading your account…</p>
       ) : session.error ? (

@@ -5,6 +5,9 @@ WORKOS_CLIENT_ID=
 WORKOS_COOKIE_PASSWORD=
 NEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback
 
+# Public endpoint used in personal MCP setup commands. Must match the MCP Worker's resource URL.
+MCP_RESOURCE_URL=http://localhost:3001/mcp
+
 # AI provider. The model adapter reads these. Names are provisional until reconciled with the team.
 AI_PROVIDER=openrouter
 OPENROUTER_API_KEY=

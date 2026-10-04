@@ -158,10 +158,13 @@ require a signed-in WorkOS session; security changes should be verified with a
 disposable staging account.
 
 `/settings/mcp` is a personal settings section for connecting AI clients to this
-app's MCP server. Enter a registered endpoint to copy its URL or generate VS Code
-user configuration, then sign in through the client's browser OAuth flow. The
-page does not save endpoints, collect credentials, or contact servers. A hosted
-MCP endpoint is not deployed yet; local setup uses `http://localhost:3001/mcp`.
+app's MCP server. Choose Claude Code, OpenCode (V2), or Codex, copy the setup
+command, and complete the client's browser sign-in. Commands configure the agent
+for all projects on the user's device without collecting API keys or editing JSON.
+Set `MCP_RESOURCE_URL` in the web Worker's runtime environment to the registered
+MCP endpoint. If it is missing or invalid, the page shows command previews with
+copying disabled. A hosted MCP endpoint is not deployed yet; local setup uses
+`http://localhost:3001/mcp` and requires the separate MCP Worker to be running.
 See [MCP server](docs/mcp-server.md) for server setup and authorization requirements.
 
 ## GitHub integration

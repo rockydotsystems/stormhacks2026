@@ -252,9 +252,11 @@ function MultiFilter({
 export function Dashboard({
   settingsSection,
   githubOutcome,
+  mcpEndpoint,
 }: {
   settingsSection?: SettingsSection;
   githubOutcome?: string;
+  mcpEndpoint?: string;
 }) {
   const session = useSession();
   const [defaultSort] = useDefaultDocumentSort(session.data?.user?.id);
@@ -886,6 +888,7 @@ export function Dashboard({
                 section={settingsSection}
                 organizationId={organization}
                 githubOutcome={githubOutcome}
+                mcpEndpoint={mcpEndpoint}
               />
             )
           ) : session.isPending ||

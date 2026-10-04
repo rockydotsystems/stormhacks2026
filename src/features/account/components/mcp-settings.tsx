@@ -3,34 +3,26 @@
 import { CopyIcon } from "@phosphor-icons/react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { createMcpConfiguration } from "@/features/account/mcp-configuration";
+import { Tabs, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs";
+import {
+  createMcpSetup,
+  mcpAgents,
+} from "@/features/account/mcp-configuration";
 
-export function McpSettings() {
-  const [endpoint, setEndpoint] = useState("");
+export function McpSettings({ endpoint }: { endpoint?: string }) {
+  const setup = createMcpSetup(endpoint);
   const [notice, setNotice] = useState("");
-  const [copyError, setCopyError] = useState("");
-  let configuration: ReturnType<typeof createMcpConfiguration> | undefined;
-  let error = "";
-  if (endpoint.trim()) {
-    try {
-      configuration = createMcpConfiguration(endpoint);
-    } catch {
-      error =
-        "Enter an HTTPS server URL without credentials, query parameters, or a fragment. For local development, HTTP on localhost is allowed.";
-    }
-  }
+  const [error, setError] = useState("");
 
-  async function copy(value: string, label: string) {
+  async function copy(command: string) {
     setNotice("");
-    setCopyError("");
+    setError("");
     try {
-      await navigator.clipboard.writeText(value);
-      setNotice(`${label} copied.`);
+      await navigator.clipboard.writeText(command);
+      setNotice("Setup command copied. Run it in your terminal.");
     } catch {
-      setCopyError(
-        "Clipboard access is unavailable. Select and copy the text manually.",
+      setError(
+        "Clipboard access is unavailable. Select and copy the command manually.",
       );
     }
   }
@@ -38,121 +30,119 @@ export function McpSettings() {
   return (
     <div className="max-w-2xl space-y-6">
       <p className="settings-description">
-        Connect an AI client to WhyDidWeChooseThis with Model Context Protocol
-        (MCP) to read project decisions and propose document changes.
+        To connect WhyDidWeChooseThis to your local coding agent, choose your
+        agent and run the following command in your terminal.
       </p>
-      <p className="rounded-lg border bg-muted/40 p-4 text-sm leading-6 text-muted-foreground">
-        A hosted MCP endpoint is not available yet. For local development, start
-        the separate MCP server with <code>pnpm mcp:dev</code> and use{" "}
-        <code>http://localhost:3001/mcp</code>. Hosted clients cannot reach your
-        localhost.
-      </p>
-      <section aria-labelledby="mcp-endpoint-heading" className="space-y-3">
-        <h2 id="mcp-endpoint-heading" className="text-base font-medium">
-          Server endpoint
-        </h2>
-        <Label htmlFor="mcp-endpoint">Server URL</Label>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Input
-            id="mcp-endpoint"
-            type="url"
-            placeholder="http://localhost:3001/mcp"
-            value={endpoint}
-            onChange={(event) => {
-              setEndpoint(event.target.value);
-              setNotice("");
-              setCopyError("");
-            }}
-            aria-invalid={Boolean(error)}
-            aria-describedby={
-              error ? "mcp-endpoint-error" : "mcp-endpoint-hint"
-            }
-          />
-          <Button
-            variant="outline"
-            disabled={!configuration}
-            onClick={() =>
-              configuration && copy(configuration.url, "Server URL")
-            }
-          >
-            <CopyIcon aria-hidden="true" /> Copy URL
-          </Button>
-        </div>
+      {!setup.url ? (
         <p
-          id="mcp-endpoint-hint"
-          className="text-xs leading-5 text-muted-foreground"
+          role="status"
+          className="rounded-lg border bg-muted/40 p-4 text-sm leading-6 text-muted-foreground"
         >
-          Use the exact registered MCP endpoint, including /mcp. This field only
-          generates configuration; it does not save or connect to the server.
+          MCP setup is not available yet. The commands below are previews until
+          the app’s MCP endpoint is configured.
         </p>
-        {error && (
-          <p
-            id="mcp-endpoint-error"
-            role="alert"
-            className="text-sm text-destructive"
+      ) : setup.url.startsWith("http:") ? (
+        <p className="rounded-lg border bg-muted/40 p-4 text-sm leading-6 text-muted-foreground">
+          This is a local development endpoint. Start the app’s MCP server with{" "}
+          <code>pnpm mcp:dev</code> before connecting your agent.
+        </p>
+      ) : null}
+      <Tabs
+        defaultValue="claude"
+        onValueChange={() => {
+          setNotice("");
+          setError("");
+        }}
+      >
+        <h2 className="text-base font-medium">1. Choose your coding agent</h2>
+        <TabsList aria-label="Coding agent" className="max-w-full" size="sm">
+          {mcpAgents.map((agent) => (
+            <TabsTab
+              key={agent.id}
+              value={agent.id}
+              id={`mcp-agent-${agent.id}`}
+            >
+              {agent.name}
+            </TabsTab>
+          ))}
+        </TabsList>
+        {mcpAgents.map((agent) => (
+          <TabsPanel
+            key={agent.id}
+            value={agent.id}
+            id={`mcp-panel-${agent.id}`}
+            aria-labelledby={`mcp-agent-${agent.id}`}
+            className="space-y-6 pt-4"
           >
-            {error}
-          </p>
-        )}
-      </section>
-      <section aria-labelledby="mcp-client-heading" className="space-y-3">
-        <h2 id="mcp-client-heading" className="text-base font-medium">
-          VS Code configuration
-        </h2>
-        <p className="settings-description">
-          Run <strong>MCP: Open User Configuration</strong> in the Command
-          Palette and merge this server into your existing <code>servers</code>{" "}
-          object.
-        </p>
-        {configuration ? (
-          <>
-            <pre
-              className="overflow-x-auto rounded-lg border bg-muted/40 p-4 text-xs leading-6"
-              tabIndex={0}
-              aria-label="VS Code MCP configuration"
+            <section
+              className="space-y-3"
+              aria-labelledby={`${agent.id}-setup-heading`}
             >
-              <code>{configuration.json}</code>
-            </pre>
-            <Button
-              variant="outline"
-              onClick={() => copy(configuration.json, "Configuration")}
+              <h2
+                id={`${agent.id}-setup-heading`}
+                className="text-base font-medium"
+              >
+                2. Run this command
+              </h2>
+              <p className="settings-description">
+                With {agent.name} installed, run this in your terminal. The
+                connection is added to your personal configuration for all
+                projects on this device.
+              </p>
+              <pre
+                tabIndex={0}
+                aria-label={`${agent.name} setup command`}
+                className="overflow-x-auto rounded-lg border bg-muted/40 p-4 text-xs leading-6"
+              >
+                <code>{setup.commands[agent.id]}</code>
+              </pre>
+              <Button
+                variant="outline"
+                disabled={!setup.url}
+                onClick={() => copy(setup.commands[agent.id])}
+              >
+                <CopyIcon aria-hidden="true" /> Copy command
+              </Button>
+            </section>
+            <section
+              className="space-y-3"
+              aria-labelledby={`${agent.id}-signin-heading`}
             >
-              <CopyIcon aria-hidden="true" /> Copy configuration
-            </Button>
-          </>
-        ) : (
-          <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-            Enter a valid server URL to generate your configuration.
-          </p>
-        )}
-        <p className="text-xs leading-5 text-muted-foreground">
-          For other clients, add the server URL as a remote Streamable HTTP
-          connection. Your client must support MCP browser OAuth sign-in.
+              <h2
+                id={`${agent.id}-signin-heading`}
+                className="text-base font-medium"
+              >
+                3. Sign in
+              </h2>
+              <p className="settings-description">{agent.signIn}</p>
+              <a
+                href={agent.docs}
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm text-primary underline underline-offset-4"
+              >
+                Read {agent.name} MCP setup instructions
+              </a>
+            </section>
+          </TabsPanel>
+        ))}
+      </Tabs>
+      {setup.url && (
+        <p className="break-all text-xs leading-5 text-muted-foreground">
+          Server: {setup.url}
         </p>
-      </section>
-      <section aria-labelledby="mcp-auth-heading" className="space-y-3">
-        <h2 id="mcp-auth-heading" className="text-base font-medium">
-          Sign in from your client
-        </h2>
-        <p className="settings-description">
-          Start the connection in your AI client and complete the WorkOS browser
-          sign-in and consent flow. Signing in to this web app does not
-          authorize the client. Never paste passwords, API keys, or access
-          tokens into the configuration.
-        </p>
-        <p className="settings-description">
-          The client can read project documents, propose changes, and delete
-          unpublished changes within your authorized organization. It cannot
-          publish permanent versions. Review tool requests before approving
-          them.
-        </p>
-      </section>
+      )}
+      <p className="text-xs leading-5 text-muted-foreground">
+        Sign in with your WorkOS account when prompted. No API key is needed.
+        Your agent can read decisions and propose changes, but cannot publish
+        permanent versions. Review tool requests before approving them.
+      </p>
       <p role="status" className="text-sm text-primary">
         {notice}
       </p>
-      {copyError && (
+      {error && (
         <p role="alert" className="text-sm text-destructive">
-          {copyError}
+          {error}
         </p>
       )}
     </div>
