@@ -18,11 +18,18 @@ import type {
   ConversationRow,
   DocsPort,
   MessageRow,
+  ParticipantRow,
   PlanningSessionStore,
   CommitRevertInput,
   CommitTurnInput,
   AppliedChange,
 } from "@/features/planning/server/planning-session.types";
+import { JevError, type JevPort } from "@/features/planning/server/jev";
+import type {
+  ChangeReason,
+  Presence,
+  RealtimePort,
+} from "@/features/planning/server/realtime";
 import { ApiError } from "@/server/errors";
 
 // In-memory stand-ins for the data layer and the store. They follow the same rules the real
@@ -205,6 +212,7 @@ export class InMemoryStore implements PlanningSessionStore {
   conversations = new Map<string, ConversationRow>();
   messages: MessageRow[] = [];
   sources: ChangeSourceRow[] = [];
+  participants = new Map<string, Map<string, ParticipantRow>>();
   private leases = new Set<string>();
   private nextMessageId = 1;
 
@@ -214,7 +222,13 @@ export class InMemoryStore implements PlanningSessionStore {
     conversationId: string,
     fields: Pick<
       MessageRow,
-      "role" | "content" | "via" | "questions" | "clientMessageId"
+      | "role"
+      | "authorUserId"
+      | "kind"
+      | "content"
+      | "via"
+      | "questions"
+      | "clientMessageId"
     >,
   ): MessageRow {
     const row: MessageRow = {
@@ -236,6 +250,7 @@ export class InMemoryStore implements PlanningSessionStore {
 
   async createConversation(input: {
     userId: string;
+    displayName: string;
     organizationId: string;
     title: string;
     docId?: string | null;
@@ -250,28 +265,68 @@ export class InMemoryStore implements PlanningSessionStore {
       phase: input.phase ?? "grilling",
       checklist: [],
       skillVersion: null,
+      mode: "active",
+      standbySinceMessageId: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
     this.conversations.set(row.id, row);
+    await this.addParticipant(row.id, {
+      userId: input.userId,
+      displayName: input.displayName,
+    });
     return { ...row };
   }
 
-  async findOwnedConversation(userId: string, id: string) {
-    const row = this.conversations.get(id);
-    return row && row.userId === userId ? { ...row } : null;
+  private isParticipant(userId: string, conversationId: string) {
+    return this.participants.get(conversationId)?.has(userId) ?? false;
   }
 
-  async findConversationByDoc(userId: string, docId: string) {
+  async findConversationForUser(userId: string, id: string) {
+    const row = this.conversations.get(id);
+    return row && this.isParticipant(userId, id) ? { ...row } : null;
+  }
+
+  async findConversationById(id: string) {
+    const row = this.conversations.get(id);
+    return row ? { ...row } : null;
+  }
+
+  async findConversationByDoc(docId: string) {
     const row = [...this.conversations.values()].find(
-      (item) => item.userId === userId && item.docId === docId,
+      (item) => item.docId === docId,
     );
     return row ? { ...row } : null;
   }
 
+  async addParticipant(
+    conversationId: string,
+    participant: { userId: string; displayName: string },
+  ) {
+    const members = this.participants.get(conversationId) ?? new Map();
+    this.participants.set(conversationId, members);
+    const existing: ParticipantRow | undefined = members.get(
+      participant.userId,
+    );
+    if (!existing) {
+      members.set(participant.userId, { ...participant, joinedAt: new Date() });
+    } else if (existing.displayName === "") {
+      existing.displayName = participant.displayName;
+    }
+    return { ...members.get(participant.userId)! };
+  }
+
+  async listParticipants(conversationId: string) {
+    return [...(this.participants.get(conversationId)?.values() ?? [])].map(
+      (row) => ({ ...row }),
+    );
+  }
+
   async findConversation(userId: string, organizationId: string, id: string) {
     const row = this.conversations.get(id);
-    return row && row.userId === userId && row.organizationId === organizationId
+    return row &&
+      row.organizationId === organizationId &&
+      this.isParticipant(userId, id)
       ? { ...row }
       : null;
   }
@@ -279,9 +334,53 @@ export class InMemoryStore implements PlanningSessionStore {
   async listConversations(userId: string, organizationId: string) {
     return [...this.conversations.values()]
       .filter(
-        (row) => row.userId === userId && row.organizationId === organizationId,
+        (row) =>
+          row.organizationId === organizationId &&
+          this.isParticipant(userId, row.id),
       )
       .map((row) => ({ ...row }));
+  }
+
+  async enterStandby(conversationId: string, announcement: string) {
+    const conversation = this.conversations.get(conversationId);
+    if (!conversation || conversation.mode === "standby") return null;
+    const message = this.newMessage(conversationId, {
+      role: "assistant",
+      authorUserId: null,
+      kind: "standby-start",
+      content: announcement,
+      via: "text",
+      questions: [],
+      clientMessageId: null,
+    });
+    conversation.mode = "standby";
+    conversation.standbySinceMessageId = message.id;
+    return { conversation: { ...conversation }, message };
+  }
+
+  async exitStandby(conversationId: string, notice: string) {
+    const conversation = this.conversations.get(conversationId);
+    if (!conversation || conversation.mode !== "standby") return null;
+    const message = this.newMessage(conversationId, {
+      role: "assistant",
+      authorUserId: null,
+      kind: "standby-end",
+      content: notice,
+      via: "text",
+      questions: [],
+      clientMessageId: null,
+    });
+    conversation.mode = "active";
+    conversation.standbySinceMessageId = null;
+    return { conversation: { ...conversation }, message };
+  }
+
+  async listMessagesAfter(conversationId: string, messageId: string) {
+    return this.messages.filter(
+      (row) =>
+        row.conversationId === conversationId &&
+        Number(row.id) > Number(messageId),
+    );
   }
 
   async claimTurn(conversationId: string) {
@@ -311,6 +410,7 @@ export class InMemoryStore implements PlanningSessionStore {
   async insertUserMessage(
     conversationId: string,
     input: {
+      authorUserId: string;
       content: string;
       via: "text" | "voice";
       clientMessageId: string | null;
@@ -326,6 +426,7 @@ export class InMemoryStore implements PlanningSessionStore {
     return {
       message: this.newMessage(conversationId, {
         role: "user",
+        kind: "chat",
         questions: null,
         ...input,
       }),
@@ -373,9 +474,15 @@ export class InMemoryStore implements PlanningSessionStore {
     conversation.checklist = input.checklist;
     conversation.skillVersion = input.skillVersion;
     conversation.updatedAt = new Date();
+    if (input.endStandby) {
+      conversation.mode = "active";
+      conversation.standbySinceMessageId = null;
+    }
     if (change) conversation.docId ??= change.docId;
     const assistant = this.newMessage(conversation.id, {
       role: "assistant",
+      authorUserId: null,
+      kind: "chat",
       content: input.reply,
       via: "text",
       questions: input.questions,
@@ -398,6 +505,8 @@ export class InMemoryStore implements PlanningSessionStore {
     const conversation = this.conversations.get(input.conversationId)!;
     const userMessage = this.newMessage(conversation.id, {
       role: "user",
+      authorUserId: input.authorUserId,
+      kind: "chat",
       content: input.requestText,
       via: "text",
       questions: null,
@@ -407,6 +516,8 @@ export class InMemoryStore implements PlanningSessionStore {
     conversation.updatedAt = new Date();
     const assistant = this.newMessage(conversation.id, {
       role: "assistant",
+      authorUserId: null,
+      kind: "chat",
       content: input.replyText,
       via: "text",
       questions: [],
@@ -525,5 +636,57 @@ export class ScriptedAgent implements AgentPort {
     }
     if (script.fail) throw script.fail;
     yield { type: "final", result };
+  }
+}
+
+// Stands in for the live layer. Tests set who is present and read what was announced.
+export class FakeRealtime implements RealtimePort {
+  present = new Map<string, Presence[]>();
+  notified: { conversationId: string; reason: ChangeReason }[] = [];
+  failing = false;
+
+  async presence(conversationId: string) {
+    if (this.failing) throw new Error("realtime down");
+    return this.present.get(conversationId) ?? [];
+  }
+
+  async notify(conversationId: string, reason: ChangeReason) {
+    if (this.failing) throw new Error("realtime down");
+    this.notified.push({ conversationId, reason });
+  }
+
+  setPresent(conversationId: string, ...userIds: string[]) {
+    this.present.set(
+      conversationId,
+      userIds.map((userId) => ({ userId, displayName: `Name of ${userId}` })),
+    );
+  }
+}
+
+// Stands in for Jev. Tests set the three agreement scores and read how often it was asked.
+export class FakeJev implements JevPort {
+  scores = { agreement: 0, objection: 0, askedToUpdate: 0 };
+  calls: unknown[] = [];
+  failing = false;
+
+  agree() {
+    this.scores = { agreement: 0.97, objection: 0.03, askedToUpdate: 0.03 };
+  }
+
+  disagree() {
+    this.scores = { agreement: 0.03, objection: 0.9, askedToUpdate: 0.03 };
+  }
+
+  async askNouls<K extends string>(
+    state: unknown,
+    questions: Record<K, unknown>,
+  ) {
+    this.calls.push(state);
+    if (this.failing) throw new JevError("unavailable", "down");
+    const answers = {} as Record<K, number>;
+    for (const key of Object.keys(questions) as K[]) {
+      answers[key] = (this.scores as Record<string, number>)[key] ?? 0;
+    }
+    return answers;
   }
 }

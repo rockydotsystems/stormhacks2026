@@ -37,6 +37,9 @@ type SessionService = Pick<
   | "createConversation"
   | "listConversations"
   | "getConversation"
+  | "liveAccess"
+  | "syncStandby"
+  | "applyStandby"
   | "listChanges"
   | "listVersions"
   | "getVersion"
@@ -94,6 +97,33 @@ export class PlanningSessionController {
     return json(
       await this.service.getConversation(user.id, conversationId(id)),
     );
+  }
+
+  // Called when the people present change. The server checks who is really here and moves the
+  // conversation in or out of standby, so a client cannot force either.
+  async syncStandby(request: Request, id: string) {
+    const user = await this.dependencies.authService.requireUser();
+    assertSameOrigin(request);
+    return json(await this.service.syncStandby(user.id, conversationId(id)));
+  }
+
+  // Ends standby by updating the document from the discussion, without waiting for the model to
+  // judge that everyone agreed.
+  async applyStandby(request: Request, id: string) {
+    const user = await this.dependencies.authService.requireUser();
+    assertSameOrigin(request);
+    try {
+      return json(await this.service.applyStandby(user.id, conversationId(id)));
+    } catch (error) {
+      throw mapProviderError(error);
+    }
+  }
+
+  // For the realtime Worker only. It forwards the caller's cookie to learn who they are and
+  // whether they may join this conversation's live room.
+  async liveAccess(id: string) {
+    const user = await this.dependencies.authService.requireUser();
+    return json(await this.service.liveAccess(user.id, conversationId(id)));
   }
 
   async send(request: Request, id: string) {

@@ -45,6 +45,10 @@ export type ChangeMode = z.infer<typeof changeModeSchema>;
 export const messageSchema = z.object({
   id: z.string(),
   role: z.enum(["user", "assistant"]),
+  // The participant who wrote a user message. Null for the agent.
+  authorUserId: z.string().nullable(),
+  // "chat" is an ordinary message. The standby kinds are fixed notices from the server.
+  kind: z.enum(["chat", "standby-start", "standby-end"]),
   // Voice turns keep their transcript text, which is what a change source shows.
   content: z.string(),
   via: z.enum(["text", "voice"]),
@@ -107,6 +111,8 @@ export const conversationListItemSchema = z.object({
   id: z.string().uuid(),
   title: z.string(),
   phase: phaseSchema,
+  // In standby, people are discussing and the agent stays quiet until they agree.
+  mode: z.enum(["active", "standby"]),
   hasDocument: z.boolean(),
   // The document this conversation plans. Null until the first draft creates one.
   documentId: z.string().uuid().nullable(),
@@ -115,8 +121,16 @@ export const conversationListItemSchema = z.object({
 });
 export type ConversationListItem = z.infer<typeof conversationListItemSchema>;
 
+export const participantSchema = z.object({
+  userId: z.string(),
+  displayName: z.string(),
+});
+export type ParticipantDto = z.infer<typeof participantSchema>;
+
 export const conversationDetailSchema = conversationListItemSchema.extend({
   checklist: z.array(checklistEntrySchema),
+  // Everyone in the chat, owner first. Use it to name the author of each message.
+  participants: z.array(participantSchema),
   skillVersion: z.string().nullable(),
   messages: z.array(messageSchema),
   workingDocument: workingDocumentSchema.nullable(),
@@ -127,7 +141,8 @@ export type ConversationDetail = z.infer<typeof conversationDetailSchema>;
 
 export const sendMessageResultSchema = z.object({
   userMessage: messageSchema,
-  assistantMessage: messageSchema,
+  // Null while the conversation is in standby and the agent has not been asked to act.
+  assistantMessage: messageSchema.nullable(),
   conversation: conversationDetailSchema,
 });
 export type SendMessageResult = z.infer<typeof sendMessageResultSchema>;
@@ -186,7 +201,7 @@ export const sessionEventSchema = z.discriminatedUnion("type", [
   eventBase.extend({
     type: z.literal("message.final"),
     userMessage: messageSchema,
-    assistantMessage: messageSchema,
+    assistantMessage: messageSchema.nullable(),
     phase: phaseSchema,
     checklist: z.array(checklistEntrySchema),
   }),

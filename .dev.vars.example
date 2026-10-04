@@ -25,3 +25,9 @@ GITHUB_CLIENT_SECRET=
 # Double-quoted PEM with escaped newlines, or a quoted multiline PEM.
 GITHUB_PRIVATE_KEY=
 GITHUB_WEBHOOK_SECRET=
+
+# Jev (TypeSafe System One) decides when people in a standby discussion have agreed.
+# Without a key, standby still works and a person presses Apply instead.
+TYPESAFE_API_KEY=
+# Optional. Pinned to a model version in code, because the alias moves with each release.
+TYPESAFE_MODEL=

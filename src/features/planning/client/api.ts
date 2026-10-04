@@ -112,6 +112,18 @@ export function revert(id: string, input: RevertInput): Promise<RevertResult> {
   return request(`${at(id)}/revert`, post(input));
 }
 
+// Asks the server to check who is in the chat and switch standby on or off to match. The server
+// decides from the live room, so this cannot force either state.
+export function syncStandby(id: string): Promise<ConversationDetail> {
+  return request(`${at(id)}/standby/sync`, post({}));
+}
+
+// Ends standby by updating the document from the discussion, without waiting for the model to
+// judge that everyone agreed.
+export function applyStandby(id: string): Promise<ConversationDetail> {
+  return request(`${at(id)}/standby/apply`, post({}));
+}
+
 export function listChanges(id: string): Promise<ChangeSummary[]> {
   return request(`${at(id)}/changes`);
 }

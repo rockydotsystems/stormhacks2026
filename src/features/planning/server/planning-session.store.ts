@@ -30,12 +30,14 @@ import type {
   CommitTurnResult,
   ConversationRow,
   MessageRow,
+  ParticipantRow,
   PlanningSessionStore,
 } from "@/features/planning/server/planning-session.types";
 import {
   planningChangeSources,
   planningConversations,
   planningMessages,
+  planningParticipants,
 } from "@/features/planning/server/schema";
 import type { Database } from "@/server/db";
 
@@ -53,9 +55,16 @@ function toConversation(
     phase: row.phase,
     checklist: row.checklist as ChecklistEntry[],
     skillVersion: row.skillVersion,
+    mode: row.mode,
+    standbySinceMessageId: row.standbySinceMessageId?.toString() ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+}
+
+// The conversation's participants include its owner, so one rule covers both.
+function hasParticipant(userId: string) {
+  return sql`exists (select 1 from ${planningParticipants} where ${planningParticipants.conversationId} = ${planningConversations.id} and ${planningParticipants.userId} = ${userId})`;
 }
 
 function toMessage(row: typeof planningMessages.$inferSelect): MessageRow {
@@ -63,6 +72,8 @@ function toMessage(row: typeof planningMessages.$inferSelect): MessageRow {
     id: row.id.toString(),
     conversationId: row.conversationId,
     role: row.role,
+    authorUserId: row.authorUserId,
+    kind: row.kind,
     content: row.content,
     via: row.via,
     questions: row.questions ? normalizeQuestions(row.questions) : null,
@@ -100,42 +111,92 @@ export class DrizzlePlanningSessionStore implements PlanningSessionStore {
 
   async createConversation(input: {
     userId: string;
+    displayName: string;
     organizationId: string;
     title: string;
     docId?: string | null;
     phase?: Phase;
   }) {
-    const [row] = await this.dependencies.db
-      .insert(planningConversations)
-      .values(input)
-      .returning();
-    return toConversation(row);
+    const { displayName, ...values } = input;
+    return this.dependencies.db.transaction(async (tx) => {
+      const [row] = await tx
+        .insert(planningConversations)
+        .values(values)
+        .returning();
+      await tx.insert(planningParticipants).values({
+        conversationId: row.id,
+        userId: input.userId,
+        displayName,
+      });
+      return toConversation(row);
+    });
   }
 
-  async findOwnedConversation(userId: string, id: string) {
+  async findConversationForUser(userId: string, id: string) {
     const [row] = await this.dependencies.db
       .select()
       .from(planningConversations)
-      .where(
-        and(
-          eq(planningConversations.id, id),
-          eq(planningConversations.userId, userId),
-        ),
-      );
+      .where(and(eq(planningConversations.id, id), hasParticipant(userId)));
     return row ? toConversation(row) : null;
   }
 
-  async findConversationByDoc(userId: string, docId: string) {
+  async findConversationById(id: string) {
     const [row] = await this.dependencies.db
       .select()
       .from(planningConversations)
+      .where(eq(planningConversations.id, id));
+    return row ? toConversation(row) : null;
+  }
+
+  async findConversationByDoc(docId: string) {
+    const [row] = await this.dependencies.db
+      .select()
+      .from(planningConversations)
+      .where(eq(planningConversations.docId, docId));
+    return row ? toConversation(row) : null;
+  }
+
+  async addParticipant(
+    conversationId: string,
+    participant: { userId: string; displayName: string },
+  ): Promise<ParticipantRow> {
+    await this.dependencies.db
+      .insert(planningParticipants)
+      .values({ conversationId, ...participant })
+      .onConflictDoUpdate({
+        target: [
+          planningParticipants.conversationId,
+          planningParticipants.userId,
+        ],
+        set: { displayName: participant.displayName },
+        // Only fills in the placeholder left by the backfill. A chosen name stays.
+        setWhere: eq(planningParticipants.displayName, ""),
+      });
+    const [row] = await this.dependencies.db
+      .select()
+      .from(planningParticipants)
       .where(
         and(
-          eq(planningConversations.docId, docId),
-          eq(planningConversations.userId, userId),
+          eq(planningParticipants.conversationId, conversationId),
+          eq(planningParticipants.userId, participant.userId),
         ),
       );
-    return row ? toConversation(row) : null;
+    return row;
+  }
+
+  async listParticipants(conversationId: string): Promise<ParticipantRow[]> {
+    return this.dependencies.db
+      .select({
+        userId: planningParticipants.userId,
+        displayName: planningParticipants.displayName,
+        joinedAt: planningParticipants.joinedAt,
+      })
+      .from(planningParticipants)
+      .where(eq(planningParticipants.conversationId, conversationId))
+      .orderBy(
+        asc(planningParticipants.joinedAt),
+        asc(planningParticipants.userId),
+      );
   }
 
   async findConversation(userId: string, organizationId: string, id: string) {
@@ -145,7 +206,7 @@ export class DrizzlePlanningSessionStore implements PlanningSessionStore {
       .where(
         and(
           eq(planningConversations.id, id),
-          eq(planningConversations.userId, userId),
+          hasParticipant(userId),
           eq(planningConversations.organizationId, organizationId),
         ),
       );
@@ -158,13 +219,96 @@ export class DrizzlePlanningSessionStore implements PlanningSessionStore {
       .from(planningConversations)
       .where(
         and(
-          eq(planningConversations.userId, userId),
+          hasParticipant(userId),
           eq(planningConversations.organizationId, organizationId),
         ),
       )
       .orderBy(desc(planningConversations.updatedAt))
       .limit(100);
     return rows.map(toConversation);
+  }
+
+  async enterStandby(conversationId: string, announcement: string) {
+    return this.dependencies.db.transaction(async (tx) => {
+      // Locks the row, so two callers cannot both announce.
+      const [current] = await tx
+        .select({ mode: planningConversations.mode })
+        .from(planningConversations)
+        .where(eq(planningConversations.id, conversationId))
+        .for("update");
+      if (!current || current.mode === "standby") return null;
+      const [message] = await tx
+        .insert(planningMessages)
+        .values({
+          conversationId,
+          role: "assistant",
+          kind: "standby-start",
+          content: announcement,
+          questions: [],
+        })
+        .returning();
+      const [conversation] = await tx
+        .update(planningConversations)
+        .set({
+          mode: "standby",
+          standbySinceMessageId: message.id,
+          updatedAt: sql`now()`,
+        })
+        .where(eq(planningConversations.id, conversationId))
+        .returning();
+      return {
+        conversation: toConversation(conversation),
+        message: toMessage(message),
+      };
+    });
+  }
+
+  async exitStandby(conversationId: string, notice: string) {
+    return this.dependencies.db.transaction(async (tx) => {
+      const [current] = await tx
+        .select({ mode: planningConversations.mode })
+        .from(planningConversations)
+        .where(eq(planningConversations.id, conversationId))
+        .for("update");
+      if (!current || current.mode !== "standby") return null;
+      const [message] = await tx
+        .insert(planningMessages)
+        .values({
+          conversationId,
+          role: "assistant",
+          kind: "standby-end",
+          content: notice,
+          questions: [],
+        })
+        .returning();
+      const [conversation] = await tx
+        .update(planningConversations)
+        .set({
+          mode: "active",
+          standbySinceMessageId: null,
+          updatedAt: sql`now()`,
+        })
+        .where(eq(planningConversations.id, conversationId))
+        .returning();
+      return {
+        conversation: toConversation(conversation),
+        message: toMessage(message),
+      };
+    });
+  }
+
+  async listMessagesAfter(conversationId: string, messageId: string) {
+    const rows = await this.dependencies.db
+      .select()
+      .from(planningMessages)
+      .where(
+        and(
+          eq(planningMessages.conversationId, conversationId),
+          gt(planningMessages.id, BigInt(messageId)),
+        ),
+      )
+      .orderBy(asc(planningMessages.id));
+    return rows.map(toMessage);
   }
 
   async claimTurn(conversationId: string, leaseSeconds: number) {
@@ -210,6 +354,7 @@ export class DrizzlePlanningSessionStore implements PlanningSessionStore {
   async insertUserMessage(
     conversationId: string,
     input: {
+      authorUserId: string;
       content: string;
       via: "text" | "voice";
       clientMessageId: string | null;
@@ -312,6 +457,9 @@ export class DrizzlePlanningSessionStore implements PlanningSessionStore {
           checklist: input.checklist,
           skillVersion: input.skillVersion,
           updatedAt: sql`now()`,
+          ...(input.endStandby
+            ? { mode: "active" as const, standbySinceMessageId: null }
+            : {}),
           ...(change
             ? {
                 docId: sql`coalesce(${planningConversations.docId}, ${change.docId}::uuid)`,
@@ -354,6 +502,7 @@ export class DrizzlePlanningSessionStore implements PlanningSessionStore {
         .values({
           conversationId: input.conversationId,
           role: "user",
+          authorUserId: input.authorUserId,
           content: input.requestText,
           via: "text",
         })

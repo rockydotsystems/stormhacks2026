@@ -105,6 +105,10 @@ export function isBusy(state: TurnUi): boolean {
 export type ChatItem = {
   key: string;
   role: "user" | "assistant";
+  // Who wrote it. Null for the agent and for a message still being sent from this tab.
+  authorUserId: string | null;
+  // The standby kinds are notices from the server, not speech.
+  kind: MessageDto["kind"];
   content: string;
   via: "text" | "voice";
   questions: Question[];
@@ -119,6 +123,8 @@ export function chatItems(
   const items: ChatItem[] = messages.map((message) => ({
     key: message.id,
     role: message.role,
+    authorUserId: message.authorUserId,
+    kind: message.kind,
     content: message.content,
     via: message.via,
     questions: message.questions ?? [],
@@ -135,6 +141,8 @@ export function chatItems(
       items.push({
         key: `pending-${pending.clientMessageId}`,
         role: "user",
+        authorUserId: null,
+        kind: "chat",
         content: pending.text,
         via: pending.via,
         questions: [],
@@ -146,6 +154,8 @@ export function chatItems(
       items.push({
         key: `stream-${pending.clientMessageId}`,
         role: "assistant",
+        authorUserId: null,
+        kind: "chat",
         content: ui.streamText,
         via: "text",
         questions: [],

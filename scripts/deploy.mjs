@@ -15,20 +15,30 @@ if (!hyperdrive?.id || /^0+$/.test(hyperdrive.id)) {
   process.exit(1);
 }
 
-const result = spawnSync(
-  process.execPath,
-  [
-    fileURLToPath(
-      new URL("../node_modules/wrangler/bin/wrangler.js", import.meta.url),
-    ),
-    "deploy",
-    "--config",
-    configPath,
-    ...process.argv.slice(2),
-  ],
-  { stdio: "inherit" },
-);
-if (result.error) {
-  console.error(result.error.message);
+function wrangler(args) {
+  const result = spawnSync(
+    process.execPath,
+    [
+      fileURLToPath(
+        new URL("../node_modules/wrangler/bin/wrangler.js", import.meta.url),
+      ),
+      "deploy",
+      ...args,
+    ],
+    { stdio: "inherit" },
+  );
+  if (result.error) {
+    console.error(result.error.message);
+  }
+  return result.status ?? 1;
 }
-process.exit(result.status ?? 1);
+
+// The app binds to the realtime Worker's Durable Object, so that Worker must exist first.
+const realtime = wrangler([
+  "--config",
+  "apps/realtime/wrangler.jsonc",
+  ...process.argv.slice(2),
+]);
+if (realtime !== 0) process.exit(realtime);
+
+process.exit(wrangler(["--config", configPath, ...process.argv.slice(2)]));

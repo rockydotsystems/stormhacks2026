@@ -1484,6 +1484,105 @@ a {
   margin-left: 20px;
   border-radius: 9px 9px 2px 9px;
 }
+/* Another person in a shared chat. On the left like the agent, but boxed, named and tinted
+   with their own hue so the two never read as the same voice. Only the hue is set per person.
+   The tint is mixed into the theme background, so it works in light and dark. */
+.planning-message-teammate {
+  --tint: oklch(0.72 0.14 var(--hue, 250));
+  margin-right: 20px;
+  padding: 10px 14px 12px;
+  border: 1px solid color-mix(in srgb, var(--tint) 45%, var(--border));
+  border-left-width: 3px;
+  border-radius: 2px 9px 9px 9px;
+  background: color-mix(in srgb, var(--tint) 12%, var(--background));
+}
+.planning-author {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 6px;
+  font-size: 11px;
+}
+.planning-avatar {
+  --tint: oklch(0.72 0.14 var(--hue, 250));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--tint) 60%, var(--border));
+  background: color-mix(in srgb, var(--tint) 30%, var(--background));
+  color: var(--foreground);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.planning-notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin: 28px 8px 0;
+  padding: 8px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.6;
+  text-align: center;
+}
+.planning-notice svg {
+  flex-shrink: 0;
+  width: 13px;
+  height: 13px;
+}
+.planning-presence {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding-inline: 2px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.planning-avatars {
+  display: inline-flex;
+  gap: 4px;
+}
+.planning-standby {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--background);
+  font-size: 12px;
+}
+.planning-standby > svg {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  margin-top: 2px;
+  color: var(--primary);
+}
+.planning-standby > span {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+.planning-standby small {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.planning-standby small[data-error] {
+  color: var(--destructive, #b3261e);
+}
 .planning-proposal {
   margin-top: 18px;
   border: 1px solid var(--border);

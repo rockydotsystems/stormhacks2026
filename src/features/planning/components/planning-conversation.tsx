@@ -130,7 +130,9 @@ export function PlanningConversation({
         onDelta: (text) => dispatch({ type: "delta", text }),
       });
       dispatch({ type: "succeeded" });
-      if (turn.speak) void playback.speak(final.assistantMessage.content);
+      // In standby the agent says nothing, so there is nothing to speak.
+      if (turn.speak && final.assistantMessage)
+        void playback.speak(final.assistantMessage.content);
     } catch (caught) {
       const error = caught instanceof PlanningApiError ? caught : null;
       dispatch({

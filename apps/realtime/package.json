@@ -1,0 +1,17 @@
+{
+  "name": "@stormhacks/realtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "pnpm worker:types && tsc --noEmit -p tsconfig.json",
+    "worker:types": "wrangler types worker-configuration.d.ts --config wrangler.jsonc --include-runtime=false",
+    "build": "wrangler deploy --config wrangler.jsonc --dry-run --outdir dist",
+    "deploy": "wrangler deploy --config wrangler.jsonc"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261001.1",
+    "typescript": "^5",
+    "wrangler": "4.147.0"
+  }
+}

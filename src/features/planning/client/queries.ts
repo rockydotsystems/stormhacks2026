@@ -7,6 +7,7 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import {
+  applyStandby,
   createConversation,
   getChangeSource,
   getVersionSource,
@@ -199,6 +200,16 @@ export function usePublish(id: string) {
         refresh(queryClient, id),
         queryClient.invalidateQueries({ queryKey: planningKeys.versions(id) }),
       ]),
+  });
+}
+
+// Any participant can end standby by hand. The server refuses when the chat is not in standby,
+// has no discussion yet, or a turn is still running.
+export function useApplyStandby(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation<ConversationDetail, PlanningApiError, void>({
+    mutationFn: () => applyStandby(id),
+    onSettled: () => refresh(queryClient, id),
   });
 }
 

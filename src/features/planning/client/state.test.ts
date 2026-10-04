@@ -36,6 +36,8 @@ function message(
   return {
     id,
     role,
+    authorUserId: role === "user" ? "user-1" : null,
+    kind: "chat" as const,
     content,
     via: "text",
     questions,

@@ -12,6 +12,8 @@ import { TeamController } from "@/features/organizations/server/team.controller"
 import { ProjectsService } from "@/features/projects/server/projects.service";
 import { NotesController } from "@/features/notes/server/notes.controller";
 import { NotesService } from "@/features/notes/server/notes.service";
+import { createJev } from "@/features/planning/server/jev";
+import type { JevPort } from "@/features/planning/server/jev";
 import type { ModelPort } from "@/features/planning/server/model";
 import { createModel } from "@/features/planning/server/model.factory";
 import { PlanningController } from "@/features/planning/server/planning.controller";
@@ -21,6 +23,14 @@ import { DrizzlePlanningSessionStore } from "@/features/planning/server/planning
 import { PlanningSessionService } from "@/features/planning/server/planning-session.service";
 import type { PlanningSessionStore } from "@/features/planning/server/planning-session.types";
 import { WorkspaceContext } from "@/features/planning/server/workspace-context";
+import {
+  WorkOsUserDirectory,
+  type UserDirectory,
+} from "@/features/planning/server/user-directory";
+import {
+  DurableObjectRealtime,
+  type RealtimePort,
+} from "@/features/planning/server/realtime";
 import type { SpeechPort } from "@/features/planning/server/speech";
 import { createSpeech } from "@/features/planning/server/speech.factory";
 import { createDatabase, type Database } from "@/server/db";
@@ -32,10 +42,13 @@ export type Dependencies = {
   db: Database;
   model: ModelPort;
   speech: SpeechPort;
+  jev: JevPort;
   planningService: PlanningService;
   planningController: PlanningController;
   planningSessionStore: PlanningSessionStore;
   workspaceContext: WorkspaceContext;
+  userDirectory: UserDirectory;
+  realtime: RealtimePort;
   planningSessionService: PlanningSessionService;
   planningSessionController: PlanningSessionController;
   authService: AuthService;
@@ -64,10 +77,13 @@ container.register({
   // Stateless provider adapters. They hold no request identity, so one instance serves all requests.
   model: asFunction(() => createModel()).singleton(),
   speech: asFunction(() => createSpeech()).singleton(),
+  jev: asFunction(() => createJev()).singleton(),
   planningService: asClass(PlanningService).scoped(),
   planningController: asClass(PlanningController).scoped(),
   planningSessionStore: asClass(DrizzlePlanningSessionStore).scoped(),
   workspaceContext: asClass(WorkspaceContext).scoped(),
+  userDirectory: asClass(WorkOsUserDirectory).scoped(),
+  realtime: asClass(DurableObjectRealtime).scoped(),
   planningSessionService: asClass(PlanningSessionService).scoped(),
   planningSessionController: asClass(PlanningSessionController).scoped(),
   authService: asClass(AuthService).scoped(),

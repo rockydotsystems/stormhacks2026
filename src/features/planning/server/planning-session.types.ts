@@ -27,15 +27,31 @@ export type ConversationRow = {
   phase: Phase;
   checklist: ChecklistEntry[];
   skillVersion: string | null;
+  // Standby: people are discussing, so the agent stays quiet. The discussion is every message
+  // after standbySinceMessageId, which is the standby announcement.
+  mode: "active" | "standby";
+  standbySinceMessageId: string | null;
   createdAt: Date;
   updatedAt: Date;
+};
+
+export type MessageKind = "chat" | "standby-start" | "standby-end";
+
+export type ParticipantRow = {
+  userId: string;
+  displayName: string;
+  joinedAt: Date;
 };
 
 export type MessageRow = {
   id: string;
   conversationId: string;
   role: "user" | "assistant";
+  // The human who wrote a user message. Null for the agent.
+  authorUserId: string | null;
   content: string;
+  // The standby kinds are fixed notices written by the server.
+  kind: MessageKind;
   via: "text" | "voice";
   questions: Question[] | null;
   clientMessageId: string | null;
@@ -73,6 +89,8 @@ export type CommitTurnInput = {
   mode: ChangeMode;
   revertedToChangeId: string | null;
   applyDocument: ApplyDocument | null;
+  // Leaves standby in the same transaction, so the change and the mode move together.
+  endStandby: boolean;
 };
 
 export type CommitTurnResult = {
@@ -83,6 +101,7 @@ export type CommitTurnResult = {
 
 export type CommitRevertInput = {
   conversationId: string;
+  authorUserId: string;
   requestText: string;
   replyText: string;
   revertedToChangeId: string;
@@ -103,6 +122,8 @@ export interface PlanningSessionStore {
   // text, in the generated phase.
   createConversation(input: {
     userId: string;
+    // The owner joins as the first participant under this name.
+    displayName: string;
     organizationId: string;
     title: string;
     docId?: string | null;
@@ -113,19 +134,42 @@ export interface PlanningSessionStore {
     organizationId: string,
     id: string,
   ): Promise<ConversationRow | null>;
-  // By owner only. The conversation's own organization decides what the user acts as.
-  findOwnedConversation(
+  // By participant (the owner is one). The conversation's own organization decides what the
+  // user acts as.
+  findConversationForUser(
     userId: string,
     id: string,
   ): Promise<ConversationRow | null>;
-  findConversationByDoc(
-    userId: string,
-    docId: string,
-  ): Promise<ConversationRow | null>;
+  // No access check. For joining, after the caller has proven organization membership.
+  findConversationById(id: string): Promise<ConversationRow | null>;
+  // One conversation plans one document, whoever owns it. Callers check the organization.
+  findConversationByDoc(docId: string): Promise<ConversationRow | null>;
+  // Adds the user, or fills in a missing name. An existing name is kept.
+  addParticipant(
+    conversationId: string,
+    participant: { userId: string; displayName: string },
+  ): Promise<ParticipantRow>;
+  listParticipants(conversationId: string): Promise<ParticipantRow[]>;
   listConversations(
     userId: string,
     organizationId: string,
   ): Promise<ConversationRow[]>;
+  // Goes quiet: sets standby, writes the announcement and points standby at it. Null when the
+  // conversation is already in standby, so concurrent callers announce once.
+  enterStandby(
+    conversationId: string,
+    announcement: string,
+  ): Promise<{ conversation: ConversationRow; message: MessageRow } | null>;
+  // Listens again without applying anything. Null when the conversation is not in standby.
+  exitStandby(
+    conversationId: string,
+    notice: string,
+  ): Promise<{ conversation: ConversationRow; message: MessageRow } | null>;
+  // Ascending. Everything after a message, such as the discussion since standby began.
+  listMessagesAfter(
+    conversationId: string,
+    messageId: string,
+  ): Promise<MessageRow[]>;
   // Takes the turn lease. False when another turn holds an unexpired lease.
   claimTurn(conversationId: string, leaseSeconds: number): Promise<boolean>;
   releaseTurn(conversationId: string): Promise<void>;
@@ -136,6 +180,7 @@ export interface PlanningSessionStore {
   insertUserMessage(
     conversationId: string,
     input: {
+      authorUserId: string;
       content: string;
       via: "text" | "voice";
       clientMessageId: string | null;
