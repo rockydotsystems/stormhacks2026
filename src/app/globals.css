@@ -1168,10 +1168,10 @@ a {
   gap: 12px;
   min-width: 0;
 }
-.dashboard-breadcrumb button {
+.dashboard-breadcrumb a {
   border-radius: 3px;
 }
-.dashboard-breadcrumb button:hover {
+.dashboard-breadcrumb a:hover {
   color: var(--foreground);
 }
 .breadcrumb-document {

@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Dashboard } from "@/features/dashboard/components/dashboard";
 import type { SettingsSection } from "@/features/account/components/account-settings";
 import { parseMcpEndpoint } from "@/features/account/mcp-configuration";
@@ -14,6 +14,8 @@ export default async function SettingsPage({
   }>;
 }) {
   const { section } = await params;
+  // Keep existing links usable while team management is hidden.
+  if (section === "team") redirect("/settings/profile");
   if (
     !["profile", "security", "preferences", "team", "github", "mcp"].includes(
       section,

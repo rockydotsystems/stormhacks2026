@@ -186,7 +186,7 @@ export function Workspace() {
         </span>
       </div>
       <Button
-        render={<Link href="/" />}
+        render={<Link href="/documents" />}
         variant="ghost"
         className="mb-2 w-full justify-start text-xs"
       >

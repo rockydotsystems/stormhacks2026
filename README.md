@@ -112,6 +112,23 @@ amp orb service start web --command 'pnpm dev --host 0.0.0.0' --port 3000 --port
 
 The homepage works without WorkOS credentials and shows setup instructions. Protected APIs return 503 until auth is configured; there is no development auth bypass. Once configured, anonymous API requests return 401 JSON instead of redirecting to a login page.
 
+## Workspace navigation
+
+The dashboard uses shareable routes: `/` for Overview, `/projects` for Projects,
+`/projects/:id` for a project, `/documents` for Documents, and `/documents/:id`
+for a document. Navigation, breadcrumbs, and recently viewed items use real links;
+refreshing or using browser back/forward restores the selected page from its URL.
+The shared dashboard layout preserves sidebar state during navigation. Creating
+a project or document opens its resource URL.
+
+Resource links use stable IDs and remain scoped to the selected WorkOS
+organization. Missing or inaccessible items show an unavailable state instead of
+falling back to Overview. Switch to the item's organization to open its link;
+switching organizations from the dashboard returns to Overview so an old project
+or document selection does not leak into the new workspace. Account settings keep
+their existing `/settings/:section` routes. `/workspace` and `/starter` are separate
+demo surfaces.
+
 ## WorkOS authentication
 
 Use a WorkOS **staging** environment. Set these in `.dev.vars` for the local Worker runtime (keep `.env.local` for Drizzle's direct database URL):
@@ -138,8 +155,9 @@ vinext runs `src/proxy.ts` for AuthKit session handling. Controllers explicitly 
 The account menu reads WorkOS names, email, and profile images from the session.
 `/settings/profile` and `/settings/security` use WorkOS UserProfile, UserSecurity,
 and UserSessions widgets with AuthKit's refreshable access token.
-`/settings/team` uses UsersManagement for the authenticated organization; it
-requires the `widgets:users-table:manage` permission. The dashboard organization
+Team settings is temporarily hidden from navigation, and `/settings/team`
+redirects to `/settings/profile`. Its UsersManagement implementation is retained
+for later use and requires the `widgets:users-table:manage` permission. The dashboard organization
 switcher lists active WorkOS memberships and refreshes the AuthKit session when
 switching. Projects, documents, and UsersManagement all use the selected WorkOS
 organization. New organization creators receive the role configured as the WorkOS
