@@ -787,11 +787,61 @@ export function Dashboard({
           ref={scrollRef}
         >
           {settingsSection ? (
-            <AccountSettings
-              section={settingsSection}
-              organizationId={organization}
-              githubOutcome={githubOutcome}
-            />
+            settingsSection === "github" ? (
+              <div className="settings-content">
+                <Label htmlFor="github-organization">Organization</Label>
+                <Select
+                  items={
+                    workspace.data?.organizations.map((org) => ({
+                      value: org.id,
+                      label: org.name,
+                    })) || []
+                  }
+                  value={organization || null}
+                  disabled={switching || workspace.isPending}
+                  onValueChange={(value) => {
+                    if (value) void switchOrganization(value);
+                  }}
+                >
+                  <SelectTrigger id="github-organization">
+                    <SelectValue placeholder="Choose organization" />
+                  </SelectTrigger>
+                  <SelectPopup>
+                    {workspace.data?.organizations.map((org) => (
+                      <SelectItem key={org.id} value={org.id}>
+                        {org.name}
+                      </SelectItem>
+                    ))}
+                  </SelectPopup>
+                </Select>
+                {switchError && <p role="alert">{switchError}</p>}
+                {session.data?.user && workspace.isPending ? (
+                  <p role="status">Loading your organizations…</p>
+                ) : workspace.isError ? (
+                  <div role="alert">
+                    <p>{workspace.error.message}</p>
+                    <Button
+                      variant="outline"
+                      onClick={() => void workspace.refetch()}
+                    >
+                      Try again
+                    </Button>
+                  </div>
+                ) : (
+                  <AccountSettings
+                    section={settingsSection}
+                    organizationId={organization}
+                    githubOutcome={githubOutcome}
+                  />
+                )}
+              </div>
+            ) : (
+              <AccountSettings
+                section={settingsSection}
+                organizationId={organization}
+                githubOutcome={githubOutcome}
+              />
+            )
           ) : session.isPending ||
             (session.data?.user && workspace.isPending) ? (
             <div className="documents-empty" role="status">

@@ -5,6 +5,30 @@ import { ApiError } from "@/server/errors";
 
 const organizationId = "org_testgithub";
 const state = "a".repeat(43);
+it("accepts WorkOS organization IDs for GitHub status", async () => {
+  const { controller, githubService } = setup();
+  const response = await controller.status(
+    new Request(`https://app.test/api/github?organizationId=${organizationId}`),
+  );
+  expect(response.status).toBe(200);
+  expect(githubService.status).toHaveBeenCalledWith({
+    userId: "workos-user",
+    organizationId,
+  });
+});
+
+it.each(["", "f21f884a-71cf-41fc-ae62-15e6485b7937", "org_bad-id"])(
+  "rejects invalid GitHub organization selection %s",
+  async (value) => {
+    const { controller, githubService } = setup();
+    await expect(
+      controller.status(
+        new Request(`https://app.test/api/github?organizationId=${value}`),
+      ),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(githubService.status).not.toHaveBeenCalled();
+  },
+);
 function setup() {
   const authService = {
     requireUser: vi.fn().mockResolvedValue({ id: "workos-user" }),

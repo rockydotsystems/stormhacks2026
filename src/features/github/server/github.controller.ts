@@ -55,9 +55,9 @@ export class GitHubController {
 
   async status(request: Request) {
     const user = await this.dependencies.authService.requireUser();
-    const organizationId = z
-      .uuid()
-      .safeParse(new URL(request.url).searchParams.get("organizationId"));
+    const organizationId = organizationIdSchema.safeParse(
+      new URL(request.url).searchParams.get("organizationId"),
+    );
     if (!organizationId.success)
       throw new ApiError(400, "Choose an organization.");
     return json(
