@@ -51,6 +51,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         docsService: docs,
         planningService: agent,
         workspaceContext: context,
+        userDirectory: { displayName: async (id: string) => `Name of ${id}` },
       });
       return { agent, service };
     }
@@ -275,6 +276,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       });
       const actor = await context.resolveActor(userId);
       const { message } = await store.insertUserMessage(id, {
+        authorUserId: userId,
         content: "draft",
         via: "text",
         clientMessageId: null,
@@ -350,6 +352,77 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       const links =
         await client`select count(*)::int as n from planning_change_sources where conversation_id = ${id}`;
       expect(links[0].n).toBe(1);
+    });
+
+    it("lets participants, and only participants, open a conversation", async () => {
+      const { service } = build();
+      const owner = newUser();
+      const teammate = newUser();
+      const stranger = newUser();
+      const { id } = await service.createConversation(owner, {
+        projectName: "Shared",
+      });
+      const actor = await context.resolveActor(owner);
+      await context.resolveActor(teammate);
+      await context.resolveActor(stranger);
+
+      expect(await store.findConversationForUser(teammate, id)).toBeNull();
+      await store.addParticipant(id, {
+        userId: teammate,
+        displayName: "Ben K.",
+      });
+      expect((await store.findConversationForUser(teammate, id))?.id).toBe(id);
+      expect(
+        (await store.findConversation(teammate, actor.organizationId, id))?.id,
+      ).toBe(id);
+      expect(await store.findConversationForUser(stranger, id)).toBeNull();
+      expect(
+        (await store.listConversations(teammate, actor.organizationId)).map(
+          (row) => row.id,
+        ),
+      ).toEqual([id]);
+
+      const names = (await store.listParticipants(id)).map((row) => [
+        row.userId,
+        row.displayName,
+      ]);
+      expect(names).toEqual([
+        [owner, "Name of " + owner],
+        [teammate, "Ben K."],
+      ]);
+    });
+
+    it("keeps a chosen name and fills only the empty placeholder", async () => {
+      const { service } = build();
+      const owner = newUser();
+      const { id } = await service.createConversation(owner, {
+        projectName: "Names",
+      });
+      await store.addParticipant(id, { userId: owner, displayName: "Other" });
+      expect((await store.listParticipants(id))[0].displayName).toBe(
+        "Name of " + owner,
+      );
+      await client`update planning_participants set display_name = '' where conversation_id = ${id}`;
+      await store.addParticipant(id, { userId: owner, displayName: "Filled" });
+      expect((await store.listParticipants(id))[0].displayName).toBe("Filled");
+    });
+
+    it("rejects a user message with no author and an agent message with one", async () => {
+      const { service } = build();
+      const owner = newUser();
+      const { id } = await service.createConversation(owner, {
+        projectName: "Authors",
+      });
+      await expect(
+        client`insert into planning_messages (conversation_id, role, content) values (${id}, 'user', 'x')`,
+      ).rejects.toMatchObject({
+        constraint_name: "planning_messages_author_check",
+      });
+      await expect(
+        client`insert into planning_messages (conversation_id, role, content, author_user_id) values (${id}, 'assistant', 'x', ${owner})`,
+      ).rejects.toMatchObject({
+        constraint_name: "planning_messages_author_check",
+      });
     });
   },
 );

@@ -27,14 +27,27 @@ export type ConversationRow = {
   phase: Phase;
   checklist: ChecklistEntry[];
   skillVersion: string | null;
+  // Standby: people are discussing, so the agent stays quiet. The discussion is every message
+  // after standbySinceMessageId. The streak counts consecutive agreement checks that passed.
+  mode: "active" | "standby";
+  standbySinceMessageId: string | null;
+  agreementStreak: number;
   createdAt: Date;
   updatedAt: Date;
+};
+
+export type ParticipantRow = {
+  userId: string;
+  displayName: string;
+  joinedAt: Date;
 };
 
 export type MessageRow = {
   id: string;
   conversationId: string;
   role: "user" | "assistant";
+  // The human who wrote a user message. Null for the agent.
+  authorUserId: string | null;
   content: string;
   via: "text" | "voice";
   questions: Question[] | null;
@@ -83,6 +96,7 @@ export type CommitTurnResult = {
 
 export type CommitRevertInput = {
   conversationId: string;
+  authorUserId: string;
   requestText: string;
   replyText: string;
   revertedToChangeId: string;
@@ -103,6 +117,8 @@ export interface PlanningSessionStore {
   // text, in the generated phase.
   createConversation(input: {
     userId: string;
+    // The owner joins as the first participant under this name.
+    displayName: string;
     organizationId: string;
     title: string;
     docId?: string | null;
@@ -113,15 +129,22 @@ export interface PlanningSessionStore {
     organizationId: string,
     id: string,
   ): Promise<ConversationRow | null>;
-  // By owner only. The conversation's own organization decides what the user acts as.
-  findOwnedConversation(
+  // By participant (the owner is one). The conversation's own organization decides what the
+  // user acts as.
+  findConversationForUser(
     userId: string,
     id: string,
   ): Promise<ConversationRow | null>;
-  findConversationByDoc(
-    userId: string,
-    docId: string,
-  ): Promise<ConversationRow | null>;
+  // No access check. For joining, after the caller has proven organization membership.
+  findConversationById(id: string): Promise<ConversationRow | null>;
+  // One conversation plans one document, whoever owns it. Callers check the organization.
+  findConversationByDoc(docId: string): Promise<ConversationRow | null>;
+  // Adds the user, or fills in a missing name. An existing name is kept.
+  addParticipant(
+    conversationId: string,
+    participant: { userId: string; displayName: string },
+  ): Promise<ParticipantRow>;
+  listParticipants(conversationId: string): Promise<ParticipantRow[]>;
   listConversations(
     userId: string,
     organizationId: string,
@@ -136,6 +159,7 @@ export interface PlanningSessionStore {
   insertUserMessage(
     conversationId: string,
     input: {
+      authorUserId: string;
       content: string;
       via: "text" | "voice";
       clientMessageId: string | null;

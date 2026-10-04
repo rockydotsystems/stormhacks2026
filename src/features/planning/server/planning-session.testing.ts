@@ -18,6 +18,7 @@ import type {
   ConversationRow,
   DocsPort,
   MessageRow,
+  ParticipantRow,
   PlanningSessionStore,
   CommitRevertInput,
   CommitTurnInput,
@@ -205,6 +206,7 @@ export class InMemoryStore implements PlanningSessionStore {
   conversations = new Map<string, ConversationRow>();
   messages: MessageRow[] = [];
   sources: ChangeSourceRow[] = [];
+  participants = new Map<string, Map<string, ParticipantRow>>();
   private leases = new Set<string>();
   private nextMessageId = 1;
 
@@ -214,7 +216,12 @@ export class InMemoryStore implements PlanningSessionStore {
     conversationId: string,
     fields: Pick<
       MessageRow,
-      "role" | "content" | "via" | "questions" | "clientMessageId"
+      | "role"
+      | "authorUserId"
+      | "content"
+      | "via"
+      | "questions"
+      | "clientMessageId"
     >,
   ): MessageRow {
     const row: MessageRow = {
@@ -236,6 +243,7 @@ export class InMemoryStore implements PlanningSessionStore {
 
   async createConversation(input: {
     userId: string;
+    displayName: string;
     organizationId: string;
     title: string;
     docId?: string | null;
@@ -250,28 +258,69 @@ export class InMemoryStore implements PlanningSessionStore {
       phase: input.phase ?? "grilling",
       checklist: [],
       skillVersion: null,
+      mode: "active",
+      standbySinceMessageId: null,
+      agreementStreak: 0,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
     this.conversations.set(row.id, row);
+    await this.addParticipant(row.id, {
+      userId: input.userId,
+      displayName: input.displayName,
+    });
     return { ...row };
   }
 
-  async findOwnedConversation(userId: string, id: string) {
-    const row = this.conversations.get(id);
-    return row && row.userId === userId ? { ...row } : null;
+  private isParticipant(userId: string, conversationId: string) {
+    return this.participants.get(conversationId)?.has(userId) ?? false;
   }
 
-  async findConversationByDoc(userId: string, docId: string) {
+  async findConversationForUser(userId: string, id: string) {
+    const row = this.conversations.get(id);
+    return row && this.isParticipant(userId, id) ? { ...row } : null;
+  }
+
+  async findConversationById(id: string) {
+    const row = this.conversations.get(id);
+    return row ? { ...row } : null;
+  }
+
+  async findConversationByDoc(docId: string) {
     const row = [...this.conversations.values()].find(
-      (item) => item.userId === userId && item.docId === docId,
+      (item) => item.docId === docId,
     );
     return row ? { ...row } : null;
   }
 
+  async addParticipant(
+    conversationId: string,
+    participant: { userId: string; displayName: string },
+  ) {
+    const members = this.participants.get(conversationId) ?? new Map();
+    this.participants.set(conversationId, members);
+    const existing: ParticipantRow | undefined = members.get(
+      participant.userId,
+    );
+    if (!existing) {
+      members.set(participant.userId, { ...participant, joinedAt: new Date() });
+    } else if (existing.displayName === "") {
+      existing.displayName = participant.displayName;
+    }
+    return { ...members.get(participant.userId)! };
+  }
+
+  async listParticipants(conversationId: string) {
+    return [...(this.participants.get(conversationId)?.values() ?? [])].map(
+      (row) => ({ ...row }),
+    );
+  }
+
   async findConversation(userId: string, organizationId: string, id: string) {
     const row = this.conversations.get(id);
-    return row && row.userId === userId && row.organizationId === organizationId
+    return row &&
+      row.organizationId === organizationId &&
+      this.isParticipant(userId, id)
       ? { ...row }
       : null;
   }
@@ -279,7 +328,9 @@ export class InMemoryStore implements PlanningSessionStore {
   async listConversations(userId: string, organizationId: string) {
     return [...this.conversations.values()]
       .filter(
-        (row) => row.userId === userId && row.organizationId === organizationId,
+        (row) =>
+          row.organizationId === organizationId &&
+          this.isParticipant(userId, row.id),
       )
       .map((row) => ({ ...row }));
   }
@@ -311,6 +362,7 @@ export class InMemoryStore implements PlanningSessionStore {
   async insertUserMessage(
     conversationId: string,
     input: {
+      authorUserId: string;
       content: string;
       via: "text" | "voice";
       clientMessageId: string | null;
@@ -376,6 +428,7 @@ export class InMemoryStore implements PlanningSessionStore {
     if (change) conversation.docId ??= change.docId;
     const assistant = this.newMessage(conversation.id, {
       role: "assistant",
+      authorUserId: null,
       content: input.reply,
       via: "text",
       questions: input.questions,
@@ -398,6 +451,7 @@ export class InMemoryStore implements PlanningSessionStore {
     const conversation = this.conversations.get(input.conversationId)!;
     const userMessage = this.newMessage(conversation.id, {
       role: "user",
+      authorUserId: input.authorUserId,
       content: input.requestText,
       via: "text",
       questions: null,
@@ -407,6 +461,7 @@ export class InMemoryStore implements PlanningSessionStore {
     conversation.updatedAt = new Date();
     const assistant = this.newMessage(conversation.id, {
       role: "assistant",
+      authorUserId: null,
       content: input.replyText,
       via: "text",
       questions: [],

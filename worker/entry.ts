@@ -4,8 +4,8 @@ export * from "vinext/server/fetch-handler";
 
 // vinext rewraps route handler responses and drops the WebSocket on a 101, so upgrades are
 // handled here, before the app. Spike: no auth yet.
-export default {
-  async fetch(request: Request, env: any, ctx: any): Promise<Response> {
+const handler: ExportedHandler<Cloudflare.Env> = {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (
       request.headers.get("Upgrade") === "websocket" &&
@@ -14,6 +14,8 @@ export default {
       const room = env.CHAT_ROOM;
       return room.get(room.idFromName("spike")).fetch(request);
     }
-    return (app as any).fetch(request, env, ctx);
+    return app.fetch(request, env, ctx);
   },
 };
+
+export default handler;

@@ -12,6 +12,7 @@ function message(id: string, role: "user" | "assistant", content: string) {
   return {
     id,
     role,
+    authorUserId: role === "user" ? "user-1" : null,
     content,
     via: "text",
     questions: null,

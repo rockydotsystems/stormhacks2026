@@ -39,6 +39,9 @@ function setup() {
         organizationId: `org-${userId}`,
       }),
     },
+    userDirectory: {
+      displayName: async (userId: string) => `Name of ${userId}`,
+    },
   });
   return { docs, store, agent, service };
 }
@@ -537,5 +540,104 @@ describe("PlanningSessionService: a document that already exists", () => {
     await expect(
       service.getConversation("someone-else", detail.id),
     ).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+describe("PlanningSessionService: collaboration", () => {
+  const ana = "user-ana";
+  const ben = "user-ben";
+  const org = "org-team";
+  const anaActor = { userId: ana, organizationId: org };
+
+  async function shared() {
+    const ctx = setup();
+    const doc = await ctx.docs.create(anaActor, "project", draft("Doc", ""));
+    const input = {
+      projectName: "Doc",
+      documentId: doc.id,
+      organizationId: org,
+    };
+    const first = await ctx.service.createConversation(ana, input);
+    return { ...ctx, doc, input, first };
+  }
+
+  it("names the owner as the first participant", async () => {
+    const { first } = await shared();
+    expect(first.participants).toEqual([
+      { userId: ana, displayName: "Name of user-ana" },
+    ]);
+  });
+
+  it("a teammate who opens the same document joins the same conversation", async () => {
+    const { service, input, first } = await shared();
+    const joined = await service.createConversation(ben, input);
+    expect(joined.id).toBe(first.id);
+    expect(joined.participants.map((p) => p.userId)).toEqual([ana, ben]);
+    const again = await service.createConversation(ben, input);
+    expect(again.participants).toHaveLength(2);
+    expect((await service.getConversation(ben, first.id)).id).toBe(first.id);
+  });
+
+  it("refuses a teammate outside the document's organization", async () => {
+    const { service, input } = await shared();
+    await expect(
+      service.createConversation("user-eve", {
+        ...input,
+        organizationId: "org-elsewhere",
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("someone who never joined cannot read or write the conversation", async () => {
+    const { service, first } = await shared();
+    await expect(
+      service.getConversation("user-eve", first.id),
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(
+      service.sendMessage("user-eve", first.id, { text: "hi" }),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("stores who wrote each message and the agent writes none", async () => {
+    const { service, agent, input, first } = await shared();
+    await service.createConversation(ben, input);
+    agent.enqueue(generate, generate);
+    await service.sendMessage(ana, first.id, {
+      text: "I want incident search.",
+    });
+    await service.sendMessage(ben, first.id, { text: "Keep it in-house." });
+    const detail = await service.getConversation(ben, first.id);
+    expect(detail.messages.map((m) => [m.role, m.authorUserId])).toEqual([
+      ["user", ana],
+      ["assistant", null],
+      ["user", ben],
+      ["assistant", null],
+    ]);
+  });
+
+  it("a revert is written by the person who asked for it", async () => {
+    const { service, agent, input, first } = await shared();
+    await service.createConversation(ben, input);
+    agent.enqueue(generate, edit("Newer."));
+    await service.sendMessage(ana, first.id, { text: "draft" });
+    const sent = await service.sendMessage(ana, first.id, { text: "edit" });
+    const result = await service.revert(ben, first.id, {
+      toChangeId: sent.conversation.changes[0].id,
+    });
+    expect(result.userMessage.authorUserId).toBe(ben);
+  });
+
+  it("fills in the placeholder name of an owner whose conversation predates participants", async () => {
+    const ctx = setup();
+    const row = await ctx.store.createConversation({
+      userId: ana,
+      displayName: "",
+      organizationId: "org-" + ana,
+      title: "Old",
+    });
+    const detail = await ctx.service.getConversation(ana, row.id);
+    expect(detail.participants).toEqual([
+      { userId: ana, displayName: "Name of user-ana" },
+    ]);
   });
 });

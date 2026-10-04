@@ -21,6 +21,10 @@ import { DrizzlePlanningSessionStore } from "@/features/planning/server/planning
 import { PlanningSessionService } from "@/features/planning/server/planning-session.service";
 import type { PlanningSessionStore } from "@/features/planning/server/planning-session.types";
 import { WorkspaceContext } from "@/features/planning/server/workspace-context";
+import {
+  WorkOsUserDirectory,
+  type UserDirectory,
+} from "@/features/planning/server/user-directory";
 import type { SpeechPort } from "@/features/planning/server/speech";
 import { createSpeech } from "@/features/planning/server/speech.factory";
 import { createDatabase, type Database } from "@/server/db";
@@ -36,6 +40,7 @@ export type Dependencies = {
   planningController: PlanningController;
   planningSessionStore: PlanningSessionStore;
   workspaceContext: WorkspaceContext;
+  userDirectory: UserDirectory;
   planningSessionService: PlanningSessionService;
   planningSessionController: PlanningSessionController;
   authService: AuthService;
@@ -68,6 +73,7 @@ container.register({
   planningController: asClass(PlanningController).scoped(),
   planningSessionStore: asClass(DrizzlePlanningSessionStore).scoped(),
   workspaceContext: asClass(WorkspaceContext).scoped(),
+  userDirectory: asClass(WorkOsUserDirectory).scoped(),
   planningSessionService: asClass(PlanningSessionService).scoped(),
   planningSessionController: asClass(PlanningSessionController).scoped(),
   authService: asClass(AuthService).scoped(),

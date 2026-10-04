@@ -78,6 +78,13 @@
       "when": 1791091185571,
       "tag": "0010_doc_metadata_project_soft_delete",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791098712717,
+      "tag": "0011_planning_collaboration",
+      "breakpoints": true
     }
   ]
 }

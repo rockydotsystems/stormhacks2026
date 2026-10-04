@@ -45,6 +45,8 @@ export type ChangeMode = z.infer<typeof changeModeSchema>;
 export const messageSchema = z.object({
   id: z.string(),
   role: z.enum(["user", "assistant"]),
+  // The participant who wrote a user message. Null for the agent.
+  authorUserId: z.string().nullable(),
   // Voice turns keep their transcript text, which is what a change source shows.
   content: z.string(),
   via: z.enum(["text", "voice"]),
@@ -115,8 +117,16 @@ export const conversationListItemSchema = z.object({
 });
 export type ConversationListItem = z.infer<typeof conversationListItemSchema>;
 
+export const participantSchema = z.object({
+  userId: z.string(),
+  displayName: z.string(),
+});
+export type ParticipantDto = z.infer<typeof participantSchema>;
+
 export const conversationDetailSchema = conversationListItemSchema.extend({
   checklist: z.array(checklistEntrySchema),
+  // Everyone in the chat, owner first. Use it to name the author of each message.
+  participants: z.array(participantSchema),
   skillVersion: z.string().nullable(),
   messages: z.array(messageSchema),
   workingDocument: workingDocumentSchema.nullable(),

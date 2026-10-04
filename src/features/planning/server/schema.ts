@@ -4,9 +4,11 @@ import {
   check,
   foreignKey,
   index,
+  integer,
   jsonb,
   pgTable,
   text,
+  primaryKey,
   timestamp,
   unique,
   uuid,
@@ -52,6 +54,17 @@ export const planningConversations = pgTable(
       .default(sql`'[]'::jsonb`)
       .notNull(),
     skillVersion: text("skill_version"),
+    // Standby is the shared discussion state. While it holds, the agent does not answer messages.
+    // standby_since_message_id is the last message before standby began, so the discussion is
+    // every message after it. The streak counts consecutive agreement checks that passed.
+    mode: text("mode")
+      .$type<"active" | "standby">()
+      .default("active")
+      .notNull(),
+    standbySinceMessageId: bigint("standby_since_message_id", {
+      mode: "bigint",
+    }),
+    agreementStreak: integer("agreement_streak").default(0).notNull(),
     // Lease for the turn in flight. An expired lease can be claimed again, so a crash cannot wedge a conversation.
     turnLockedAt: timestamp("turn_locked_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -83,10 +96,41 @@ export const planningConversations = pgTable(
       "planning_conversations_phase_check",
       sql`${table.phase} in ('grilling', 'awaiting-confirmation', 'generated')`,
     ),
+    check(
+      "planning_conversations_mode_check",
+      sql`${table.mode} in ('active', 'standby')`,
+    ),
+    check(
+      "planning_conversations_standby_check",
+      sql`(${table.mode} = 'standby') = (${table.standbySinceMessageId} is not null)`,
+    ),
     index("planning_conversations_user_updated_idx").on(
       table.userId,
       table.updatedAt.desc(),
     ),
+  ],
+);
+
+// Everyone who may read and write a conversation. The owner is always one. Others join by
+// opening the conversation's document, after the docs layer has verified their organization.
+// The display name is a snapshot taken at join time, so messages never wait on the identity provider.
+export const planningParticipants = pgTable(
+  "planning_participants",
+  {
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => planningConversations.id),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    displayName: text("display_name").notNull(),
+    joinedAt: timestamp("joined_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.conversationId, table.userId] }),
+    index("planning_participants_user_idx").on(table.userId),
   ],
 );
 
@@ -100,6 +144,8 @@ export const planningMessages = pgTable(
       .notNull()
       .references(() => planningConversations.id),
     role: text("role").$type<"user" | "assistant">().notNull(),
+    // The human who wrote a user message. Null for the agent.
+    authorUserId: text("author_user_id").references(() => users.id),
     content: text("content").notNull(),
     // Voice turns store the transcript only, never the audio.
     via: text("via").$type<"text" | "voice">().default("text").notNull(),
@@ -115,6 +161,10 @@ export const planningMessages = pgTable(
     check(
       "planning_messages_role_check",
       sql`${table.role} in ('user', 'assistant')`,
+    ),
+    check(
+      "planning_messages_author_check",
+      sql`(${table.role} = 'assistant') = (${table.authorUserId} is null)`,
     ),
     check(
       "planning_messages_via_check",

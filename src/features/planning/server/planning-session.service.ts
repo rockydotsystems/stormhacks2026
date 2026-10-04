@@ -20,6 +20,7 @@ import type {
   MessageRow,
   PlanningSessionStore,
 } from "@/features/planning/server/planning-session.types";
+import type { UserDirectory } from "@/features/planning/server/user-directory";
 import type { ActorResolver } from "@/features/planning/server/workspace-context";
 import {
   createConversationSchema,
@@ -114,6 +115,7 @@ function messageDto(row: MessageRow, producedChangeId: string | null) {
   return {
     id: row.id,
     role: row.role,
+    authorUserId: row.authorUserId,
     content: row.content,
     via: row.via,
     questions: row.questions,
@@ -204,6 +206,7 @@ export class PlanningSessionService {
       docsService: DocsPort;
       planningService: AgentPort;
       workspaceContext: ActorResolver;
+      userDirectory: UserDirectory;
     },
   ) {}
 
@@ -219,7 +222,7 @@ export class PlanningSessionService {
   // The conversation's own organization decides what the user acts as. A conversation bound to
   // a document lives in the document's organization, which may not be the personal one.
   private async load(userId: string, id: string) {
-    const conversation = await this.store.findOwnedConversation(userId, id);
+    const conversation = await this.store.findConversationForUser(userId, id);
     if (!conversation) throw new ApiError(404, "Conversation not found.");
     const actor: OrganizationActor = {
       userId,
@@ -243,6 +246,7 @@ export class PlanningSessionService {
     const actor = await this.dependencies.workspaceContext.resolveActor(userId);
     const conversation = await this.store.createConversation({
       userId,
+      displayName: await this.dependencies.userDirectory.displayName(userId),
       organizationId: actor.organizationId,
       title: parsed.projectName,
     });
@@ -251,7 +255,8 @@ export class PlanningSessionService {
 
   // Plans a document that already exists. The docs layer checks that the user belongs to the
   // organization and that the document is in it. One conversation plans one document, so asking
-  // again returns the same conversation.
+  // again returns the same conversation. A teammate who opens the document of a conversation
+  // someone else started joins that conversation, so everyone shares one chat and one agent.
   private async bindToDocument(
     userId: string,
     input: { title: string; documentId: string; organizationId: string },
@@ -261,14 +266,18 @@ export class PlanningSessionService {
       organizationId: input.organizationId,
     };
     const changes = await this.docs.listChanges(actor, input.documentId);
-    const existing = await this.store.findConversationByDoc(
-      userId,
-      input.documentId,
-    );
-    if (existing) return this.detail(actor, existing);
+    const existing = await this.store.findConversationByDoc(input.documentId);
+    if (existing) {
+      await this.store.addParticipant(existing.id, {
+        userId,
+        displayName: await this.dependencies.userDirectory.displayName(userId),
+      });
+      return this.detail(actor, existing);
+    }
     const hasText = Boolean(changes.at(-1)?.content.trim());
     const conversation = await this.store.createConversation({
       userId,
+      displayName: await this.dependencies.userDirectory.displayName(userId),
       organizationId: input.organizationId,
       title: input.title,
       docId: input.documentId,
@@ -603,6 +612,7 @@ export class PlanningSessionService {
       };
       const committed = await this.store.commitRevert({
         conversationId: conversation.id,
+        authorUserId: userId,
         requestText: `Revert the document to change ${target.number}, "${target.title}".`,
         replyText: `Reverted. The working document now matches change ${target.number}. The newer text is still in the history.`,
         revertedToChangeId: target.id,
@@ -676,6 +686,7 @@ export class PlanningSessionService {
       const { message: userMessage } = await this.store.insertUserMessage(
         conversation.id,
         {
+          authorUserId: userId,
           content: input.text,
           via: input.via,
           clientMessageId: input.clientMessageId ?? null,
@@ -862,13 +873,27 @@ export class PlanningSessionService {
     };
   }
 
+  // The owner of a conversation that predates participants has no name yet. The first time they
+  // open it, the directory fills it in.
+  private async participantsFor(userId: string, conversationId: string) {
+    const rows = await this.store.listParticipants(conversationId);
+    const mine = rows.find((row) => row.userId === userId);
+    if (!mine || mine.displayName !== "") return rows;
+    const filled = await this.store.addParticipant(conversationId, {
+      userId,
+      displayName: await this.dependencies.userDirectory.displayName(userId),
+    });
+    return rows.map((row) => (row.userId === userId ? filled : row));
+  }
+
   private async detail(
     actor: OrganizationActor,
     conversation: ConversationRow,
   ): Promise<ConversationDetail> {
-    const [messages, sources] = await Promise.all([
+    const [messages, sources, participants] = await Promise.all([
       this.store.listMessages(conversation.id),
       this.store.listChangeSources(conversation.id),
+      this.participantsFor(actor.userId, conversation.id),
     ]);
     let changes: DocChange[] = [];
     let versions: DocVersion[] = [];
@@ -903,6 +928,10 @@ export class PlanningSessionService {
       ...listItem(conversation),
       checklist: conversation.checklist,
       skillVersion: conversation.skillVersion,
+      participants: participants.map(({ userId, displayName }) => ({
+        userId,
+        displayName,
+      })),
       messages: messages.map((row) => {
         const changeId = produced.get(row.id);
         return messageDto(
