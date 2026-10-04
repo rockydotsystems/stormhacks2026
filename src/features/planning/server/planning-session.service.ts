@@ -91,7 +91,7 @@ export const STANDBY_ANNOUNCEMENT =
 // the agent's own check for "that's enough" fires, and the discussion it refers to is already in
 // the history, with each message labeled by who wrote it.
 export const APPLY_REQUEST =
-  "That's enough discussion. We agreed. Draft or update the document now so it records what we agreed in the discussion above. Only record what we agreed. Leave anything we did not settle as an open decision.";
+  "That's enough discussion. We agreed. Draft or update the document now so it records what we agreed in the discussion above. If we agreed to switch to something, make the switch and replace what it replaces. That is our direct decision. Only record what we agreed. Leave anything we did not settle as an open decision.";
 
 const FALLBACK_NAME = "Teammate";
 
