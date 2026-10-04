@@ -426,18 +426,22 @@ export function Dashboard({
       setFormError("Choose at least one repository for this project.");
       return;
     }
+    const repositories = projectRepositories.map((slug) =>
+      workspace.data?.repositories.find(
+        (repo) => `${repo.owner}/${repo.name}` === slug,
+      ),
+    );
+    if (repositories.some((repository) => !repository)) {
+      setFormError("Choose connected GitHub repositories. Refresh the page.");
+      return;
+    }
     try {
       const result = await mutation.mutateAsync({
         action: "createProject",
         organizationId: organization,
         name: String(fields.get("name")),
         description: String(fields.get("description")),
-        repositoryIds: projectRepositories.map(
-          (slug) =>
-            workspace.data!.repositories.find(
-              (repo) => `${repo.owner}/${repo.name}` === slug,
-            )!.id,
-        ),
+        repositoryIds: repositories.map((repository) => repository!.id),
       });
       setProjectCreateOpen(false);
       openProject(result.id);
@@ -457,31 +461,6 @@ export function Dashboard({
       await switchOrganization(result.id);
       setOrganizationCreateOpen(false);
       navigate("Overview");
-    } catch (error) {
-      setFormError((error as Error).message);
-    }
-  }
-  async function connectRepository(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setFormError(null);
-    const form = event.currentTarget;
-    const slug = String(new FormData(form).get("repository")).trim();
-    const parts = slug.split("/");
-    if (parts.length !== 2) {
-      setFormError("Enter a repository as owner/name.");
-      return;
-    }
-    try {
-      await mutation.mutateAsync({
-        action: "connectRepository",
-        organizationId: organization,
-        owner: parts[0],
-        name: parts[1],
-      });
-      setProjectRepositories((items) => [
-        ...new Set([...items, slug.toLowerCase()]),
-      ]);
-      form.reset();
     } catch (error) {
       setFormError((error as Error).message);
     }
@@ -1430,36 +1409,6 @@ export function Dashboard({
               project can contain a monorepo, or several related repositories.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={connectRepository} className="px-6 pb-4 space-y-2">
-            <Button
-              variant="outline"
-              render={
-                <Link
-                  href={`/settings/github?organizationId=${organization}`}
-                />
-              }
-            >
-              Connect repositories with GitHub
-            </Button>
-            <Label htmlFor="repository-slug">
-              Add a repository reference manually
-            </Label>
-            <div className="flex gap-2">
-              <Input
-                id="repository-slug"
-                name="repository"
-                placeholder="owner/repository"
-                required
-              />
-              <Button
-                variant="outline"
-                type="submit"
-                disabled={mutation.isPending}
-              >
-                Add
-              </Button>
-            </div>
-          </form>
           <form onSubmit={createProject}>
             <DialogPanel className="space-y-4">
               <div className="space-y-2">
@@ -1488,19 +1437,36 @@ export function Dashboard({
                 <Label htmlFor="dashboard-project-repositories">
                   Repositories
                 </Label>
-                <MultiFilter
-                  label="Project repositories"
-                  values={projectRepositories}
-                  options={
-                    workspace.data?.repositories.map(
+                {workspace.data?.repositories.length ? (
+                  <MultiFilter
+                    label="Project repositories"
+                    values={projectRepositories}
+                    options={workspace.data.repositories.map(
                       (repo) => `${repo.owner}/${repo.name}`,
-                    ) || []
-                  }
-                  onChange={setProjectRepositories}
-                />
+                    )}
+                    onChange={setProjectRepositories}
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No connected repositories. Connect repositories with GitHub
+                    before creating a project.
+                  </p>
+                )}
                 <p className="text-xs text-muted-foreground">
+                  Only connected GitHub repositories can be selected.
                   Repositories can belong to more than one project.
                 </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  render={
+                    <Link
+                      href={`/settings/github?organizationId=${organization}`}
+                    />
+                  }
+                >
+                  Connect repositories with GitHub
+                </Button>
               </div>
             </DialogPanel>
             {formError && (
@@ -1512,7 +1478,10 @@ export function Dashboard({
               <DialogClose render={<Button variant="outline" />}>
                 Cancel
               </DialogClose>
-              <Button type="submit" disabled={mutation.isPending}>
+              <Button
+                type="submit"
+                disabled={mutation.isPending || !projectRepositories.length}
+              >
                 {mutation.isPending ? "Creating…" : "Create project"}
               </Button>
             </DialogFooter>
