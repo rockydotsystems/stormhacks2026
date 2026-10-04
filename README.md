@@ -8,8 +8,8 @@ A feature-first hackathon starter using vinext 1.0.1 (Next.js-compatible App Rou
 
 The pinned flake provides Node 24, pnpm 12.0.0, jj, direnv, nix-direnv,
 nixfmt, Docker/Compose clients, and PostgreSQL 18 tools. It declares x86_64 and
-aarch64 Linux/macOS; only x86_64 Linux has been verified locally. Docker still
-needs a running daemon (Docker Desktop on macOS).
+aarch64 Linux/macOS; only x86_64 Linux has been verified locally. Docker is optional
+for Nix development; Compose commands need a running daemon (Docker Desktop on macOS).
 
 Install Nix with `nix-command` and `flakes` enabled, then enter from the repository root:
 
@@ -21,9 +21,7 @@ nix develop
 pnpm install --frozen-lockfile
 cp .env.example .env.local
 cp .dev.vars.example .dev.vars
-pnpm db:up
-pnpm db:migrate
-pnpm dev
+nix run .#dev
 ```
 
 Enable direnv in your host shell for automatic loading: `eval "$(direnv hook bash)"`
@@ -34,6 +32,16 @@ and `programs.direnv.nix-direnv.enable = true`). Including nix-direnv in the dev
 shell does not itself enable that host integration. Plain direnv's built-in
 `use flake` also works, without nix-direnv caching. No shell hook starts services,
 installs dependencies, or runs migrations.
+
+`nix run .#dev` starts Nix's PostgreSQL 18 without Docker, creates the local
+database, applies committed migrations, and launches the Worker dev server.
+Data persists in `.direnv/postgres`; PostgreSQL keeps running across dev-server
+restarts, like Compose. To stop it, run
+`nix develop -c pg_ctl -D .direnv/postgres -m fast -w stop`.
+Both migrations and the Worker use the local database,
+regardless of hosted credentials in `.env.local`. Stop Compose Postgres first if
+it already occupies port 5432, or set `STORMHACKS_DB_PORT` to another local port.
+`pnpm dev` remains a server-only command and requires a database already running.
 
 The dev shell and `nix run` source commands default `NODE_EXTRA_CA_CERTS` to
 the pinned Nix CA bundle, preserving an existing override. This lets the local
@@ -48,7 +56,7 @@ They forward arguments and preserve command failures. Run `install` first.
 | Command                                          | Purpose                                                   |
 | ------------------------------------------------ | --------------------------------------------------------- |
 | `nix run .#install`                              | Install locked dependencies                               |
-| `nix run .#dev -- --port 3000`                   | Start the development server                              |
+| `nix run .#dev -- --port 3000`                   | Start local Postgres, migrate, and run the dev server     |
 | `nix run .#build`                                | Build the source checkout                                 |
 | `nix run .#test -- src/features/auth`            | Run tests, optionally filtered                            |
 | `nix run .#lint`                                 | Run ESLint                                                |
@@ -192,7 +200,7 @@ Before a live deploy:
 5. Run `pnpm run deploy` (use `run`: `pnpm deploy` is pnpm's workspace deployment
    command). Then verify sign-in, create/list notes, and sign-out at the real URL.
 
-Local Hyperdrive uses the Compose database on `127.0.0.1:5432`, without a remote
+Local Hyperdrive uses PostgreSQL on `127.0.0.1:5432`, without a remote
 connection or Cloudflare credentials. Override it with
 `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` when needed. Neither
 the all-zero ID nor local credentials identify a production resource. No
@@ -221,7 +229,7 @@ unsupported server setting. Node's trusted CA roots are used with `verify-full`;
 do not disable certificate verification. The committed migration creates the
 `notes` table and its owner/time index.
 
-Local Workers still use the Compose connection in `localConnectionString`.
+Local Workers still use the loopback connection in `localConnectionString`.
 Changing `.env.local` changes the migration target, not the Worker binding.
 Never point `TEST_DATABASE_URL` at the hosted hackathon database.
 

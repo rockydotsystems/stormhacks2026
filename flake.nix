@@ -64,7 +64,8 @@
                   pnpm
                   pkgs.docker-client
                   pkgs.nixfmt
-                ];
+                ]
+                ++ pkgs.lib.optionals (name == "dev") [ pkgs.postgresql_18 ];
                 text = ''
                   ${caEnvironment}
                   if [[ ! -f package.json || ! -f flake.nix || ! -d src/features ]]; then
@@ -78,7 +79,7 @@
           };
           commands = {
             install = "pnpm install --frozen-lockfile";
-            dev = "pnpm dev";
+            dev = "bash scripts/dev.sh";
             mcp-dev = "pnpm mcp:dev";
             mcp-build = "pnpm mcp:build";
             build = "pnpm build";

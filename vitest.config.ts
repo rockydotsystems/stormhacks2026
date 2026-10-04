@@ -12,7 +12,11 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts", "apps/mcp/src/**/*.test.ts"],
+    include: [
+      "src/**/*.test.ts",
+      "apps/mcp/src/**/*.test.ts",
+      "scripts/**/*.test.ts",
+    ],
     setupFiles: ["./tests/setup.ts"],
   },
 });
