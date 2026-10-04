@@ -1696,39 +1696,21 @@ a {
 }
 .voice-orb {
   position: relative;
-  width: 128px;
-  height: 128px;
-  overflow: hidden;
-  border-radius: 42% 58% 55% 45% / 48% 42% 58% 52%;
-  background: radial-gradient(
-    circle at 30% 25%,
-    color-mix(in oklch, var(--primary), white 65%),
-    var(--primary) 55%,
-    color-mix(in oklch, var(--primary), black 30%)
-  );
-  box-shadow:
-    inset -8px -12px 24px color-mix(in oklch, var(--primary), black 25%),
-    0 12px 40px color-mix(in oklch, var(--primary), transparent 80%);
-  transform: scale(calc(1 + var(--voice-level) * 0.45));
+  width: 160px;
+  height: 160px;
+  transform: scale(calc(1 + var(--voice-level) * 0.25));
   transition: transform 80ms linear;
-  animation: voice-morph 7s ease-in-out infinite;
 }
-.voice-orb-shine {
-  position: absolute;
-  inset: 12% 25% 55% 12%;
-  border-radius: 50%;
-  background: #ffffff60;
-  filter: blur(12px);
+.voice-orb > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 .voice-orb-halo {
   position: absolute;
   inset: 24px;
   border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    color-mix(in oklch, var(--primary), transparent 84%),
-    transparent 70%
-  );
+  background: color-mix(in oklch, var(--primary), transparent 94%);
   transform: scale(calc(1 + var(--voice-level) * 0.6));
   transition: transform 100ms linear;
 }
@@ -1746,9 +1728,6 @@ a {
   border-top: 3px solid var(--primary);
   border-right-color: transparent;
   animation: voice-think 1.6s linear infinite;
-}
-.voice-orb-stage[data-state="thinking"] .voice-orb {
-  animation-duration: 2s;
 }
 .voice-orb-stage[data-state="paused"],
 .voice-orb-stage[data-state="error"] {
@@ -1777,7 +1756,6 @@ a {
   padding: 12px 16px;
   border: 1px solid var(--border);
   background: var(--background);
-  box-shadow: 0 2px 8px #00000004;
   text-align: left;
 }
 .voice-thought-bubble::before,
@@ -1801,9 +1779,39 @@ a {
   left: calc(50% - 3px);
 }
 .voice-thought-bubble[data-kind="thought"] {
+  padding: 24px 28px;
+  background: transparent;
+  border: 0;
+}
+.voice-thought-cloud {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: color-mix(in oklch, var(--primary), var(--background) 95%);
+  stroke: var(--border);
+  stroke-width: 1;
+  pointer-events: none;
+}
+.voice-thought-bubble[data-kind="thought"]::before,
+.voice-thought-bubble[data-kind="thought"]::after {
   background: color-mix(in oklch, var(--primary), var(--background) 95%);
 }
-.voice-thought-bubble > span {
+.voice-thought-bubble[data-kind="reply"]::before {
+  width: 16px;
+  height: 16px;
+  top: -9px;
+  left: calc(50% - 8px);
+  border-radius: 2px 0 0 0;
+  border-right: 0;
+  border-bottom: 0;
+  transform: rotate(45deg);
+}
+.voice-thought-bubble[data-kind="reply"]::after {
+  display: none;
+}
+.voice-bubble-label {
+  position: relative;
   display: block;
   margin-bottom: 4px;
   color: var(--muted-foreground);
@@ -1811,6 +1819,7 @@ a {
   font-weight: 600;
 }
 .voice-thought-bubble p {
+  position: relative;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
@@ -1827,11 +1836,6 @@ a {
   color: var(--destructive);
   font-size: 13px;
   line-height: 1.6;
-}
-@keyframes voice-morph {
-  50% {
-    border-radius: 58% 42% 43% 57% / 40% 58% 42% 60%;
-  }
 }
 @keyframes voice-listen {
   from {

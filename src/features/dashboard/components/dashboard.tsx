@@ -992,6 +992,7 @@ export function Dashboard({
             <DocumentEditor
               key={`${organization}:${selected.id}`}
               id={selected.id}
+              projectId={selected.project}
               organizationId={organization}
               userId={session.data!.user!.id}
               creator={people[selected.creator]}
