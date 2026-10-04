@@ -2,6 +2,7 @@ import { z } from "zod";
 import { changeIdSchema } from "@/features/docs/contracts";
 import {
   checklistEntrySchema,
+  gateKindSchema,
   phaseSchema,
   questionSchema,
 } from "@/features/planning/contracts";
@@ -132,6 +133,11 @@ export const conversationDetailSchema = conversationListItemSchema.extend({
   // Everyone in the chat, owner first. Use it to name the author of each message.
   participants: z.array(participantSchema),
   skillVersion: z.string().nullable(),
+  // A change the agent is holding until the people acknowledge what was said before and give a
+  // reason. Null when nothing is held.
+  pendingGate: z
+    .object({ kind: gateKindSchema, summary: z.string() })
+    .nullable(),
   messages: z.array(messageSchema),
   workingDocument: workingDocumentSchema.nullable(),
   publishedDocument: versionDetailSchema.nullable(),

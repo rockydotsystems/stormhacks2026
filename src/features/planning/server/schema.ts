@@ -14,6 +14,7 @@ import {
 } from "drizzle-orm/pg-core";
 import type {
   ChecklistEntry,
+  PendingGate,
   Phase,
   Question,
 } from "@/features/planning/contracts";
@@ -53,6 +54,9 @@ export const planningConversations = pgTable(
       .default(sql`'[]'::jsonb`)
       .notNull(),
     skillVersion: text("skill_version"),
+    // A proposal the agent is holding until the people acknowledge earlier discussion and give
+    // a reason. Null when nothing is held.
+    pendingGate: jsonb("pending_gate").$type<PendingGate>(),
     // Standby is the shared discussion state. While it holds, the agent does not answer messages.
     // standby_since_message_id is the standby announcement, so the discussion is every message
     // after it.

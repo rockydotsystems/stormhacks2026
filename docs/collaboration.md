@@ -5,7 +5,7 @@
 ## What it does
 
 - **One chat, many people.** Organization members who open a document's chat join the same conversation and talk to the same agent. Everyone sees every message.
-- **Standby.** While two or more people have the chat open, the agent goes quiet. It says so once, in fixed words, then leaves the document alone while people discuss tradeoffs.
+- **Standby.** While two or more people have the chat open, the agent goes quiet and leaves the document alone while people discuss tradeoffs. It says so once per conversation, in fixed words, the first time. Later joins and leaves write no notice. The chat header shows the mode instead.
 - **Agreement.** After each message in standby, Jev checks whether the people agreed. When they did, the agent updates the document from the discussion and standby ends. Anyone can also press **Apply now**.
 - **Display.** Other people appear on the left, boxed and tinted, under their name. The agent keeps its plain text style. Fixed notices (standby on and off) are dashed boxes.
 

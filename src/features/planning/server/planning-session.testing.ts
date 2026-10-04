@@ -265,6 +265,7 @@ export class InMemoryStore implements PlanningSessionStore {
       phase: input.phase ?? "grilling",
       checklist: [],
       skillVersion: null,
+      pendingGate: null,
       mode: "active",
       standbySinceMessageId: null,
       createdAt: new Date(),
@@ -344,35 +345,36 @@ export class InMemoryStore implements PlanningSessionStore {
   async enterStandby(conversationId: string, announcement: string) {
     const conversation = this.conversations.get(conversationId);
     if (!conversation || conversation.mode === "standby") return null;
-    const message = this.newMessage(conversationId, {
-      role: "assistant",
-      authorUserId: null,
-      kind: "standby-start",
-      content: announcement,
-      via: "text",
-      questions: [],
-      clientMessageId: null,
-    });
+    const announced = this.messages.some(
+      (row) =>
+        row.conversationId === conversationId && row.kind === "standby-start",
+    );
+    const latest = this.messages
+      .filter((row) => row.conversationId === conversationId)
+      .at(-1);
+    const message =
+      announced && latest
+        ? null
+        : this.newMessage(conversationId, {
+            role: "assistant",
+            authorUserId: null,
+            kind: "standby-start",
+            content: announcement,
+            via: "text",
+            questions: [],
+            clientMessageId: null,
+          });
     conversation.mode = "standby";
-    conversation.standbySinceMessageId = message.id;
+    conversation.standbySinceMessageId = (message ?? latest!).id;
     return { conversation: { ...conversation }, message };
   }
 
-  async exitStandby(conversationId: string, notice: string) {
+  async exitStandby(conversationId: string) {
     const conversation = this.conversations.get(conversationId);
     if (!conversation || conversation.mode !== "standby") return null;
-    const message = this.newMessage(conversationId, {
-      role: "assistant",
-      authorUserId: null,
-      kind: "standby-end",
-      content: notice,
-      via: "text",
-      questions: [],
-      clientMessageId: null,
-    });
     conversation.mode = "active";
     conversation.standbySinceMessageId = null;
-    return { conversation: { ...conversation }, message };
+    return { conversation: { ...conversation } };
   }
 
   async listMessagesAfter(conversationId: string, messageId: string) {
@@ -473,6 +475,7 @@ export class InMemoryStore implements PlanningSessionStore {
     conversation.phase = input.phase;
     conversation.checklist = input.checklist;
     conversation.skillVersion = input.skillVersion;
+    conversation.pendingGate = input.pendingGate;
     conversation.updatedAt = new Date();
     if (input.endStandby) {
       conversation.mode = "active";

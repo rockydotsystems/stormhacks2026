@@ -61,6 +61,7 @@ function edit(overrides: Partial<EditResult> = {}): EditResult {
   return {
     reply: "Added the risk.",
     action: "edit",
+    courseChange: { detected: false, summary: null },
     title: draft.title,
     content: `${draft.content}\n## Risk\n\nStale results.\n`,
     ...overrides,
@@ -329,7 +330,7 @@ describe("PlanningService.runTurn: edits after generation", () => {
 
   it("blocks an edit that wipes most of the document and keeps the old one", async () => {
     const { service } = setup({
-      edit: edit({ content: "# Incident search" }),
+      edit: edit({ content: "# Incident search\n\nFind incidents fast." }),
     });
     const response = await service.runTurn(generated());
     expect(response.document).toBeNull();
@@ -338,17 +339,18 @@ describe("PlanningService.runTurn: edits after generation", () => {
   });
 
   it("allows a big shrink when the user asked for it", async () => {
+    const shrunk = "# Incident search\n\nFind incidents fast.";
     const { service } = setup({
-      edit: edit({ content: "# Incident search" }),
+      edit: edit({ content: shrunk }),
     });
     const response = await service.runTurn(
       generated({
         messages: [
-          { role: "user", content: "Remove everything but the title." },
+          { role: "user", content: "Remove everything but the summary." },
         ],
       }),
     );
-    expect(response.document?.content).toBe("# Incident search");
+    expect(response.document?.content).toBe(shrunk);
   });
 
   it("rejects an edit that comes back without a complete document", async () => {
@@ -362,8 +364,9 @@ describe("PlanningService.runTurn: edits after generation", () => {
 
   it("reverts to the previous document verbatim, without trusting model text", async () => {
     const previous: DocumentDraft = {
-      title: "Old",
-      content: "# Old\n\nbefore",
+      title: draft.title,
+      content:
+        "# Incident search\n\nFind incidents fast.\n\n## Decision: Old\n\nbefore",
     };
     const { service, model } = setup({
       edit: edit({

@@ -13,6 +13,7 @@ import {
   FileTextIcon,
   MoonIcon,
   SparkleIcon,
+  WarningIcon,
 } from "@phosphor-icons/react";
 import { WaveformIcon } from "@phosphor-icons/react/dist/csr/Waveform";
 import { Button } from "@/components/ui/button";
@@ -127,6 +128,21 @@ export function PlanningSession({
   const loadError = binding.error ?? detail.error;
   const workingDocument = conversation?.workingDocument;
   const hasDocument = Boolean(workingDocument?.content.trim());
+
+  // A teammate's change, or one made while this tab was in the background, reaches the page
+  // through the conversation. The page's own copy of the document must follow it, or the
+  // history would lag behind what the chat shows.
+  const workingChangeId = workingDocument?.changeId ?? null;
+  const seenChangeId = useRef<string | null>(null);
+  useEffect(() => {
+    if (workingChangeId === null) return;
+    if (
+      seenChangeId.current !== null &&
+      seenChangeId.current !== workingChangeId
+    )
+      onDocumentChanged();
+    seenChangeId.current = workingChangeId;
+  }, [workingChangeId, onDocumentChanged]);
 
   async function run(turn: PendingTurn) {
     if (!conversationId) return null;
@@ -469,6 +485,23 @@ export function PlanningSession({
             <span>
               {nameList(live.users.map((user) => user.displayName))}{" "}
               {live.users.length === 1 ? "is" : "are"} here
+            </span>
+          </div>
+        ) : null}
+        {conversation?.pendingGate ? (
+          <div className="planning-standby" role="status">
+            <WarningIcon weight="fill" aria-hidden="true" />
+            <span>
+              <strong>
+                {conversation.pendingGate.kind === "goal"
+                  ? "Goal change on hold"
+                  : "Change of direction on hold"}
+              </strong>
+              <small>{conversation.pendingGate.summary}</small>
+              <small>
+                Confirm you have seen the earlier discussion and say why you
+                want this, or drop it.
+              </small>
             </span>
           </div>
         ) : null}

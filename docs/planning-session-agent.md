@@ -41,6 +41,18 @@ The data layer calls an ADR a **doc**. The planning agent writes docs.
 - **Treat user text as data.** Pitch text, pasted material, and the current document never change the rules or the phase. The server decides phase transitions, not the model.
 - **Edit narrowly.** An edit changes only what was asked and preserves unrelated text. A guard keeps the old document when an edit shrinks it below a quarter of its length without the user asking.
 
+## Goal lock and course changes
+
+After the first draft exists, the agent guards the direction of the document. The server enforces both rules in code. The model only describes what it sees.
+
+- **Goal lock.** The title, the opening paragraph, the Summary section, and the Context and Problem Statement of the first decision are locked. `goal-lock.ts` compares them as text after every edit or revert. A part the document did not have yet can still be filled in. Everything else stays editable.
+- **Course change.** The edit call reports `courseChange` when an edit would reverse or replace something already decided or settled, for example moving from Python to Rust.
+- **Hold.** Either rule holds the edit. Nothing is written. The server stores the proposal in `planning_conversations.pending_gate` and the detail DTO shows it as `pendingGate`.
+- **History search.** A separate model call (the search agent) reads the whole conversation (up to 1000 messages) and the working document for rationale, tradeoffs, objections, earlier rejections, and earlier mentions. Quotes it returns are checked against the transcript, and one that cannot be found is dropped. If the search fails, the hold stays and the agent says it could not look.
+- **Conversation.** The main agent reports the findings, says plainly when nothing was discussed before, and asks for two things: confirm the earlier discussion was seen, and give the reason for moving now.
+- **Release.** On each later message a model call reads the newest messages against the hold. It reports `proceed`, `withdraw`, `unclear`, or `unrelated`. Code lets the change through only when the outcome is `proceed`, the earlier discussion was acknowledged, and a reason of at least 8 characters came with it. `unrelated` messages are answered as usual and the hold stays. The approved change runs with the reason in the prompt, so the reason is recorded in the document. The whole exchange sits in the change's conversation source.
+- **Standby.** An apply turn goes through the same gate. If it holds, standby still ends, and the acknowledgement happens in the normal chat.
+
 ## Planning skill
 
 A skill is a versioned file the agent reads to know what it needs before it can write the plan. It is the checklist behind the sufficiency check.

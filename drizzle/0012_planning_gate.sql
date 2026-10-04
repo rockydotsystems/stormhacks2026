@@ -1,0 +1,1 @@
+ALTER TABLE "planning_conversations" ADD COLUMN "pending_gate" jsonb;

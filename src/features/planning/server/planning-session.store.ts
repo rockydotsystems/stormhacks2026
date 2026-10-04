@@ -55,6 +55,7 @@ function toConversation(
     phase: row.phase,
     checklist: row.checklist as ChecklistEntry[],
     skillVersion: row.skillVersion,
+    pendingGate: row.pendingGate ?? null,
     mode: row.mode,
     standbySinceMessageId: row.standbySinceMessageId?.toString() ?? null,
     createdAt: row.createdAt,
@@ -230,40 +231,62 @@ export class DrizzlePlanningSessionStore implements PlanningSessionStore {
 
   async enterStandby(conversationId: string, announcement: string) {
     return this.dependencies.db.transaction(async (tx) => {
-      // Locks the row, so two callers cannot both announce.
+      // Locks the row, so two callers cannot both switch.
       const [current] = await tx
         .select({ mode: planningConversations.mode })
         .from(planningConversations)
         .where(eq(planningConversations.id, conversationId))
         .for("update");
       if (!current || current.mode === "standby") return null;
-      const [message] = await tx
-        .insert(planningMessages)
-        .values({
-          conversationId,
-          role: "assistant",
-          kind: "standby-start",
-          content: announcement,
-          questions: [],
-        })
-        .returning();
+      // The notice is written once per conversation. After that, joining and leaving is silent
+      // and standby starts from the newest message.
+      const [announced] = await tx
+        .select({ id: planningMessages.id })
+        .from(planningMessages)
+        .where(
+          and(
+            eq(planningMessages.conversationId, conversationId),
+            eq(planningMessages.kind, "standby-start"),
+          ),
+        )
+        .limit(1);
+      const [latest] = await tx
+        .select({ id: planningMessages.id })
+        .from(planningMessages)
+        .where(eq(planningMessages.conversationId, conversationId))
+        .orderBy(desc(planningMessages.id))
+        .limit(1);
+      let message: typeof planningMessages.$inferSelect | null = null;
+      if (!announced || !latest) {
+        [message] = await tx
+          .insert(planningMessages)
+          .values({
+            conversationId,
+            role: "assistant",
+            kind: "standby-start",
+            content: announcement,
+            questions: [],
+          })
+          .returning();
+      }
+      const since = message?.id ?? latest.id;
       const [conversation] = await tx
         .update(planningConversations)
         .set({
           mode: "standby",
-          standbySinceMessageId: message.id,
+          standbySinceMessageId: since,
           updatedAt: sql`now()`,
         })
         .where(eq(planningConversations.id, conversationId))
         .returning();
       return {
         conversation: toConversation(conversation),
-        message: toMessage(message),
+        message: message ? toMessage(message) : null,
       };
     });
   }
 
-  async exitStandby(conversationId: string, notice: string) {
+  async exitStandby(conversationId: string) {
     return this.dependencies.db.transaction(async (tx) => {
       const [current] = await tx
         .select({ mode: planningConversations.mode })
@@ -271,16 +294,6 @@ export class DrizzlePlanningSessionStore implements PlanningSessionStore {
         .where(eq(planningConversations.id, conversationId))
         .for("update");
       if (!current || current.mode !== "standby") return null;
-      const [message] = await tx
-        .insert(planningMessages)
-        .values({
-          conversationId,
-          role: "assistant",
-          kind: "standby-end",
-          content: notice,
-          questions: [],
-        })
-        .returning();
       const [conversation] = await tx
         .update(planningConversations)
         .set({
@@ -290,10 +303,7 @@ export class DrizzlePlanningSessionStore implements PlanningSessionStore {
         })
         .where(eq(planningConversations.id, conversationId))
         .returning();
-      return {
-        conversation: toConversation(conversation),
-        message: toMessage(message),
-      };
+      return { conversation: toConversation(conversation) };
     });
   }
 
@@ -456,6 +466,7 @@ export class DrizzlePlanningSessionStore implements PlanningSessionStore {
           phase: input.phase,
           checklist: input.checklist,
           skillVersion: input.skillVersion,
+          pendingGate: input.pendingGate,
           updatedAt: sql`now()`,
           ...(input.endStandby
             ? { mode: "active" as const, standbySinceMessageId: null }

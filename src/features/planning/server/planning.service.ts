@@ -3,12 +3,17 @@ import {
   CORE_CHECKLIST_IDS,
   documentDraftSchema,
   editResultSchema,
+  gateResolutionSchema,
+  historyFindingsSchema,
   normalizeQuestions,
   turnAnalysisSchema,
   type AgentTurnInput,
   type AgentTurnResult,
   type ChecklistEntry,
   type DocumentDraft,
+  type GateKind,
+  type HistoryFindings,
+  type PendingGate,
   type Phase,
   type TurnAnalysis,
 } from "@/features/planning/contracts";
@@ -18,7 +23,13 @@ import {
   buildEditPrompt,
   buildGenerationPrompt,
   editMessages,
+  gateRaisePrompt,
+  gateResolutionPrompt,
+  historySearchMessages,
+  historySearchPrompt,
+  transcriptOf,
 } from "@/features/planning/server/prompt";
+import { changedGoalParts } from "@/features/planning/server/goal-lock";
 import {
   ALLOWED_IDS,
   EXTRA_IDS,
@@ -40,6 +51,20 @@ const MUST_BE_COVERED = MUST_COVER_IDS;
 
 // How hard the model thinks while interviewing. Generation and edits stay on the default.
 const ANALYSIS_REASONING = "medium" as const;
+
+// Words the agent uses when the model cannot supply the text for a held proposal.
+const HELD_REPLY =
+  "I have not changed the document. This change goes against something already settled, so before I make it, please confirm you have seen the earlier discussion and tell me why we should move this way now.";
+const NEEDS_ACKNOWLEDGEMENT =
+  "I am still holding the change. Please confirm you have seen the earlier discussion about this, then I will make it.";
+const NEEDS_REASON =
+  "I am still holding the change. Please tell me why we should move this way now, then I will make it.";
+const WITHDRAWN_REPLY = "Understood. I left the document as it is.";
+const MIN_REASON_LENGTH = 8;
+
+// The history search reads at most this much of the conversation, keeping the newest part.
+const SEARCH_CHARS = 200_000;
+const MAX_FINDINGS = 8;
 
 // A rewrite below this share of the old length needs the user to have asked for it.
 const SHRINK_RATIO = 0.25;
@@ -184,17 +209,7 @@ export class PlanningService {
     }
     const previous = input.previousDocument ?? null;
     const instruction = input.messages[input.messages.length - 1].content;
-    const edit = await this.dependencies.model.generateObject({
-      system: buildEditPrompt({
-        checklist: input.checklist,
-        projectName: input.projectName,
-        today: input.today,
-        hasPrevious: previous !== null,
-      }),
-      messages: editMessages(input.messages, current),
-      schema: editResultSchema,
-      schemaName: "EditResult",
-    });
+    const held = input.gate ?? null;
     const base = {
       questions: [],
       checklist: input.checklist,
@@ -203,15 +218,64 @@ export class PlanningService {
       mode: "edited" as const,
     };
 
+    // A held proposal comes first. Only the code below can release it.
+    let cleared: { gate: PendingGate; reason: string } | null = null;
+    if (held) {
+      const verdict = await this.resolveGate(input, held);
+      if (verdict.kind === "held") {
+        return { ...base, reply: verdict.reply, document: null, gate: held };
+      }
+      if (verdict.kind === "withdrawn") {
+        return { ...base, reply: verdict.reply, document: null, gate: null };
+      }
+      if (verdict.kind === "proceed") {
+        cleared = { gate: held, reason: verdict.reason };
+      }
+    }
+    // The gate that stays after this turn. An unrelated message leaves it where it was.
+    const carried = held && !cleared ? held : null;
+
+    const edit = await this.dependencies.model.generateObject({
+      system: buildEditPrompt({
+        checklist: input.checklist,
+        projectName: input.projectName,
+        today: input.today,
+        hasPrevious: previous !== null,
+        cleared,
+      }),
+      messages: editMessages(input.messages, current),
+      schema: editResultSchema,
+      schemaName: "EditResult",
+    });
+    // What the user is asking for. After a cleared hold, that is the held proposal.
+    const proposal = cleared ? cleared.gate.proposal : instruction;
+    const hold = (kind: GateKind, summary: string) =>
+      this.raiseGate(input, current, { kind, proposal, summary });
+
     if (edit.action === "none") {
-      return { ...base, reply: edit.reply, document: null };
+      return { ...base, reply: edit.reply, document: null, gate: carried };
     }
     if (edit.action === "revert") {
       // The server restores the stored text. The model never rewrites old content.
       if (!previous) {
-        return { ...base, reply: NOTHING_TO_REVERT, document: null };
+        return {
+          ...base,
+          reply: NOTHING_TO_REVERT,
+          document: null,
+          gate: carried,
+        };
       }
-      return { ...base, reply: edit.reply, document: previous };
+      const moved = changedGoalParts(current, previous);
+      if (moved.length > 0 && cleared?.gate.kind !== "goal") {
+        return {
+          ...base,
+          ...(await hold(
+            "goal",
+            `Reverting would change ${moved.join(", ")}.`,
+          )),
+        };
+      }
+      return { ...base, reply: edit.reply, document: previous, gate: null };
     }
 
     const next = documentDraftSchema.safeParse({
@@ -225,15 +289,147 @@ export class PlanningService {
       );
     }
     if (isDrasticShrink(current, next.data, instruction)) {
-      return { ...base, reply: SHRINK_BLOCKED, document: null };
+      return { ...base, reply: SHRINK_BLOCKED, document: null, gate: carried };
     }
     if (
       next.data.title === current.title &&
       next.data.content === current.content
     ) {
-      return { ...base, reply: edit.reply, document: null };
+      return { ...base, reply: edit.reply, document: null, gate: carried };
     }
-    return { ...base, reply: edit.reply, document: next.data };
+    if (edit.courseChange.detected && !cleared) {
+      return {
+        ...base,
+        ...(await hold(
+          "course",
+          edit.courseChange.summary?.trim() ||
+            "This changes the course of a decision.",
+        )),
+      };
+    }
+    const moved = changedGoalParts(current, next.data);
+    if (moved.length > 0 && cleared?.gate.kind !== "goal") {
+      return {
+        ...base,
+        ...(await hold("goal", `This would change ${moved.join(", ")}.`)),
+      };
+    }
+    return { ...base, reply: edit.reply, document: next.data, gate: null };
+  }
+
+  /**
+   * Holds a proposal. A search agent reads the whole conversation for earlier discussion of
+   * it, then the main agent reports what it found and asks the team to acknowledge it and give
+   * a reason. A failed search never lets the change through. It only means the report says so.
+   */
+  private async raiseGate(
+    input: AgentTurnInput,
+    current: DocumentDraft,
+    gate: PendingGate,
+  ): Promise<{ reply: string; document: null; gate: PendingGate }> {
+    const findings = await this.searchHistory(input, current, gate.proposal);
+    let reply = HELD_REPLY;
+    try {
+      const text = await this.dependencies.model.generateText({
+        system: gateRaisePrompt({
+          kind: gate.kind,
+          summary: gate.summary,
+          findings,
+          projectName: input.projectName,
+        }),
+        messages: [{ role: "user", content: gate.proposal }],
+      });
+      if (text.trim()) reply = text.trim();
+    } catch (error) {
+      if (!(error instanceof ModelError)) throw error;
+    }
+    return { reply, document: null, gate };
+  }
+
+  /** The search agent. Null when it fails, so the caller can say it could not look. */
+  private async searchHistory(
+    input: AgentTurnInput,
+    current: DocumentDraft,
+    proposal: string,
+  ): Promise<HistoryFindings | null> {
+    try {
+      const history = input.loadHistory
+        ? await input.loadHistory()
+        : input.messages;
+      const transcript = transcriptOf(history).slice(-SEARCH_CHARS);
+      const found = await this.dependencies.model.generateObject({
+        system: historySearchPrompt(),
+        messages: historySearchMessages(transcript, proposal, current),
+        schema: historyFindingsSchema,
+        schemaName: "HistoryFindings",
+      });
+      const squash = (text: string) => text.replace(/\s+/g, " ").trim();
+      const haystack = squash(transcript + " " + current.content);
+      const findings = found.findings.slice(0, MAX_FINDINGS).map((finding) => ({
+        ...finding,
+        // A quote the model could not copy from the conversation is dropped.
+        quote:
+          finding.quote && haystack.includes(squash(finding.quote))
+            ? finding.quote
+            : null,
+      }));
+      return {
+        discussedBefore: found.discussedBefore && findings.length > 0,
+        summary: found.summary,
+        findings,
+      };
+    } catch (error) {
+      if (!(error instanceof ModelError)) throw error;
+      console.error("History search failed", error);
+      return null;
+    }
+  }
+
+  /**
+   * Reads the newest messages against a held proposal. The model describes them and this code
+   * decides. A change goes ahead only when the model saw both an acknowledgement of the earlier
+   * discussion and a reason.
+   */
+  private async resolveGate(
+    input: AgentTurnInput,
+    gate: PendingGate,
+  ): Promise<
+    | { kind: "held"; reply: string }
+    | { kind: "withdrawn"; reply: string }
+    | { kind: "proceed"; reason: string }
+    | { kind: "unrelated" }
+  > {
+    const recent = input.messages.slice(-10);
+    const start = recent.findIndex((message) => message.role === "user");
+    const resolution = await this.dependencies.model.generateObject({
+      system: gateResolutionPrompt(gate),
+      messages: start === -1 ? input.messages.slice(-1) : recent.slice(start),
+      schema: gateResolutionSchema,
+      schemaName: "GateResolution",
+    });
+    const reply = resolution.reply.trim();
+    if (resolution.outcome === "unrelated") return { kind: "unrelated" };
+    if (resolution.outcome === "withdraw") {
+      return { kind: "withdrawn", reply: reply || WITHDRAWN_REPLY };
+    }
+    const reason = resolution.reason?.trim() ?? "";
+    const reasoned = reason.length >= MIN_REASON_LENGTH;
+    if (
+      resolution.outcome === "proceed" &&
+      resolution.acknowledgedPriorDiscussion &&
+      reasoned
+    ) {
+      return { kind: "proceed", reason };
+    }
+    if (reply && resolution.outcome === "unclear") {
+      return { kind: "held", reply };
+    }
+    return {
+      kind: "held",
+      reply: resolution.acknowledgedPriorDiscussion
+        ? NEEDS_REASON
+        : NEEDS_ACKNOWLEDGEMENT,
+    };
   }
 }
 

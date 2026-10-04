@@ -345,7 +345,11 @@ export function DocumentWorkspace({
       </div>
       <DocumentHistoryDialog
         open={historyOpen}
-        onOpenChange={setHistoryOpen}
+        onOpenChange={(open) => {
+          // The page's copy can be older than the server's, so look again as the history opens.
+          if (open) onDocumentChanged();
+          setHistoryOpen(open);
+        }}
         data={data}
         documentId={documentId}
         organizationId={organizationId}

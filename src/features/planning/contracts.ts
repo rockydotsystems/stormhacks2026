@@ -113,11 +113,73 @@ export type DocumentDraft = z.infer<typeof documentDraftSchema>;
 export const editResultSchema = z.object({
   reply: z.string(),
   action: z.enum(["edit", "revert", "none"]),
+  // Whether an edit changes the course of the design: it reverses or replaces a decision,
+  // option, technology or approach that was decided or discussed earlier. The server does not
+  // apply such an edit until the people have acknowledged the earlier discussion.
+  courseChange: z.object({
+    detected: z.boolean(),
+    // One sentence naming what would change. Null when nothing changes course.
+    summary: z.string().nullable(),
+  }),
   // The complete new document for an edit. Null for revert and none.
   title: z.string().nullable(),
   content: z.string().nullable(),
 });
 export type EditResult = z.infer<typeof editResultSchema>;
+
+// A held proposal. Either kind stops the edit until the user acknowledges what was said before
+// and gives a reason. "course" is a change of direction. "goal" is a change to the locked
+// goal of the document (title, summary, or the founding problem statement).
+export const gateKindSchema = z.enum(["course", "goal"]);
+export type GateKind = z.infer<typeof gateKindSchema>;
+
+export const pendingGateSchema = z.object({
+  kind: gateKindSchema,
+  // The user's request, as written. The edit runs from it once the gate clears.
+  proposal: z.string().max(8000),
+  // What would change, in one sentence.
+  summary: z.string().max(1000),
+});
+export type PendingGate = z.infer<typeof pendingGateSchema>;
+
+// What the history search reports back to the main agent. Quotes are checked against the
+// transcript by the server, and one that cannot be found is dropped.
+export const historyFindingSchema = z.object({
+  kind: z.enum([
+    "rationale", // why the current path was chosen
+    "tradeoff", // a tradeoff that was weighed
+    "objection", // an argument against the proposed change
+    "rejected", // the proposed change was already discussed and turned down
+    "earlier-mention", // the idea came up before, with no outcome
+  ]),
+  detail: z.string(),
+  author: z.string().nullable(),
+  quote: z.string().nullable(),
+});
+export type HistoryFinding = z.infer<typeof historyFindingSchema>;
+
+export const historyFindingsSchema = z.object({
+  discussedBefore: z.boolean(),
+  summary: z.string(),
+  findings: z.array(historyFindingSchema),
+});
+export type HistoryFindings = z.infer<typeof historyFindingsSchema>;
+
+// The user's answer to a held proposal, judged by the model. Code decides what it allows.
+export const gateResolutionSchema = z.object({
+  outcome: z.enum([
+    "proceed", // they want the change anyway
+    "withdraw", // they drop the proposal
+    "unclear", // they answered, but not enough
+    "unrelated", // the message is about something else
+  ]),
+  acknowledgedPriorDiscussion: z.boolean(),
+  // Why they want the change, in their words. Null when they gave none.
+  reason: z.string().nullable(),
+  // What the agent says back when the proposal stays held or is withdrawn.
+  reply: z.string(),
+});
+export type GateResolution = z.infer<typeof gateResolutionSchema>;
 
 // Server-internal agent contract. Persistence and HTTP layers code against these two types.
 export type AgentTurnInput = {
@@ -131,6 +193,11 @@ export type AgentTurnInput = {
   previousDocument?: DocumentDraft | null;
   // Server-supplied ISO date for the MADR Date line. The agent never invents dates.
   today?: string;
+  // The proposal this conversation is holding, if any.
+  gate?: PendingGate | null;
+  // Every message of the conversation, for the history search. Called only when a proposal
+  // is held, because the input messages are capped.
+  loadHistory?: () => Promise<PlanningMessage[]>;
 };
 
 export type AgentTurnResult = {
@@ -146,6 +213,8 @@ export type AgentTurnResult = {
   // generated: the first draft was written this turn. edited: a turn after generation
   // (document is null when nothing changed).
   mode: "grilling" | "confirming" | "generated" | "edited";
+  // The held proposal after this turn. Null or absent when nothing is held.
+  gate?: PendingGate | null;
 };
 
 // HTTP request for a turn. The client holds the session state until persistence lands.

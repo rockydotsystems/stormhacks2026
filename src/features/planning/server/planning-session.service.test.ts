@@ -4,7 +4,6 @@ import {
   APPLY_REQUEST,
   PlanningSessionService,
   STANDBY_ANNOUNCEMENT,
-  STANDBY_ENDED,
 } from "@/features/planning/server/planning-session.service";
 import {
   FakeDocs,
@@ -109,6 +108,38 @@ describe("PlanningSessionService", () => {
     expect(last.phase).toBe("generated");
     expect(last.messages.at(-1)).toEqual({ role: "user", content: "thanks" });
     expect(last.today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("stores a held proposal, hands it back on the next turn, and clears it", async () => {
+    const gate = {
+      kind: "course" as const,
+      proposal: "Use Rust.",
+      summary: "Switch to Rust.",
+    };
+    ctx.agent.enqueue(
+      {},
+      generate,
+      { reply: "On hold.", phase: "generated", mode: "edited", gate },
+      { reply: "Done.", phase: "generated", mode: "edited", gate: null },
+    );
+    await ctx.service.sendMessage(user, id, { text: "pitch" });
+    await ctx.service.sendMessage(user, id, { text: "that's enough" });
+    const held = await ctx.service.sendMessage(user, id, { text: "Use Rust." });
+    expect(held.conversation.pendingGate).toEqual({
+      kind: "course",
+      summary: "Switch to Rust.",
+    });
+    expect(held.conversation.changes).toHaveLength(1);
+    const cleared = await ctx.service.sendMessage(user, id, {
+      text: "I saw it. Speed.",
+    });
+    expect(ctx.agent.inputs.at(-1)!.gate).toEqual(gate);
+    const history = await ctx.agent.inputs.at(-1)!.loadHistory!();
+    expect(history).toContainEqual({
+      role: "user",
+      content: "I saw it. Speed.",
+    });
+    expect(cleared.conversation.pendingGate).toBeNull();
   });
 
   it("generation creates change 1 and a source covering the whole conversation so far", async () => {
@@ -863,7 +894,7 @@ describe("PlanningSessionService: standby", () => {
     });
   });
 
-  it("listens again when people leave, with one notice however many ask", async () => {
+  it("listens again when people leave, and says nothing about it", async () => {
     const { service, realtime, id } = await team();
     await service.syncStandby(ana, id);
     realtime.setPresent(id, ana);
@@ -874,8 +905,19 @@ describe("PlanningSessionService: standby", () => {
     ]);
     expect(results.every((r) => r.mode === "active")).toBe(true);
     const detail = await service.getConversation(ana, id);
-    expect(kinds(detail)).toEqual(["standby-start", "standby-end"]);
-    expect(detail.messages[1].content).toBe(STANDBY_ENDED);
+    expect(kinds(detail)).toEqual(["standby-start"]);
+  });
+
+  it("announces standby once per conversation, however often people rejoin", async () => {
+    const { service, realtime, id } = await team();
+    await service.syncStandby(ana, id);
+    realtime.setPresent(id, ana);
+    await service.syncStandby(ana, id);
+    realtime.setPresent(id, ana, ben);
+    const again = await service.syncStandby(ana, id);
+    expect(again.mode).toBe("standby");
+    const detail = await service.getConversation(ana, id);
+    expect(kinds(detail)).toEqual(["standby-start"]);
   });
 
   it("announces standby once when everyone asks at the same moment", async () => {

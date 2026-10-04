@@ -302,6 +302,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           phase: "generated",
           checklist: [],
           skillVersion: "x",
+          pendingGate: null,
           mode: "generated",
           revertedToChangeId: null,
           endStandby: false,
@@ -451,7 +452,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       const announcement = entered.find(Boolean)!;
       expect(announcement.conversation.mode).toBe("standby");
       expect(announcement.conversation.standbySinceMessageId).toBe(
-        announcement.message.id,
+        announcement.message!.id,
       );
       expect(announcement.message).toMatchObject({
         role: "assistant",
@@ -460,7 +461,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       });
 
       const left = await Promise.all(
-        Array.from({ length: 6 }, () => store.exitStandby(id, "back")),
+        Array.from({ length: 6 }, () => store.exitStandby(id)),
       );
       expect(left.filter(Boolean)).toHaveLength(1);
       expect(left.find(Boolean)!.conversation).toMatchObject({
@@ -469,10 +470,13 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       });
       const rows =
         await client`select kind from planning_messages where conversation_id = ${id} order by id`;
-      expect(rows.map((row) => row.kind)).toEqual([
-        "standby-start",
-        "standby-end",
-      ]);
+      expect(rows.map((row) => row.kind)).toEqual(["standby-start"]);
+      // Entering again is silent, and standby starts from the newest message.
+      const again = (await store.enterStandby(id, "quiet"))!;
+      expect(again.message).toBeNull();
+      expect(again.conversation.standbySinceMessageId).toBe(
+        announcement.message!.id,
+      );
     });
 
     it("lists only what was said after standby began", async () => {
@@ -495,7 +499,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         clientMessageId: null,
       });
       expect(
-        (await store.listMessagesAfter(id, entered.message.id)).map(
+        (await store.listMessagesAfter(id, entered.message!.id)).map(
           (row) => row.content,
         ),
       ).toEqual(["during"]);

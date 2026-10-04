@@ -1,6 +1,7 @@
 import type { DocsService } from "@/features/docs/server/docs.service";
 import type {
   ChecklistEntry,
+  PendingGate,
   Phase,
   Question,
 } from "@/features/planning/contracts";
@@ -27,6 +28,8 @@ export type ConversationRow = {
   phase: Phase;
   checklist: ChecklistEntry[];
   skillVersion: string | null;
+  // A proposal the agent is holding until the people acknowledge earlier discussion.
+  pendingGate: PendingGate | null;
   // Standby: people are discussing, so the agent stays quiet. The discussion is every message
   // after standbySinceMessageId, which is the standby announcement.
   mode: "active" | "standby";
@@ -91,6 +94,8 @@ export type CommitTurnInput = {
   applyDocument: ApplyDocument | null;
   // Leaves standby in the same transaction, so the change and the mode move together.
   endStandby: boolean;
+  // The held proposal after this turn. Null clears it.
+  pendingGate: PendingGate | null;
 };
 
 export type CommitTurnResult = {
@@ -154,17 +159,21 @@ export interface PlanningSessionStore {
     userId: string,
     organizationId: string,
   ): Promise<ConversationRow[]>;
-  // Goes quiet: sets standby, writes the announcement and points standby at it. Null when the
-  // conversation is already in standby, so concurrent callers announce once.
+  // Goes quiet. The announcement is written once per conversation, the first time. Later
+  // entries stay silent and point standby at the newest message. Null when the conversation is
+  // already in standby, so concurrent callers switch once.
   enterStandby(
     conversationId: string,
     announcement: string,
-  ): Promise<{ conversation: ConversationRow; message: MessageRow } | null>;
-  // Listens again without applying anything. Null when the conversation is not in standby.
+  ): Promise<{
+    conversation: ConversationRow;
+    message: MessageRow | null;
+  } | null>;
+  // Listens again without applying anything, and without a notice. Null when the conversation
+  // is not in standby.
   exitStandby(
     conversationId: string,
-    notice: string,
-  ): Promise<{ conversation: ConversationRow; message: MessageRow } | null>;
+  ): Promise<{ conversation: ConversationRow } | null>;
   // Ascending. Everything after a message, such as the discussion since standby began.
   listMessagesAfter(
     conversationId: string,

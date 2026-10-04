@@ -5,6 +5,7 @@ import type { DocChange, DocVersion } from "@/features/docs/contracts";
 import {
   checklistEntrySchema,
   documentDraftSchema,
+  pendingGateSchema,
   phaseSchema,
   questionSchema,
   type AgentTurnInput,
@@ -75,12 +76,13 @@ export interface AgentPort {
 // while the model runs.
 const LEASE_SECONDS = 120;
 const HISTORY_LIMIT = 100;
+// The search agent that checks a proposed change reads further back than a normal turn.
+const SEARCH_HISTORY_LIMIT = 1000;
 
 // What the agent says, word for word, when it goes quiet and when it listens again. They are
 // fixed text on purpose, so a model never decides whether it is in standby.
 export const STANDBY_ANNOUNCEMENT =
   "Several of you are here, so I'm entering standby mode. I'll stay quiet and leave the document alone while you talk through the tradeoffs. Once you agree, I'll update the document from this discussion.";
-export const STANDBY_ENDED = "Standby mode ended. I'm listening again.";
 
 // The instruction the agent receives once the people in standby have agreed. It is worded so
 // the agent's own check for "that's enough" fires, and the discussion it refers to is already in
@@ -96,6 +98,7 @@ const agentResultSchema = z.object({
   checklist: z.array(checklistEntrySchema),
   phase: phaseSchema,
   document: documentDraftSchema.nullable(),
+  gate: pendingGateSchema.nullable().optional(),
   skillVersion: z.string().min(1),
   mode: z.enum(["grilling", "confirming", "generated", "edited"]),
 });
@@ -866,12 +869,27 @@ export class PlanningSessionService {
             content: previous.content,
           },
           today: new Date().toISOString().slice(0, 10),
+          gate: fresh.pendingGate,
+          loadHistory: this.historyLoader(fresh.id),
         },
       };
     } catch (error) {
       await release();
       throw error;
     }
+  }
+
+  // The whole conversation as the search agent reads it, fetched only if a change is held.
+  private historyLoader(conversationId: string) {
+    return async () => {
+      const [history, participants] = await Promise.all([
+        this.store.listMessages(conversationId, {
+          limit: SEARCH_HISTORY_LIMIT,
+        }),
+        this.store.listParticipants(conversationId),
+      ]);
+      return this.agentMessages(history, participants);
+    };
   }
 
   private validate(raw: unknown): AgentTurnResult {
@@ -909,7 +927,7 @@ export class PlanningSessionService {
         STANDBY_ANNOUNCEMENT,
       );
     } else if (conversation.mode === "standby" && present <= 1) {
-      changed = await this.store.exitStandby(conversation.id, STANDBY_ENDED);
+      changed = await this.store.exitStandby(conversation.id);
     } else {
       return conversation;
     }
@@ -1037,6 +1055,8 @@ export class PlanningSessionService {
             content: previous.content,
           },
           today: new Date().toISOString().slice(0, 10),
+          gate: conversation.pendingGate,
+          loadHistory: this.historyLoader(conversation.id),
         },
       };
     } catch (error) {
@@ -1094,6 +1114,7 @@ export class PlanningSessionService {
       revertedToChangeId: revertedTo,
       applyDocument: apply,
       endStandby: prepared.endStandby,
+      pendingGate: result.gate ?? null,
     });
     await this.announce(
       conversation.id,
@@ -1230,6 +1251,10 @@ export class PlanningSessionService {
       ...listItem(conversation),
       checklist: conversation.checklist,
       skillVersion: conversation.skillVersion,
+      pendingGate: conversation.pendingGate && {
+        kind: conversation.pendingGate.kind,
+        summary: conversation.pendingGate.summary,
+      },
       participants: participants.map(({ userId, displayName }) => ({
         userId,
         displayName,
