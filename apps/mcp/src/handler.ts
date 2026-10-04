@@ -80,16 +80,10 @@ export function createHandler(
     const scope = createScope();
     try {
       const memberships = await scope.organizations.list(userId);
-      if (memberships.length !== 1)
-        throw new ApiError(
-          403,
-          "Exactly one organization membership is required. Contact an administrator.",
-        );
-      const organization = memberships[0];
       const server = createMcpServer({
         ...scope,
-        organization,
-        actor: { userId, organizationId: organization.id },
+        organizations: memberships,
+        userId,
       });
       const transport = new WebStandardStreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
