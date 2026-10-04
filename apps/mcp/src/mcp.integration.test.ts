@@ -137,14 +137,11 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       const client = await connect(actor.userId);
       try {
         const tools = await client.listTools();
-        expect(tools.tools).toHaveLength(11);
+        expect(tools.tools).toHaveLength(12);
         expect(tools.tools.map((tool) => tool.name)).not.toContain(
           "publish_version",
         );
         for (const tool of tools.tools) {
-          expect(tool.inputSchema.properties).not.toHaveProperty(
-            "organizationId",
-          );
           expect(tool.inputSchema.properties).not.toHaveProperty("userId");
         }
         expect(
@@ -382,6 +379,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
                   title: "Forged",
                   content: "Forged",
                   userId: other.actor.userId,
+                  organizationId: other.actor.organizationId,
                 },
               })
             ).isError,
@@ -427,24 +425,108 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       expect(disposed).toBe(opened);
     });
 
-    it("denies zero/multiple local memberships and disposes failed request scopes", async () => {
+    it("discovers zero/multiple memberships and requires a verified organization for scoped tools", async () => {
       const userId = `user_${randomUUID()}`;
-      let response = await handler(
-        new Request(config.resource, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${await bearer(userId)}` },
-        }),
-      );
-      expect(response.status).toBe(403);
-      await organizations.create(userId, "One");
-      await organizations.create(userId, "Two");
-      response = await handler(
-        new Request(config.resource, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${await bearer(userId)}` },
-        }),
-      );
-      expect(response.status).toBe(403);
+      const client = await connect(userId);
+      try {
+        expect(
+          data(await client.callTool({ name: "list_organizations" })),
+        ).toEqual({ items: [], nextOffset: null });
+        expect((await client.callTool({ name: "list_projects" })).isError).toBe(
+          true,
+        );
+        const one = await organizations.create(userId, "One");
+        const two = await organizations.create(userId, "Two");
+        const actor = { userId, organizationId: two.id };
+        const project = await projects.create(actor, {
+          name: "Second organization's project",
+        });
+        const doc = await docs.create(actor, project.id, {
+          title: "Second",
+          content: "Second body",
+        });
+        const listed = data(
+          await client.callTool({ name: "list_organizations" }),
+        ).items as { id: string }[];
+        expect(listed.map((item) => item.id).sort()).toEqual(
+          [one.id, two.id].sort(),
+        );
+        expect(
+          data(
+            await client.callTool({
+              name: "list_organizations",
+              arguments: { limit: 1 },
+            }),
+          ),
+        ).toMatchObject({ nextOffset: 1 });
+        expect(
+          (await client.callTool({ name: "get_current_organization" })).isError,
+        ).toBe(true);
+        expect((await client.callTool({ name: "list_projects" })).isError).toBe(
+          true,
+        );
+        expect(
+          data(
+            await client.callTool({
+              name: "list_projects",
+              arguments: { organizationId: two.id },
+            }),
+          ),
+        ).toMatchObject({ items: [{ id: project.id }] });
+        expect(
+          data(
+            await client.callTool({
+              name: "get_doc_metadata",
+              arguments: { organizationId: two.id, docId: doc.id },
+            }),
+          ),
+        ).toMatchObject({ latestTitle: "Second" });
+        expect(
+          (
+            await client.callTool({
+              name: "get_doc_metadata",
+              arguments: { organizationId: one.id, docId: doc.id },
+            })
+          ).isError,
+        ).toBe(true);
+        const proposal = data(
+          await client.callTool({
+            name: "propose_change",
+            arguments: {
+              organizationId: two.id,
+              docId: doc.id,
+              title: "Proposal",
+              content: "Full body",
+            },
+          }),
+        );
+        expect(
+          (
+            await client.callTool({
+              name: "delete_change",
+              arguments: {
+                organizationId: one.id,
+                docId: doc.id,
+                changeId: proposal.id,
+              },
+            })
+          ).isError,
+        ).toBe(true);
+        expect(
+          data(
+            await client.callTool({
+              name: "delete_change",
+              arguments: {
+                organizationId: two.id,
+                docId: doc.id,
+                changeId: proposal.id,
+              },
+            }),
+          ),
+        ).toMatchObject({ deleted: true });
+      } finally {
+        await client.close();
+      }
       expect(disposed).toBe(opened);
     });
   },

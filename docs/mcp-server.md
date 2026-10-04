@@ -10,7 +10,8 @@ no Express server, persistent MCP sessions, or Durable Objects.
 
 | Tool                       | Arguments                   | Result                                                                                                       |
 | -------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `get_current_organization` | None                        | Signed-in user ID and their single organization                                                              |
+| `list_organizations`       | Pagination                  | Active organization memberships available to the signed-in person                                            |
+| `get_current_organization` | Optional `organizationId`   | Signed-in user ID and selected organization                                                                  |
 | `list_projects`            | Pagination                  | Projects in that organization                                                                                |
 | `list_docs`                | `projectId`, pagination     | Stable doc identities in the project                                                                         |
 | `get_doc_metadata`         | `docId`                     | Ownership, creation time, latest title/change/time, change/version counts, latest version, unpublished state |
@@ -23,6 +24,11 @@ no Express server, persistent MCP sessions, or Durable Objects.
 | `propose_change`           | `docId`, `title`, `content` | Appends a full snapshot marked `proposed: true`                                                              |
 
 Tool results include `structuredContent: { data: ... }` and equivalent JSON text.
+All tools except `list_organizations` accept an optional `organizationId` from
+that list. It is required for accounts with multiple active memberships. With
+one membership, omission selects that organization. Selection is checked against
+fresh memberships on every request; it is not saved between calls. An account
+without memberships can discover an empty list but cannot use scoped tools.
 List tools return `{ items, nextOffset }` inside `data`. Pagination uses `offset`
 (default 0) and `limit` (default 50, maximum 100); database queries fetch at most
 `limit + 1` rows. Continue with `nextOffset` until it is null. Concurrent writes
@@ -61,14 +67,15 @@ or machine-to-machine credentials. JWT verification needs no client secret;
 organization membership checks require the environment's `WORKOS_API_KEY`.
 
 On every authenticated request, the Worker resolves active WorkOS memberships
-from the verified user ID and mirrors the organization into Postgres. Exactly
-one organization is required; zero or multiple
-memberships return `403` rather than selecting one. No tools take org/user IDs
-as identity inputs, and all project/doc operations enforce the organization
+from the verified user ID and mirrors the organizations into Postgres. Discovery
+works with zero or multiple memberships. Scoped tools require an explicit
+organization selection when membership is ambiguous and reject nonmember IDs.
+No tools accept user IDs as identity inputs; organization IDs select only among
+verified memberships. All project/doc operations enforce the organization
 boundary through shared services. Roles remain equal, as in the data layer.
 
 Signing in does not create an organization or grant membership. The user must
-already have exactly one active WorkOS organization membership. `org_id` in a
+already have an active WorkOS organization membership to access projects. `org_id` in a
 token is not treated as proof of authorization. There is no sign-in bypass for
 local development.
 
@@ -107,9 +114,11 @@ Before connecting an OAuth-capable MCP client:
    if the environment requires it.
 3. Optionally set that resource as default for clients omitting the `resource`
    parameter. The Worker never falls back to the environment's web client ID.
-4. Ensure the signing-in user has exactly one active WorkOS organization membership.
+4. Ensure the signing-in user has an active WorkOS organization membership.
 5. Configure the MCP client with the remote HTTP URL and complete its browser
    authorization flow. Its OAuth callback belongs to the **client**, not this app.
+6. Call `list_organizations`, then pass the selected `organizationId` to scoped
+   tools if the account has multiple memberships.
 
 See [WorkOS MCP auth](https://workos.com/docs/authkit/mcp) and
 [Connect claims](https://workos.com/docs/authkit/connect/token-claims) for the
