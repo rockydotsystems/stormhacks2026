@@ -24,6 +24,7 @@ import type {
   CommitTurnInput,
   AppliedChange,
 } from "@/features/planning/server/planning-session.types";
+import { JevError, type JevPort } from "@/features/planning/server/jev";
 import type {
   ChangeReason,
   Presence,
@@ -473,6 +474,10 @@ export class InMemoryStore implements PlanningSessionStore {
     conversation.checklist = input.checklist;
     conversation.skillVersion = input.skillVersion;
     conversation.updatedAt = new Date();
+    if (input.endStandby) {
+      conversation.mode = "active";
+      conversation.standbySinceMessageId = null;
+    }
     if (change) conversation.docId ??= change.docId;
     const assistant = this.newMessage(conversation.id, {
       role: "assistant",
@@ -655,5 +660,33 @@ export class FakeRealtime implements RealtimePort {
       conversationId,
       userIds.map((userId) => ({ userId, displayName: `Name of ${userId}` })),
     );
+  }
+}
+
+// Stands in for Jev. Tests set the three agreement scores and read how often it was asked.
+export class FakeJev implements JevPort {
+  scores = { agreement: 0, objection: 0, askedToUpdate: 0 };
+  calls: unknown[] = [];
+  failing = false;
+
+  agree() {
+    this.scores = { agreement: 0.97, objection: 0.03, askedToUpdate: 0.03 };
+  }
+
+  disagree() {
+    this.scores = { agreement: 0.03, objection: 0.9, askedToUpdate: 0.03 };
+  }
+
+  async askNouls<K extends string>(
+    state: unknown,
+    questions: Record<K, unknown>,
+  ) {
+    this.calls.push(state);
+    if (this.failing) throw new JevError("unavailable", "down");
+    const answers = {} as Record<K, number>;
+    for (const key of Object.keys(questions) as K[]) {
+      answers[key] = (this.scores as Record<string, number>)[key] ?? 0;
+    }
+    return answers;
   }
 }

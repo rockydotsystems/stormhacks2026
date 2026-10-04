@@ -20,6 +20,11 @@ import type {
   MessageRow,
   PlanningSessionStore,
 } from "@/features/planning/server/planning-session.types";
+import {
+  AgreementDetector,
+  type DiscussionMessage,
+} from "@/features/planning/server/agreement";
+import type { JevPort } from "@/features/planning/server/jev";
 import type {
   ChangeReason,
   RealtimePort,
@@ -71,6 +76,20 @@ export interface AgentPort {
 const LEASE_SECONDS = 120;
 const HISTORY_LIMIT = 100;
 
+// What the agent says, word for word, when it goes quiet and when it listens again. They are
+// fixed text on purpose, so a model never decides whether it is in standby.
+export const STANDBY_ANNOUNCEMENT =
+  "Several of you are here, so I'm entering standby mode. I'll stay quiet and leave the document alone while you talk through the tradeoffs. Once you agree, I'll update the document from this discussion.";
+export const STANDBY_ENDED = "Standby mode ended. I'm listening again.";
+
+// The instruction the agent receives once the people in standby have agreed. It is worded so
+// the agent's own check for "that's enough" fires, and the discussion it refers to is already in
+// the history, with each message labeled by who wrote it.
+export const APPLY_REQUEST =
+  "That's enough discussion. We agreed. Draft or update the document now so it records what we agreed in the discussion above. Only record what we agreed. Leave anything we did not settle as an open decision.";
+
+const FALLBACK_NAME = "Teammate";
+
 const agentResultSchema = z.object({
   reply: z.string().trim().min(1),
   questions: z.array(questionSchema),
@@ -92,6 +111,8 @@ type PreparedRun = {
   working: Draft | null;
   previous: Draft | null;
   release: () => Promise<void>;
+  // True when this turn applies a standby discussion, so standby ends with the change.
+  endStandby: boolean;
 };
 
 type PreparedDuplicate = {
@@ -102,7 +123,17 @@ type PreparedDuplicate = {
   assistantMessage: MessageRow;
 };
 
-type Prepared = PreparedRun | PreparedDuplicate;
+// The conversation is in standby. The message is stored and the agent stays quiet, unless the
+// people in the discussion just agreed, in which case `apply` is the turn that updates the document.
+type PreparedStandby = {
+  kind: "standby";
+  actor: OrganizationActor;
+  conversation: ConversationRow;
+  userMessage: MessageRow;
+  apply: PreparedRun | null;
+};
+
+type Prepared = PreparedRun | PreparedDuplicate | PreparedStandby;
 
 type Committed = {
   assistant: MessageRow;
@@ -121,6 +152,7 @@ function messageDto(row: MessageRow, producedChangeId: string | null) {
     id: row.id,
     role: row.role,
     authorUserId: row.authorUserId,
+    kind: row.kind,
     content: row.content,
     via: row.via,
     questions: row.questions,
@@ -134,6 +166,7 @@ function listItem(row: ConversationRow): ConversationListItem {
     id: row.id,
     title: row.title,
     phase: row.phase,
+    mode: row.mode,
     hasDocument: row.docId !== null,
     documentId: row.docId,
     createdAt: iso(row.createdAt),
@@ -213,6 +246,7 @@ export class PlanningSessionService {
       workspaceContext: ActorResolver;
       userDirectory: UserDirectory;
       realtime: RealtimePort;
+      jev: JevPort;
     },
   ) {}
 
@@ -477,6 +511,7 @@ export class PlanningSessionService {
   // with the assistant message, the change source link and the new phase and checklist.
   // Concurrency: one turn per conversation. A second turn gets 409 while the first holds its
   // lease. A repeated clientMessageId returns the stored outcome and never runs the agent twice.
+  // In standby the message is stored and the agent stays quiet until the people agree.
   async sendMessage(
     userId: string,
     id: string,
@@ -485,6 +520,14 @@ export class PlanningSessionService {
     const parsed = sendMessageSchema.parse(input);
     const prepared = await this.prepare(userId, id, parsed);
     if (prepared.kind === "duplicate") return this.resultFor(prepared);
+    if (prepared.kind === "standby") {
+      if (!prepared.apply) return this.standbyResult(prepared);
+      return this.runTurn(prepared.apply);
+    }
+    return this.runTurn(prepared);
+  }
+
+  private async runTurn(prepared: PreparedRun): Promise<SendMessageResult> {
     try {
       const raw = await this.dependencies.planningService.runTurn(
         prepared.input,
@@ -494,6 +537,31 @@ export class PlanningSessionService {
     } finally {
       await prepared.release();
     }
+  }
+
+  private async standbyResult(
+    prepared: PreparedStandby,
+  ): Promise<SendMessageResult> {
+    return {
+      userMessage: messageDto(prepared.userMessage, null),
+      assistantMessage: null,
+      conversation: await this.detail(prepared.actor, prepared.conversation),
+    };
+  }
+
+  private streamEnvelope(userMessageId: string, conversationId: string) {
+    let seq = 0;
+    return (
+      event: Record<string, unknown> & { type: SessionEvent["type"] },
+    ) => {
+      seq += 1;
+      return {
+        id: `${userMessageId}:${seq}`,
+        seq,
+        conversationId,
+        ...event,
+      } as SessionEvent;
+    };
   }
 
   // Same rules as sendMessage. The user message is stored first. The assistant message and any
@@ -507,18 +575,10 @@ export class PlanningSessionService {
   ): AsyncGenerator<SessionEvent> {
     const parsed = sendMessageSchema.parse(input);
     const prepared = await this.prepare(userId, id, parsed);
-    let seq = 0;
-    const envelope = (
-      event: Record<string, unknown> & { type: SessionEvent["type"] },
-    ) => {
-      seq += 1;
-      return {
-        id: `${prepared.userMessage.id}:${seq}`,
-        seq,
-        conversationId: prepared.conversation.id,
-        ...event,
-      } as SessionEvent;
-    };
+    const envelope = this.streamEnvelope(
+      prepared.userMessage.id,
+      prepared.conversation.id,
+    );
 
     if (prepared.kind === "duplicate") {
       yield envelope({
@@ -531,12 +591,25 @@ export class PlanningSessionService {
       return;
     }
 
+    const run = prepared.kind === "standby" ? prepared.apply : prepared;
+    if (!run) {
+      // Standby, and nobody has asked the agent to act. The message is saved and that is all.
+      yield envelope({
+        type: "message.final" as const,
+        userMessage: messageDto(prepared.userMessage, null),
+        assistantMessage: null,
+        phase: prepared.conversation.phase,
+        checklist: prepared.conversation.checklist,
+      });
+      return;
+    }
+
     try {
       let final: AgentTurnResult | null = null;
       let committed: Committed;
       try {
         for await (const event of this.dependencies.planningService.streamTurn(
-          prepared.input,
+          run.input,
         )) {
           if (event.type === "reasoning") {
             yield envelope({
@@ -554,7 +627,7 @@ export class PlanningSessionService {
         }
         if (!final)
           throw new ApiError(502, "The agent finished without a result.");
-        committed = await this.commit(prepared, this.validate(final));
+        committed = await this.commit(run, this.validate(final));
       } catch (error) {
         console.error("Planning stream failed", error);
         yield envelope({ type: "error" as const, ...errorEvent(error) });
@@ -563,7 +636,7 @@ export class PlanningSessionService {
 
       if (committed.changeId) {
         const described = await this.describeChange(
-          prepared.actor,
+          run.actor,
           committed.conversation,
           committed.changeId,
         );
@@ -575,13 +648,46 @@ export class PlanningSessionService {
       }
       yield envelope({
         type: "message.final" as const,
-        userMessage: messageDto(prepared.userMessage, null),
+        userMessage: messageDto(run.userMessage, null),
         assistantMessage: messageDto(committed.assistant, committed.changeId),
         phase: committed.conversation.phase,
         checklist: committed.conversation.checklist,
       });
     } finally {
-      await prepared.release();
+      await run.release();
+    }
+  }
+
+  // Brings the mode in line with who is actually here. Two or more people go quiet. One person
+  // or none listens again. The server decides from the live layer, never from what a client
+  // claims, and the store makes the switch once even when everyone asks at the same moment.
+  // A client calls this when the people present change.
+  async syncStandby(userId: string, id: string): Promise<ConversationDetail> {
+    const { actor, conversation } = await this.load(userId, id);
+    return this.detail(actor, await this.reconcileStandby(conversation));
+  }
+
+  // The manual way to end standby with the document updated, for when the model is unsure or
+  // unavailable. Any participant can press it.
+  async applyStandby(userId: string, id: string): Promise<ConversationDetail> {
+    const { actor, conversation } = await this.load(userId, id);
+    if (conversation.mode !== "standby" || !conversation.standbySinceMessageId)
+      throw new ApiError(409, "The conversation is not in standby.");
+    const discussion = await this.discussionSince(conversation);
+    if (discussion.length === 0)
+      throw new ApiError(409, "There is no discussion to apply yet.");
+    const run = await this.prepareApply(
+      actor,
+      conversation,
+      discussion[discussion.length - 1],
+    );
+    if (!run) throw new ApiError(409, "A message is still being processed.");
+    try {
+      const raw = await this.dependencies.planningService.runTurn(run.input);
+      const committed = await this.commit(run, this.validate(raw));
+      return this.detail(actor, committed.conversation);
+    } finally {
+      await run.release();
     }
   }
 
@@ -674,7 +780,9 @@ export class PlanningSessionService {
     id: string,
     input: z.output<typeof sendMessageSchema>,
   ): Promise<Prepared> {
-    const { actor, conversation } = await this.load(userId, id);
+    const loaded = await this.load(userId, id);
+    const { actor } = loaded;
+    const conversation = await this.reconcileStandby(loaded.conversation);
     const stored = async (): Promise<PreparedDuplicate | null> => {
       if (!input.clientMessageId) return null;
       const user = await this.store.findMessageByClientId(
@@ -704,6 +812,8 @@ export class PlanningSessionService {
 
     const early = await stored();
     if (early) return early;
+    if (conversation.mode === "standby")
+      return this.prepareStandby(userId, actor, conversation, input);
     if (!(await this.store.claimTurn(conversation.id, LEASE_SECONDS)))
       throw new ApiError(409, "A message is still being processed.");
     const release = () => this.store.releaseTurn(conversation.id);
@@ -731,6 +841,7 @@ export class PlanningSessionService {
       const history = await this.store.listMessages(fresh.id, {
         limit: HISTORY_LIMIT,
       });
+      const participants = await this.store.listParticipants(fresh.id);
       const { working, previous } = await this.drafts(actor, fresh);
       return {
         kind: "run",
@@ -740,11 +851,9 @@ export class PlanningSessionService {
         working,
         previous,
         release,
+        endStandby: false,
         input: {
-          messages: history.map((row) => ({
-            role: row.role,
-            content: row.content,
-          })),
+          messages: this.agentMessages(history, participants),
           phase: fresh.phase,
           checklist: fresh.checklist,
           projectName: fresh.title,
@@ -774,6 +883,164 @@ export class PlanningSessionService {
           502,
           "The planning agent returned an invalid response.",
         );
+      throw error;
+    }
+  }
+
+  private async presentHumans(conversationId: string): Promise<number> {
+    const [present, participants] = await Promise.all([
+      this.dependencies.realtime.presence(conversationId).catch(() => []),
+      this.store.listParticipants(conversationId),
+    ]);
+    const members = new Set(participants.map((row) => row.userId));
+    return new Set(
+      present.map((row) => row.userId).filter((userId) => members.has(userId)),
+    ).size;
+  }
+
+  private async reconcileStandby(
+    conversation: ConversationRow,
+  ): Promise<ConversationRow> {
+    const present = await this.presentHumans(conversation.id);
+    let changed: { conversation: ConversationRow } | null = null;
+    if (conversation.mode === "active" && present >= 2) {
+      changed = await this.store.enterStandby(
+        conversation.id,
+        STANDBY_ANNOUNCEMENT,
+      );
+    } else if (conversation.mode === "standby" && present <= 1) {
+      changed = await this.store.exitStandby(conversation.id, STANDBY_ENDED);
+    } else {
+      return conversation;
+    }
+    if (changed) {
+      await this.announce(conversation.id, "standby");
+      return changed.conversation;
+    }
+    // Another request made the same switch first.
+    return (
+      (await this.store.findConversationById(conversation.id)) ?? conversation
+    );
+  }
+
+  // What the people said since standby began, oldest first. Notices and the agent are left out.
+  private async discussionSince(
+    conversation: ConversationRow,
+  ): Promise<MessageRow[]> {
+    if (!conversation.standbySinceMessageId) return [];
+    const rows = await this.store.listMessagesAfter(
+      conversation.id,
+      conversation.standbySinceMessageId,
+    );
+    return rows.filter((row) => row.role === "user" && row.kind === "chat");
+  }
+
+  // The history the agent reads. Once several people share the conversation, each of their
+  // messages starts with their name, so the agent can tell who said what. Server notices are
+  // for the people, not the agent.
+  private agentMessages(
+    history: MessageRow[],
+    participants: { userId: string; displayName: string }[],
+  ) {
+    const multiple = participants.length >= 2;
+    const names = new Map(participants.map((p) => [p.userId, p.displayName]));
+    return history
+      .filter((row) => row.kind === "chat")
+      .map((row) => ({
+        role: row.role,
+        content:
+          multiple && row.role === "user"
+            ? `${names.get(row.authorUserId ?? "") || FALLBACK_NAME}: ${row.content}`
+            : row.content,
+      }));
+  }
+
+  // Stores the message without waking the agent, then asks whether the people have agreed. A
+  // lease that cannot be taken just means a turn is already running, and nothing is applied.
+  private async prepareStandby(
+    userId: string,
+    actor: OrganizationActor,
+    conversation: ConversationRow,
+    input: z.output<typeof sendMessageSchema>,
+  ): Promise<PreparedStandby> {
+    const { message, created } = await this.store.insertUserMessage(
+      conversation.id,
+      {
+        authorUserId: userId,
+        content: input.text,
+        via: input.via,
+        clientMessageId: input.clientMessageId ?? null,
+      },
+    );
+    if (created) await this.announce(conversation.id, "message");
+    const fresh =
+      (await this.store.findConversationById(conversation.id)) ?? conversation;
+    const base = { kind: "standby" as const, actor, conversation: fresh };
+    if (fresh.mode !== "standby")
+      return { ...base, userMessage: message, apply: null };
+
+    const participants = await this.store.listParticipants(fresh.id);
+    const names = new Map(participants.map((p) => [p.userId, p.displayName]));
+    const discussion = await this.discussionSince(fresh);
+    const decision = await new AgreementDetector(this.dependencies.jev).check(
+      discussion.map((row): DiscussionMessage => ({
+        authorUserId: row.authorUserId ?? "",
+        authorName: names.get(row.authorUserId ?? "") || FALLBACK_NAME,
+        text: row.content,
+      })),
+    );
+    if (!decision.agreed) return { ...base, userMessage: message, apply: null };
+    const apply = await this.prepareApply(actor, fresh, message);
+    return { ...base, userMessage: message, apply };
+  }
+
+  // The turn that turns a standby discussion into a document change. The trigger is the last
+  // message of the discussion, so the change's source covers the whole conversation behind it.
+  private async prepareApply(
+    actor: OrganizationActor,
+    conversation: ConversationRow,
+    trigger: MessageRow,
+  ): Promise<PreparedRun | null> {
+    if (!(await this.store.claimTurn(conversation.id, LEASE_SECONDS)))
+      return null;
+    const release = () => this.store.releaseTurn(conversation.id);
+    try {
+      const [history, participants, drafts] = await Promise.all([
+        this.store.listMessages(conversation.id, { limit: HISTORY_LIMIT }),
+        this.store.listParticipants(conversation.id),
+        this.drafts(actor, conversation),
+      ]);
+      const { working, previous } = drafts;
+      return {
+        kind: "run",
+        actor,
+        conversation,
+        userMessage: trigger,
+        working,
+        previous,
+        release,
+        endStandby: true,
+        input: {
+          messages: [
+            ...this.agentMessages(history, participants),
+            { role: "user", content: APPLY_REQUEST },
+          ],
+          phase: conversation.phase,
+          checklist: conversation.checklist,
+          projectName: conversation.title,
+          document: working && {
+            title: working.title,
+            content: working.content,
+          },
+          previousDocument: previous && {
+            title: previous.title,
+            content: previous.content,
+          },
+          today: new Date().toISOString().slice(0, 10),
+        },
+      };
+    } catch (error) {
+      await release();
       throw error;
     }
   }
@@ -826,12 +1093,13 @@ export class PlanningSessionService {
       mode,
       revertedToChangeId: revertedTo,
       applyDocument: apply,
-      endStandby: false,
+      endStandby: prepared.endStandby,
     });
     await this.announce(
       conversation.id,
       committed.change ? "document" : "message",
     );
+    if (prepared.endStandby) await this.announce(conversation.id, "standby");
     return {
       assistant: committed.assistant,
       conversation: committed.conversation,

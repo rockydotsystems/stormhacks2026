@@ -13,6 +13,7 @@ function message(id: string, role: "user" | "assistant", content: string) {
     id,
     role,
     authorUserId: role === "user" ? "user-1" : null,
+    kind: "chat",
     content,
     via: "text",
     questions: null,
@@ -73,7 +74,7 @@ describe("streamMessage", () => {
       { onDelta: (text) => deltas.push(text) },
     );
     expect(deltas).toEqual(["Hel", "lo"]);
-    expect(final.assistantMessage.content).toBe("Hello there");
+    expect(final.assistantMessage?.content).toBe("Hello there");
   });
 
   it("copes with frames split across chunks and a multi-byte character", async () => {

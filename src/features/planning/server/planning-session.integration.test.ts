@@ -4,13 +4,18 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 import { DocsService } from "@/features/docs/server/docs.service";
-import { PlanningSessionService } from "@/features/planning/server/planning-session.service";
+import {
+  APPLY_REQUEST,
+  PlanningSessionService,
+} from "@/features/planning/server/planning-session.service";
 import { DrizzlePlanningSessionStore } from "@/features/planning/server/planning-session.store";
 import {
+  FakeJev,
   FakeRealtime,
   ScriptedAgent,
 } from "@/features/planning/server/planning-session.testing";
 import { WorkspaceContext } from "@/features/planning/server/workspace-context";
+import { getWorkOS } from "@stormhacks/data/organizations/workos";
 
 // Creates and drops only its own database; requires local CREATEDB privileges.
 describe.skipIf(!process.env.TEST_DATABASE_URL)(
@@ -49,15 +54,18 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
 
     function build() {
       const agent = new ScriptedAgent();
+      const realtime = new FakeRealtime();
+      const jev = new FakeJev();
       const service = new PlanningSessionService({
         planningSessionStore: store,
         docsService: docs,
         planningService: agent,
         workspaceContext: context,
-        realtime: new FakeRealtime(),
+        realtime,
+        jev,
         userDirectory: { displayName: async (id: string) => `Name of ${id}` },
       });
-      return { agent, service };
+      return { agent, service, realtime, jev };
     }
 
     const generate = {
@@ -428,6 +436,160 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       ).rejects.toMatchObject({
         constraint_name: "planning_messages_author_check",
       });
+    });
+
+    it("enters standby once however many callers race, and leaves it once", async () => {
+      const { service } = build();
+      const owner = newUser();
+      const { id } = await service.createConversation(owner, {
+        projectName: "Race",
+      });
+      const entered = await Promise.all(
+        Array.from({ length: 6 }, () => store.enterStandby(id, "quiet")),
+      );
+      expect(entered.filter(Boolean)).toHaveLength(1);
+      const announcement = entered.find(Boolean)!;
+      expect(announcement.conversation.mode).toBe("standby");
+      expect(announcement.conversation.standbySinceMessageId).toBe(
+        announcement.message.id,
+      );
+      expect(announcement.message).toMatchObject({
+        role: "assistant",
+        kind: "standby-start",
+        authorUserId: null,
+      });
+
+      const left = await Promise.all(
+        Array.from({ length: 6 }, () => store.exitStandby(id, "back")),
+      );
+      expect(left.filter(Boolean)).toHaveLength(1);
+      expect(left.find(Boolean)!.conversation).toMatchObject({
+        mode: "active",
+        standbySinceMessageId: null,
+      });
+      const rows =
+        await client`select kind from planning_messages where conversation_id = ${id} order by id`;
+      expect(rows.map((row) => row.kind)).toEqual([
+        "standby-start",
+        "standby-end",
+      ]);
+    });
+
+    it("lists only what was said after standby began", async () => {
+      const { service } = build();
+      const owner = newUser();
+      const { id } = await service.createConversation(owner, {
+        projectName: "After",
+      });
+      await store.insertUserMessage(id, {
+        authorUserId: owner,
+        content: "before",
+        via: "text",
+        clientMessageId: null,
+      });
+      const entered = (await store.enterStandby(id, "quiet"))!;
+      await store.insertUserMessage(id, {
+        authorUserId: owner,
+        content: "during",
+        via: "text",
+        clientMessageId: null,
+      });
+      expect(
+        (await store.listMessagesAfter(id, entered.message.id)).map(
+          (row) => row.content,
+        ),
+      ).toEqual(["during"]);
+    });
+
+    it("rejects standby with no starting message and a message pointing nowhere", async () => {
+      const { service } = build();
+      const owner = newUser();
+      const { id } = await service.createConversation(owner, {
+        projectName: "Constraint",
+      });
+      await expect(
+        client`update planning_conversations set mode = 'standby' where id = ${id}`,
+      ).rejects.toMatchObject({
+        constraint_name: "planning_conversations_standby_check",
+      });
+      await expect(
+        client`insert into planning_messages (conversation_id, role, kind, content) values (${id}, 'assistant', 'whisper', 'x')`,
+      ).rejects.toMatchObject({
+        constraint_name: "planning_messages_kind_check",
+      });
+    });
+
+    it("two people share a conversation, go quiet, agree, and the document updates atomically", async () => {
+      const { agent, service, realtime, jev } = build();
+      const ana = newUser();
+      const ben = newUser();
+
+      // Ana drafts alone. That creates the document in her organization.
+      agent.enqueue(generate);
+      const { id } = await service.createConversation(ana, {
+        projectName: "Shared",
+      });
+      const first = await service.sendMessage(ana, id, { text: "draft it" });
+      const documentId = first.conversation.documentId!;
+      const actor = await context.resolveActor(ana);
+
+      // Ben is a member of that organization, and joins by opening the document.
+      await getWorkOS().userManagement.createOrganizationMembership({
+        organizationId: actor.organizationId,
+        userId: ben,
+      });
+      const joined = await service.createConversation(ben, {
+        projectName: "Shared",
+        documentId,
+        organizationId: actor.organizationId,
+      });
+      expect(joined.id).toBe(id);
+      expect(joined.participants).toHaveLength(2);
+
+      // Both are in the chat, so the agent goes quiet.
+      realtime.setPresent(id, ana, ben);
+      const quiet = await service.sendMessage(ana, id, {
+        text: "Postgres or Redis for the queue?",
+      });
+      expect(quiet.assistantMessage).toBeNull();
+      expect(quiet.conversation.mode).toBe("standby");
+      expect(agent.inputs).toHaveLength(1);
+
+      // They agree, and the document changes in the same commit that ends standby.
+      jev.agree();
+      agent.enqueue(edit("# Context\n\nPostgres for the queue."));
+      const settled = await service.sendMessage(ben, id, {
+        text: "Postgres. We already run it.",
+      });
+      expect(settled.assistantMessage?.content).toBe("Updated.");
+      expect(settled.conversation.mode).toBe("active");
+      expect(settled.conversation.workingDocument?.content).toContain(
+        "Postgres for the queue.",
+      );
+      const trigger = settled.conversation.changes.at(-1)!.source!;
+      expect(trigger.mode).toBe("edited");
+      expect(trigger.triggerMessageId).toBe(settled.userMessage.id);
+
+      const row = (
+        await client`select mode, standby_since_message_id from planning_conversations where id = ${id}`
+      )[0];
+      expect(row).toMatchObject({
+        mode: "active",
+        standby_since_message_id: null,
+      });
+      const authors =
+        await client`select author_user_id, kind from planning_messages where conversation_id = ${id} and role = 'user' order by id`;
+      expect(authors.map((r) => r.author_user_id)).toEqual([ana, ana, ben]);
+      expect(
+        agent.inputs
+          .at(-1)!
+          .messages.map((m) => m.content)
+          .slice(-3),
+      ).toEqual([
+        expect.stringMatching(/: Postgres or Redis for the queue\?$/),
+        expect.stringMatching(/: Postgres\. We already run it\.$/),
+        APPLY_REQUEST,
+      ]);
     });
   },
 );

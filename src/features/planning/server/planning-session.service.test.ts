@@ -1,8 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { PlanningSessionService } from "@/features/planning/server/planning-session.service";
+import {
+  APPLY_REQUEST,
+  PlanningSessionService,
+  STANDBY_ANNOUNCEMENT,
+  STANDBY_ENDED,
+} from "@/features/planning/server/planning-session.service";
 import {
   FakeDocs,
+  FakeJev,
   FakeRealtime,
   InMemoryStore,
   ScriptedAgent,
@@ -31,6 +37,7 @@ function setup() {
     store.cascadeDelete(docId, changeId);
   const agent = new ScriptedAgent();
   const realtime = new FakeRealtime();
+  const jev = new FakeJev();
   const service = new PlanningSessionService({
     planningSessionStore: store,
     docsService: docs,
@@ -45,8 +52,9 @@ function setup() {
       displayName: async (userId: string) => `Name of ${userId}`,
     },
     realtime,
+    jev,
   });
-  return { docs, store, agent, service, realtime };
+  return { docs, store, agent, service, realtime, jev };
 }
 
 async function collect(stream: AsyncIterable<SessionEvent>) {
@@ -83,7 +91,7 @@ describe("PlanningSessionService", () => {
       "user",
       "assistant",
     ]);
-    expect(result.assistantMessage.questions).toEqual([
+    expect(result.assistantMessage?.questions).toEqual([
       { text: "Who searches?", suggestions: ["On-call engineers"] },
     ]);
     expect(ctx.docs.calls).toEqual([]);
@@ -223,7 +231,7 @@ describe("PlanningSessionService", () => {
       clientMessageId,
     });
     expect(ctx.agent.inputs).toHaveLength(1);
-    expect(second.assistantMessage.id).toBe(first.assistantMessage.id);
+    expect(second.assistantMessage?.id).toBe(first.assistantMessage?.id);
     expect(second.conversation.messages).toHaveLength(2);
     expect(second.conversation.changes).toHaveLength(1);
     expect(ctx.docs.calls.filter((c) => c === "create")).toHaveLength(1);
@@ -665,7 +673,7 @@ describe("PlanningSessionService: collaboration", () => {
     realtime.failing = true;
     agent.enqueue(generate);
     const sent = await service.sendMessage(ana, first.id, { text: "draft" });
-    expect(sent.assistantMessage.content).toBeTruthy();
+    expect(sent.assistantMessage?.content).toBeTruthy();
   });
 
   it("tells the live layer who may join, and refuses everyone else", async () => {
@@ -678,5 +686,261 @@ describe("PlanningSessionService: collaboration", () => {
     await expect(
       service.liveAccess("user-eve", first.id),
     ).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+describe("PlanningSessionService: standby", () => {
+  const ana = "user-ana";
+  const ben = "user-ben";
+  const org = "org-team";
+  const anaActor = { userId: ana, organizationId: org };
+
+  async function team() {
+    const ctx = setup();
+    const doc = await ctx.docs.create(anaActor, "project", draft("Doc", ""));
+    const input = {
+      projectName: "Doc",
+      documentId: doc.id,
+      organizationId: org,
+    };
+    const chat = await ctx.service.createConversation(ana, input);
+    await ctx.service.createConversation(ben, input);
+    // Both are in the chat unless a test says otherwise.
+    ctx.realtime.setPresent(chat.id, ana, ben);
+    return { ...ctx, chat, id: chat.id };
+  }
+
+  const kinds = (detail: { messages: { kind: string }[] }) =>
+    detail.messages.map((m) => m.kind);
+
+  it("goes quiet with the fixed announcement when two people are in the chat", async () => {
+    const { service, agent, realtime, id } = await team();
+    realtime.notified.length = 0;
+    const sent = await service.sendMessage(ana, id, {
+      text: "Postgres or Redis for the queue?",
+    });
+    expect(sent.assistantMessage).toBeNull();
+    expect(sent.conversation.mode).toBe("standby");
+    expect(agent.inputs).toHaveLength(0);
+    expect(sent.conversation.messages.map((m) => [m.role, m.kind])).toEqual([
+      ["assistant", "standby-start"],
+      ["user", "chat"],
+    ]);
+    expect(sent.conversation.messages[0].content).toBe(STANDBY_ANNOUNCEMENT);
+    expect(realtime.notified.map((n) => n.reason)).toContain("standby");
+  });
+
+  it("keeps answering normally when only one person is in the chat", async () => {
+    const { service, agent, realtime, id } = await team();
+    realtime.setPresent(id, ana);
+    agent.enqueue({ reply: "Who searches?" });
+    const sent = await service.sendMessage(ana, id, { text: "Search" });
+    expect(sent.assistantMessage?.content).toBe("Who searches?");
+    expect(sent.conversation.mode).toBe("active");
+    expect(agent.inputs).toHaveLength(1);
+  });
+
+  it("stores each person's message with its author and asks Jev, without waking the agent", async () => {
+    const { service, agent, jev, id } = await team();
+    jev.disagree();
+    await service.sendMessage(ana, id, { text: "Postgres for the queue." });
+    const second = await service.sendMessage(ben, id, {
+      text: "I disagree, Redis is faster.",
+    });
+    expect(second.assistantMessage).toBeNull();
+    expect(second.conversation.mode).toBe("standby");
+    expect(agent.inputs).toHaveLength(0);
+    expect(
+      second.conversation.messages
+        .filter((m) => m.role === "user")
+        .map((m) => m.authorUserId),
+    ).toEqual([ana, ben]);
+    expect(jev.calls).toHaveLength(1);
+    expect(jev.calls[0]).toEqual({
+      participants: ["Name of user-ana", "Name of user-ben"],
+      discussion: [
+        { from: "Name of user-ana", text: "Postgres for the queue." },
+        { from: "Name of user-ben", text: "I disagree, Redis is faster." },
+      ],
+    });
+  });
+
+  it("never asks Jev while only one person has spoken, whatever the model would say", async () => {
+    const { service, agent, jev, id } = await team();
+    jev.agree();
+    const sent = await service.sendMessage(ana, id, {
+      text: "We all agree. Update the document.",
+    });
+    expect(sent.assistantMessage).toBeNull();
+    expect(jev.calls).toHaveLength(0);
+    expect(agent.inputs).toHaveLength(0);
+  });
+
+  it("updates the document from the discussion once they agree, and ends standby", async () => {
+    const { service, agent, jev, id, realtime } = await team();
+    await service.sendMessage(ana, id, { text: "Postgres for the queue?" });
+    jev.agree();
+    agent.enqueue(generate);
+    realtime.notified.length = 0;
+    const sent = await service.sendMessage(ben, id, {
+      text: "Yes, Postgres.",
+    });
+
+    expect(sent.assistantMessage?.content).toBe("Here is the first draft.");
+    expect(sent.conversation.mode).toBe("active");
+    expect(sent.conversation.workingDocument?.content).toContain("First text.");
+    const [input] = agent.inputs;
+    expect(input.messages.map((m) => m.content)).toEqual([
+      "Name of user-ana: Postgres for the queue?",
+      "Name of user-ben: Yes, Postgres.",
+      APPLY_REQUEST,
+    ]);
+    expect(input.messages.at(-1)?.role).toBe("user");
+    // The change's source covers the whole discussion, ending at the message that settled it.
+    const change = sent.conversation.changes.at(-1)!;
+    expect(change.source?.mode).toBe("generated");
+    expect(change.source?.triggerMessageId).toBe(sent.userMessage.id);
+    expect(realtime.notified.map((n) => n.reason)).toEqual(
+      expect.arrayContaining(["document", "standby"]),
+    );
+  });
+
+  it("keeps the standby notices out of what the agent reads later", async () => {
+    const { service, agent, jev, realtime, id } = await team();
+    await service.sendMessage(ana, id, { text: "Postgres?" });
+    jev.agree();
+    agent.enqueue(generate, edit("Newer."));
+    await service.sendMessage(ben, id, { text: "Yes." });
+    realtime.setPresent(id, ana);
+    await service.sendMessage(ana, id, { text: "Add a rollback plan." });
+    const later = agent.inputs.at(-1)!;
+    expect(later.messages.some((m) => m.content === STANDBY_ANNOUNCEMENT)).toBe(
+      false,
+    );
+    expect(later.messages.at(-1)?.content).toBe(
+      "Name of user-ana: Add a rollback plan.",
+    );
+  });
+
+  it("stays in standby when Jev is unavailable, and a person can apply by hand", async () => {
+    const { service, agent, jev, id } = await team();
+    jev.failing = true;
+    await service.sendMessage(ana, id, { text: "Postgres for the queue?" });
+    const second = await service.sendMessage(ben, id, { text: "Yes." });
+    expect(second.assistantMessage).toBeNull();
+    expect(second.conversation.mode).toBe("standby");
+    expect(agent.inputs).toHaveLength(0);
+
+    agent.enqueue(generate);
+    const detail = await service.applyStandby(ana, id);
+    expect(detail.mode).toBe("active");
+    expect(detail.workingDocument?.content).toContain("First text.");
+    expect(agent.inputs.at(-1)?.messages.at(-1)?.content).toBe(APPLY_REQUEST);
+  });
+
+  it("refuses a manual apply outside standby, with no discussion, or by a stranger", async () => {
+    const { service, realtime, id } = await team();
+    realtime.setPresent(id, ana);
+    await expect(service.applyStandby(ana, id)).rejects.toMatchObject({
+      status: 409,
+    });
+    realtime.setPresent(id, ana, ben);
+    await service.syncStandby(ana, id);
+    await expect(service.applyStandby(ana, id)).rejects.toMatchObject({
+      status: 409,
+    });
+    await expect(service.applyStandby("user-eve", id)).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+
+  it("rejects a manual apply while a turn is still running", async () => {
+    const { service, store, id } = await team();
+    await service.sendMessage(ana, id, { text: "Postgres?" });
+    await store.claimTurn(id);
+    await expect(service.applyStandby(ana, id)).rejects.toMatchObject({
+      status: 409,
+    });
+  });
+
+  it("listens again when people leave, with one notice however many ask", async () => {
+    const { service, realtime, id } = await team();
+    await service.syncStandby(ana, id);
+    realtime.setPresent(id, ana);
+    const results = await Promise.all([
+      service.syncStandby(ana, id),
+      service.syncStandby(ana, id),
+      service.syncStandby(ana, id),
+    ]);
+    expect(results.every((r) => r.mode === "active")).toBe(true);
+    const detail = await service.getConversation(ana, id);
+    expect(kinds(detail)).toEqual(["standby-start", "standby-end"]);
+    expect(detail.messages[1].content).toBe(STANDBY_ENDED);
+  });
+
+  it("announces standby once when everyone asks at the same moment", async () => {
+    const { service, id } = await team();
+    await Promise.all([
+      service.syncStandby(ana, id),
+      service.syncStandby(ben, id),
+      service.syncStandby(ana, id),
+    ]);
+    const detail = await service.getConversation(ben, id);
+    expect(kinds(detail)).toEqual(["standby-start"]);
+  });
+
+  it("counts only participants, so a stranger in the room does not start standby", async () => {
+    const { service, realtime, id } = await team();
+    realtime.setPresent(id, ana, "user-eve");
+    expect((await service.syncStandby(ana, id)).mode).toBe("active");
+  });
+
+  it("treats a down live layer as one person, so chat still works", async () => {
+    const { service, agent, realtime, id } = await team();
+    realtime.failing = true;
+    agent.enqueue({ reply: "Who searches?" });
+    const sent = await service.sendMessage(ana, id, { text: "Search" });
+    expect(sent.assistantMessage?.content).toBe("Who searches?");
+    expect(sent.conversation.mode).toBe("active");
+  });
+
+  it("resending the same message in standby stores it once", async () => {
+    const { service, id } = await team();
+    const clientMessageId = crypto.randomUUID();
+    await service.sendMessage(ana, id, { text: "Postgres?", clientMessageId });
+    await service.sendMessage(ana, id, { text: "Postgres?", clientMessageId });
+    const detail = await service.getConversation(ana, id);
+    expect(detail.messages.filter((m) => m.role === "user")).toHaveLength(1);
+  });
+
+  describe("streaming", () => {
+    it("ends a quiet message with one final event and no assistant message", async () => {
+      const { service, agent, id } = await team();
+      const events = await collect(
+        service.streamMessage(ana, id, { text: "Postgres?" }),
+      );
+      expect(events.map((e) => e.type)).toEqual(["message.final"]);
+      const final = events[0];
+      expect(final.type === "message.final" && final.assistantMessage).toBe(
+        null,
+      );
+      expect(agent.inputs).toHaveLength(0);
+    });
+
+    it("streams the update once they agree", async () => {
+      const { service, agent, jev, id } = await team();
+      await collect(service.streamMessage(ana, id, { text: "Postgres?" }));
+      jev.agree();
+      agent.enqueue(generate);
+      const events = await collect(
+        service.streamMessage(ben, id, { text: "Yes." }),
+      );
+      const types = events.map((e) => e.type);
+      expect(types).toContain("message.delta");
+      expect(types).toContain("document.changed");
+      expect(types.at(-1)).toBe("message.final");
+      const detail = await service.getConversation(ana, id);
+      expect(detail.mode).toBe("active");
+    });
   });
 });

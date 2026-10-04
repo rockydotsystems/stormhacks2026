@@ -12,6 +12,8 @@ import { TeamController } from "@/features/organizations/server/team.controller"
 import { ProjectsService } from "@/features/projects/server/projects.service";
 import { NotesController } from "@/features/notes/server/notes.controller";
 import { NotesService } from "@/features/notes/server/notes.service";
+import { createJev } from "@/features/planning/server/jev";
+import type { JevPort } from "@/features/planning/server/jev";
 import type { ModelPort } from "@/features/planning/server/model";
 import { createModel } from "@/features/planning/server/model.factory";
 import { PlanningController } from "@/features/planning/server/planning.controller";
@@ -40,6 +42,7 @@ export type Dependencies = {
   db: Database;
   model: ModelPort;
   speech: SpeechPort;
+  jev: JevPort;
   planningService: PlanningService;
   planningController: PlanningController;
   planningSessionStore: PlanningSessionStore;
@@ -74,6 +77,7 @@ container.register({
   // Stateless provider adapters. They hold no request identity, so one instance serves all requests.
   model: asFunction(() => createModel()).singleton(),
   speech: asFunction(() => createSpeech()).singleton(),
+  jev: asFunction(() => createJev()).singleton(),
   planningService: asClass(PlanningService).scoped(),
   planningController: asClass(PlanningController).scoped(),
   planningSessionStore: asClass(DrizzlePlanningSessionStore).scoped(),

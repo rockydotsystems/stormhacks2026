@@ -117,6 +117,8 @@ export function PlanningSession({
         },
       });
       dispatch({ type: "succeeded" });
+      // In standby the agent says nothing, so there is no reply to read out.
+      if (!final.assistantMessage) return null;
       return [
         final.assistantMessage.content,
         ...(final.assistantMessage.questions ?? []).map(
