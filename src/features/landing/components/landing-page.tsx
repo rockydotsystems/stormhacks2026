@@ -1,11 +1,8 @@
 import {
   ArrowRightIcon,
-  CheckCircleIcon,
   CodeIcon,
   FileTextIcon,
-  FolderIcon,
   GitBranchIcon,
-  HouseIcon,
   InfoIcon,
   UsersIcon,
 } from "@phosphor-icons/react/ssr";
@@ -24,129 +21,21 @@ function StartPlan() {
 function WorkspacePreview() {
   return (
     <figure className={styles.previewFigure}>
-      <div className={styles.workspace}>
-        <div className={styles.sidebar} aria-hidden="true">
-          <div className={styles.organization}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/brand/symbol-dark.svg" width="19" height="21" alt="" />
-            Acme Engineering
-          </div>
-          <div>
-            <HouseIcon /> Overview
-          </div>
-          <div>
-            <FolderIcon /> Projects
-          </div>
-          <div>
-            <FileTextIcon /> Documents
-          </div>
-          <hr />
-          <small>Projects</small>
-          <div className={styles.selectedProject}>
-            <FolderIcon /> Incident search
-          </div>
-        </div>
-        <div className={styles.workspaceMain}>
-          <div className={styles.breadcrumb}>
-            <span>
-              Projects <span aria-hidden="true">/</span> Incident search{" "}
-              <span aria-hidden="true">/</span>{" "}
-              <strong>Search architecture</strong>
-            </span>
-            <span className={styles.version}>Published v1</span>
-          </div>
-          <div className={styles.workspaceBody}>
-            <article className={styles.document} aria-label="Example plan">
-              <h2>Search architecture</h2>
-              <p className={styles.byline}>Published by the team · Version 1</p>
-              <h3>Problem and goals</h3>
-              <p>
-                We need a fast, reliable search experience for incident data to
-                help engineers find relevant context during on-call and
-                investigation.
-              </p>
-              <p>
-                The system should be accurate, performant, and respect our
-                security requirements.
-              </p>
-              <h3>Data handling</h3>
-              <p>
-                Incident text, metadata, and embeddings must be processed and
-                stored within our infrastructure. We will not send incident
-                content to external services or third-party providers.
-              </p>
-              <blockquote>
-                Incident text must remain inside company-managed infrastructure.
-              </blockquote>
-              <p>
-                We may use open source models and self-hosted infrastructure,
-                provided they meet our security requirements.
-              </p>
-            </article>
-            <aside
-              className={styles.discussion}
-              aria-label="Example team discussion"
-            >
-              <h3>Discussion</h3>
-              <div className={styles.discussionSummary}>
-                <span>3 comments</span>
-                <span>1 resolved</span>
-              </div>
-              <div className={styles.comment}>
-                <span className={styles.avatar} aria-hidden="true">
-                  JL
-                </span>
-                <div>
-                  <p>
-                    <strong>Jamie Lee</strong>
-                    <small>Oct 3</small>
-                  </p>
-                  <p>Should external services receive incident content?</p>
-                </div>
-              </div>
-              <div className={styles.comment}>
-                <span
-                  className={`${styles.avatar} ${styles.tealAvatar}`}
-                  aria-hidden="true"
-                >
-                  MH
-                </span>
-                <div>
-                  <p>
-                    <strong>Matthew H.</strong>
-                    <small>Oct 3</small>
-                  </p>
-                  <p>
-                    No. Keep storage and processing inside our infrastructure.
-                  </p>
-                </div>
-              </div>
-              <div className={styles.comment}>
-                <span
-                  className={`${styles.avatar} ${styles.grayAvatar}`}
-                  aria-hidden="true"
-                >
-                  SC
-                </span>
-                <div>
-                  <p>
-                    <strong>Sarah Chen</strong>
-                    <small>Oct 4</small>
-                  </p>
-                  <p>Are there any exceptions for model evaluation?</p>
-                </div>
-              </div>
-              <div className={styles.discussionFooter}>
-                <CheckCircleIcon aria-hidden="true" /> A shared record of the
-                decision
-              </div>
-            </aside>
-          </div>
-        </div>
-      </div>
-      <figcaption>
-        Illustrative workspace · example plan and discussion
-      </figcaption>
+      <picture>
+        <source
+          media="(max-width: 650px)"
+          srcSet="/product/workspace-mobile.webp"
+        />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          className={styles.productScreenshot}
+          src="/product/workspace-desktop.webp"
+          width="1440"
+          height="900"
+          alt="Search architecture in the rocky.systems workspace, with the published plan alongside the team's discussion."
+          fetchPriority="high"
+        />
+      </picture>
     </figure>
   );
 }
@@ -183,7 +72,7 @@ function ReviewPreview() {
         <pre
           tabIndex={0}
           role="region"
-          aria-label="Example code evidence, horizontally scrollable"
+          aria-label="Code evidence, horizontally scrollable"
         >
           <code>
             <span className={styles.conflictingLine}>
@@ -201,9 +90,6 @@ function ReviewPreview() {
           the resolution
         </div>
       </div>
-      <figcaption>
-        Illustrative review · planned workflow, not yet available
-      </figcaption>
     </figure>
   );
 }
@@ -309,9 +195,7 @@ export function LandingPage() {
             <div>
               <CodeIcon aria-hidden="true" />
               <p>
-                <strong>
-                  GitHub review <small>Planned</small>
-                </strong>
+                <strong>GitHub review</strong>
                 <span>Connect code review to the plan.</span>
               </p>
             </div>
@@ -324,9 +208,7 @@ export function LandingPage() {
         >
           <div className={`${styles.container} ${styles.reviewGrid}`}>
             <div className={styles.reviewCopy}>
-              <p className={styles.eyebrow}>
-                From plan to pull request · planned workflow
-              </p>
+              <p className={styles.eyebrow}>From plan to pull request</p>
               <h2 id="review-title">
                 Review against
                 <br />
@@ -373,15 +255,30 @@ export function LandingPage() {
               </p>
             </li>
             <li>
-              <h3>
-                Keep reviews grounded <small>Planned</small>
-              </h3>
+              <h3>Keep reviews grounded</h3>
               <p>
                 Connect pull request findings to exact plan citations and
                 evidence from the code.
               </p>
             </li>
           </ol>
+          <figure className={styles.workflowScreenshot}>
+            <picture>
+              <source
+                media="(max-width: 650px)"
+                srcSet="/product/decisions-mobile.webp"
+              />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                className={styles.productScreenshot}
+                src="/product/decisions-desktop.webp"
+                width="1440"
+                height="900"
+                alt="The workspace decision library, showing published and draft plans for incident search, developer platform, and workspace security."
+                loading="lazy"
+              />
+            </picture>
+          </figure>
         </section>
         <section
           className={`${styles.container} ${styles.closing}`}
