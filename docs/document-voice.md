@@ -7,12 +7,17 @@ is sent. The planning agent replies aloud and the microphone starts listening
 again. Voice turns use the same persisted conversation and document-edit flow as
 typed messages.
 
-The teal blob responds to microphone and reply audio volume. Listening has an
-expanding ring; thinking has a rotating ring. Reduced-motion preferences disable
-the motion while retaining visible status labels.
+Each project has a deterministic Blobatar character, shared by its documents.
+Documents without a project use their own ID instead. Characters use solid
+colours, blink gently and follow the mouse on devices with a fine pointer.
+The whole character grows and shrinks with microphone and reply audio volume.
+Thinking uses Blobatar's thinking expression rather than a talking mouth.
+Listening has an expanding ring; thinking has a rotating ring. Reduced-motion
+preferences disable the motion while retaining visible status labels.
 
-Only one compact thought bubble appears at a time: the latest thinking segment
-while the agent reasons, then its final response. **Read more** stops voice mode
+Only one compact bubble appears at a time: a cloud-shaped thought bubble with
+trailing dots for the latest thinking segment, then a speech callout with a
+pointed tail for its final response. **Read more** stops voice mode
 and returns to the full transcript, including the complete response and available
 thought process. Typed drafts and conversation state are preserved.
 

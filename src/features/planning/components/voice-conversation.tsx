@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { Blobatar } from "@blobatar/react";
+import { useGaze } from "@blobatar/react/gaze";
+import { happy, thinking as thinkingExpression } from "blobatar/expression";
+import "blobatar/motion.css";
+import "blobatar/gaze.css";
 import {
   MicrophoneIcon,
   MicrophoneSlashIcon,
@@ -37,11 +42,13 @@ export function VoiceConversation({
   onEnd,
   reasoning,
   initialReply,
+  characterId,
 }: {
   onTurn: (text: string) => Promise<string | null>;
   onEnd: () => void;
   reasoning: string;
   initialReply: string;
+  characterId: string;
 }) {
   const [active, setActive] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -51,6 +58,7 @@ export function VoiceConversation({
   const heading = useRef<HTMLHeadingElement>(null);
   const alive = useRef(true);
   const playback = useSpeechPlayback();
+  const { ref: character } = useGaze({ travel: 3, lookAt: "pointer" });
   async function respond(text: string) {
     try {
       const reply = await onTurn(text);
@@ -155,8 +163,16 @@ export function VoiceConversation({
         >
           <div className="voice-orb-halo" />
           <div className="voice-orb-ring" />
-          <div className="voice-orb">
-            <div className="voice-orb-shine" />
+          <div className="voice-orb" data-character={characterId}>
+            <Blobatar
+              ref={character}
+              name={characterId}
+              size={160}
+              animate="always"
+              background={false}
+              expression={state === "thinking" ? thinkingExpression : happy}
+              aria-hidden="true"
+            />
           </div>
         </div>
         <p className="voice-status" role="status">
@@ -179,8 +195,18 @@ export function VoiceConversation({
         <div className="voice-bubble-slot">
           {bubble ? (
             <div className="voice-thought-bubble" data-kind={bubble.kind}>
-              <span>
-                {bubble.kind === "thought" ? "Thinking" : "Planning agent"}
+              {bubble.kind === "thought" ? (
+                <svg
+                  className="voice-thought-cloud"
+                  viewBox="0 0 300 140"
+                  preserveAspectRatio="none"
+                  aria-hidden="true"
+                >
+                  <path d="M 36 27 C 18 16 2 35 12 53 C -3 71 8 96 32 97 C 34 120 61 133 83 119 C 105 136 135 133 151 122 C 174 136 202 131 215 118 C 239 130 269 122 270 102 C 297 103 309 79 289 59 C 302 35 277 15 254 27 C 243 4 210 3 193 18 C 172 1 139 4 127 20 C 107 3 78 8 68 23 C 58 14 43 16 36 27 Z" />
+                </svg>
+              ) : null}
+              <span className="voice-bubble-label">
+                {bubble.kind === "thought" ? "Thinking" : "Reply"}
               </span>
               <p>{bubble.text}</p>
             </div>

@@ -55,12 +55,14 @@ const starters = [
 export function PlanningSession({
   title,
   documentId,
+  projectId,
   organizationId,
   onOpenDocument,
   onDocumentChanged,
 }: {
   title: string;
   documentId: string;
+  projectId?: string | null;
   organizationId: string;
   onOpenDocument: () => void;
   // The document changed on the server, so the page should load it again.
@@ -224,6 +226,7 @@ export function PlanningSession({
     return (
       <section className="planning-session" aria-label="Planning session">
         <VoiceConversation
+          characterId={`project:${projectId ?? documentId}`}
           onTurn={(text) => send(text, "voice")}
           onEnd={returnToTranscript}
           reasoning={ui.reasoningText}

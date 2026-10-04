@@ -56,6 +56,46 @@ describe("ElevenLabsSpeech", () => {
     expect(error).toBeInstanceOf(SpeechError);
     expect((error as Error).message).not.toContain("secret");
   });
+
+  it.each(["code", "status"])(
+    "retains the rejection %s without logging provider text",
+    async (field) => {
+      const fetchMock = vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              detail: {
+                [field]: "detected_unusual_activity",
+                message: "secret and recorded audio",
+              },
+            }),
+            { status: 401 },
+          ),
+      );
+      await expect(
+        adapter(fetchMock as unknown as typeof fetch).transcribe({
+          audio: new Blob(["audio"]),
+        }),
+      ).rejects.toThrow(
+        "Speech provider returned 401 (detected_unusual_activity).",
+      );
+    },
+  );
+
+  it.each(["secret", "invalid secret", "x".repeat(100)])(
+    "ignores sensitive or malformed rejection codes",
+    async (code) => {
+      const fetchMock = vi.fn(
+        async () =>
+          new Response(JSON.stringify({ detail: { code } }), { status: 401 }),
+      );
+      await expect(
+        adapter(fetchMock as unknown as typeof fetch).synthesize({
+          text: "hi",
+        }),
+      ).rejects.toThrow("Speech provider returned 401.");
+    },
+  );
 });
 
 describe("FakeSpeech and createSpeech", () => {

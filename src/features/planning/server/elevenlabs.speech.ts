@@ -79,9 +79,27 @@ export class ElevenLabsSpeech implements SpeechPort {
       });
     }
     if (!response.ok) {
+      const body: unknown = await response.json().catch(() => null);
+      let code: string | undefined;
+      if (body && typeof body === "object" && "detail" in body) {
+        const detail = body.detail;
+        if (detail && typeof detail === "object") {
+          // Retain only the machine-readable code, never raw messages, audio or credentials.
+          const candidates = [
+            "code" in detail ? detail.code : undefined,
+            "status" in detail ? detail.status : undefined,
+          ];
+          code = candidates.find(
+            (value): value is string =>
+              typeof value === "string" &&
+              /^[a-z][a-z0-9_]{0,79}$/.test(value) &&
+              !value.includes(this.options.apiKey),
+          );
+        }
+      }
       throw new SpeechError(
         "provider",
-        `Speech provider returned ${response.status}.`,
+        `Speech provider returned ${response.status}${code ? ` (${code})` : ""}.`,
       );
     }
     return response;

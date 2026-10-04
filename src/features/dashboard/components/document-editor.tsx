@@ -50,6 +50,7 @@ export function DocumentEditor({
   organizationId: string;
   userId: string;
   title: string;
+  projectId: string | null;
   creator: Person;
   repositories: string[];
 }) {
@@ -98,6 +99,7 @@ export function DocumentWorkspace({
   creator,
   repositories,
   title,
+  projectId,
   onDocumentChanged,
   onPublish,
   pending,
@@ -107,6 +109,7 @@ export function DocumentWorkspace({
   documentId: string;
   organizationId: string;
   title?: string;
+  projectId: string | null;
   creator: Person;
   repositories: string[];
   onDocumentChanged: () => void;
@@ -179,6 +182,7 @@ export function DocumentWorkspace({
         <PlanningSession
           title={latest?.title || "this plan"}
           documentId={documentId}
+          projectId={projectId}
           organizationId={organizationId}
           onOpenDocument={() => setPane("document")}
           onDocumentChanged={onDocumentChanged}
