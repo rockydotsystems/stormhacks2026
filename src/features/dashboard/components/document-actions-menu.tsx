@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import {
+  ClipboardTextIcon,
   CopySimpleIcon,
   DotsThreeIcon,
   DownloadSimpleIcon,
@@ -120,16 +121,26 @@ export function DocumentActionsMenu({
     }
     setTimeout(() => setNotice(null), 2500);
   }
+  async function markdown() {
+    const data = await apiClient<DocumentData>(
+      `/api/documents/${id}?organizationId=${organizationId}`,
+    );
+    const latest = data.changes.at(-1);
+    return `# ${title}\n\n${latest?.content ?? ""}\n`;
+  }
+  async function copyText() {
+    try {
+      await navigator.clipboard.writeText(await markdown());
+      setNotice("Text copied");
+    } catch {
+      setNotice("Could not copy the text");
+    }
+    setTimeout(() => setNotice(null), 2500);
+  }
   async function download() {
     try {
-      const data = await apiClient<DocumentData>(
-        `/api/documents/${id}?organizationId=${organizationId}`,
-      );
-      const latest = data.changes.at(-1);
       const url = URL.createObjectURL(
-        new Blob([`# ${title}\n\n${latest?.content ?? ""}\n`], {
-          type: "text/markdown",
-        }),
+        new Blob([await markdown()], { type: "text/markdown" }),
       );
       const link = window.document.createElement("a");
       link.href = url;
@@ -173,6 +184,10 @@ export function DocumentActionsMenu({
           <MenuItem className="cursor-pointer" onClick={download}>
             <DownloadSimpleIcon aria-hidden="true" />
             Download as Markdown
+          </MenuItem>
+          <MenuItem className="cursor-pointer" onClick={copyText}>
+            <ClipboardTextIcon aria-hidden="true" />
+            Copy as text
           </MenuItem>
           <MenuItem className="cursor-pointer" onClick={copyLink}>
             <CopySimpleIcon aria-hidden="true" />
