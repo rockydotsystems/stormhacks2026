@@ -18,7 +18,7 @@ export function DiffView({ before, after }: { before: string; after: string }) {
       oldFile={{ name: NAME, contents: before }}
       newFile={{ name: NAME, contents: after }}
       options={{
-        diffStyle: "unified",
+        diffStyle: "split",
         disableFileHeader: true,
         expandUnchanged: true,
         overflow: "wrap",
