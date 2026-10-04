@@ -9,7 +9,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTab } from "@/components/ui/tabs";
-import { Spinner } from "@/components/ui/spinner";
 import { Badge } from "@/components/ui/badge";
 import { PlanningApiError } from "@/features/planning/client/api";
 import {
@@ -281,9 +280,31 @@ const RawView = lazy(() =>
 );
 
 function CodeFallback() {
+  return <HistorySkeleton variant="code" />;
+}
+
+// Placeholder shapes that match what each tab shows once it has loaded.
+function HistorySkeleton({
+  variant,
+}: {
+  variant: "summary" | "code" | "messages";
+}) {
+  const widths =
+    variant === "code"
+      ? ["62%", "88%", "45%", "76%", "92%", "58%", "81%", "40%"]
+      : variant === "messages"
+        ? ["70%", "46%", "82%", "58%"]
+        : ["90%", "68%", "86%"];
   return (
-    <div className="history-empty" role="status">
-      <Spinner className="size-3.5" />
+    <div
+      className="history-skeleton"
+      data-variant={variant}
+      role="status"
+      aria-label="Loading"
+    >
+      {widths.map((width, index) => (
+        <span key={index} style={{ width }} />
+      ))}
     </div>
   );
 }
@@ -331,12 +352,7 @@ function ConversationPane({
   messages: MessageDto[];
   emptyText: string;
 }) {
-  if (loading)
-    return (
-      <div className="history-empty" role="status">
-        <Spinner className="size-3.5" />
-      </div>
-    );
+  if (loading) return <HistorySkeleton variant="messages" />;
   if (error) {
     // A change saved from the editor has no conversation. That is not a failure.
     if (error instanceof PlanningApiError && error.kind === "missing")
@@ -402,12 +418,7 @@ function SummaryPane({
   };
   emptyText: string;
 }) {
-  if (query.isPending)
-    return (
-      <div className="history-empty" role="status">
-        <Spinner className="size-3.5" />
-      </div>
-    );
+  if (query.isPending) return <HistorySkeleton variant="summary" />;
   if (query.error)
     return (
       <p className="history-empty text-destructive" role="alert">

@@ -2826,3 +2826,51 @@ a {
     gap: 4px;
   }
 }
+
+.history-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.history-skeleton span {
+  display: block;
+  height: 12px;
+  border-radius: 6px;
+  background: var(--muted);
+  animation: history-skeleton-pulse 1.4s ease-in-out infinite;
+}
+.history-skeleton span:nth-child(2n) {
+  animation-delay: 0.15s;
+}
+.history-skeleton[data-variant="summary"] {
+  max-width: 44rem;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  gap: 14px;
+}
+.history-skeleton[data-variant="summary"] span {
+  height: 14px;
+}
+.history-skeleton[data-variant="messages"] span {
+  height: 36px;
+  border-radius: 12px;
+}
+.history-skeleton[data-variant="messages"] span:nth-child(2n) {
+  align-self: flex-end;
+}
+.history-skeleton[data-variant="code"] {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+@keyframes history-skeleton-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .history-skeleton span {
+    animation: none;
+  }
+}
