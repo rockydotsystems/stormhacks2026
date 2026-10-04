@@ -15,9 +15,15 @@ export default async function SettingsPage({
 }) {
   const { section } = await params;
   if (
-    !["profile", "security", "preferences", "team", "github", "mcp"].includes(
-      section,
-    )
+    ![
+      "profile",
+      "security",
+      "preferences",
+      "team",
+      "github",
+      "linear",
+      "mcp",
+    ].includes(section)
   )
     notFound();
   const query = await searchParams;

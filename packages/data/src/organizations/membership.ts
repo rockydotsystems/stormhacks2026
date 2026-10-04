@@ -1,3 +1,4 @@
+import type { OrganizationMembership } from "@workos-inc/node";
 import { getWorkOS } from "./workos";
 import type { OrganizationActor } from "./contracts";
 import { organizationMembers, users } from "./schema";
@@ -26,5 +27,22 @@ export async function requireOrganizationMember(
   await db.insert(users).values({ id: actor.userId }).onConflictDoNothing();
   // Planning foreign keys need a local mirror; WorkOS remains the access authority.
   await db.insert(organizationMembers).values(actor).onConflictDoNothing();
+  return membership;
+}
+
+export function isOrganizationAdmin(membership: OrganizationMembership) {
+  return (
+    membership.role.slug === "admin" ||
+    Boolean(membership.roles?.some((role) => role.slug === "admin"))
+  );
+}
+
+export async function requireOrganizationAdmin(
+  db: Pick<Database, "insert">,
+  actor: OrganizationActor,
+) {
+  const membership = await requireOrganizationMember(db, actor);
+  if (!isOrganizationAdmin(membership))
+    throw new ApiError(403, "Only organization admins can do this.");
   return membership;
 }

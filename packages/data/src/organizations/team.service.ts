@@ -1,18 +1,12 @@
 import { sql } from "drizzle-orm";
-import type { OrganizationMembership } from "@workos-inc/node";
 import { z } from "zod";
 import type { Database } from "../db";
 import { ApiError } from "../errors";
 import type { OrganizationActor, TeamAction, TeamData } from "./contracts";
-import { requireOrganizationMember } from "./membership";
+import { isOrganizationAdmin, requireOrganizationMember } from "./membership";
 import { getWorkOS } from "./workos";
 
-function isAdmin(membership: OrganizationMembership) {
-  return (
-    membership.role.slug === "admin" ||
-    membership.roles?.some((role) => role.slug === "admin")
-  );
-}
+const isAdmin = isOrganizationAdmin;
 
 export class TeamService {
   constructor(private readonly dependencies: { db: Database }) {}

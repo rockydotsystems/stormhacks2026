@@ -13,6 +13,7 @@ import {
   FileTextIcon,
   FolderIcon,
   GitBranchIcon,
+  KanbanIcon,
   HouseIcon,
   ListIcon,
   MagnifyingGlassIcon,
@@ -615,6 +616,7 @@ export function Dashboard({
               items: [
                 { section: "team", label: "Team", icon: UsersIcon },
                 { section: "github", label: "GitHub", icon: GitBranchIcon },
+                { section: "linear", label: "Linear", icon: KanbanIcon },
               ],
             },
           ].map(({ category, items }) => (
@@ -971,13 +973,13 @@ export function Dashboard({
           ref={scrollRef}
         >
           {settingsSection ? (
-            (settingsSection === "github" || settingsSection === "team") &&
+            ["github", "team", "linear"].includes(settingsSection) &&
             session.data?.user &&
             workspace.isPending ? (
               <div className="settings-content">
                 <p role="status">Loading your organizations…</p>
               </div>
-            ) : (settingsSection === "github" || settingsSection === "team") &&
+            ) : ["github", "team", "linear"].includes(settingsSection) &&
               workspace.isError ? (
               <div className="settings-content" role="alert">
                 <p>{workspace.error.message}</p>

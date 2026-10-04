@@ -6,6 +6,7 @@ import {
   CopySimpleIcon,
   DotsThreeIcon,
   DownloadSimpleIcon,
+  KanbanIcon,
   PencilSimpleIcon,
   TextAlignLeftIcon,
   TrashIcon,
@@ -13,6 +14,7 @@ import {
 import { useDocumentAction } from "../client/queries";
 import type { DocumentData } from "../contracts";
 import { apiClient } from "@/lib/api-client";
+import { LinearSyncDialog } from "@/features/linear/components/linear-sync-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,7 +45,7 @@ import {
   MenuTrigger,
 } from "@/components/ui/menu";
 
-type Dialogs = "rename" | "description" | "delete" | null;
+type Dialogs = "rename" | "description" | "delete" | "linear" | null;
 
 export function documentLink(id: string) {
   return `${window.location.origin}/?document=${encodeURIComponent(id)}`;
@@ -193,6 +195,10 @@ export function DocumentActionsMenu({
             <CopySimpleIcon aria-hidden="true" />
             Copy link
           </MenuItem>
+          <MenuItem className="cursor-pointer" onClick={() => show("linear")}>
+            <KanbanIcon aria-hidden="true" />
+            Sync to Linear
+          </MenuItem>
           <MenuSeparator />
           <MenuItem
             className="cursor-pointer"
@@ -204,6 +210,14 @@ export function DocumentActionsMenu({
           </MenuItem>
         </MenuPopup>
       </Menu>
+      <LinearSyncDialog
+        open={open === "linear"}
+        onOpenChange={(next) => !next && setOpen(null)}
+        userId={userId}
+        organizationId={organizationId}
+        docId={id}
+        title={title}
+      />
       {notice && (
         <span className="sr-only" role="status">
           {notice}

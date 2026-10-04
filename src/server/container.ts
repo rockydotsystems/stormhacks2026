@@ -9,6 +9,8 @@ import { GitHubService } from "@/features/github/server/github.service";
 import { GitHubController } from "@/features/github/server/github.controller";
 import { GitHubReviewService } from "@/features/github/server/github-review.service";
 import { DocsService } from "@/features/docs/server/docs.service";
+import { LinearService } from "@/features/linear/server/linear.service";
+import { LinearController } from "@/features/linear/server/linear.controller";
 import { OrganizationsService } from "@/features/organizations/server/organizations.service";
 import { TeamService } from "@stormhacks/data/organizations/team.service";
 import { TeamController } from "@/features/organizations/server/team.controller";
@@ -44,6 +46,8 @@ export type Dependencies = {
   githubService: GitHubService;
   githubController: GitHubController;
   githubReviewService: GitHubReviewService;
+  linearService: LinearService;
+  linearController: LinearController;
   dashboardController: DashboardController;
   db: Database;
   model: ModelPort;
@@ -79,6 +83,8 @@ container.register({
   githubService: asClass(GitHubService).scoped(),
   githubController: asClass(GitHubController).scoped(),
   githubReviewService: asClass(GitHubReviewService).scoped(),
+  linearService: asClass(LinearService).scoped(),
+  linearController: asClass(LinearController).scoped(),
   dashboardController: asClass(DashboardController).scoped(),
   db: asFunction(createDatabase)
     .scoped()

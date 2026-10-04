@@ -22,19 +22,21 @@ import {
 import { useSession } from "@/features/auth/client/queries";
 import { useDefaultDocumentSort } from "@/features/account/preferences";
 import { GitHubSettings } from "@/features/github/components/github-settings";
+import { LinearSettings } from "@/features/linear/components/linear-settings";
 import { McpSettings } from "@/features/account/components/mcp-settings";
 import { TeamSettings } from "@/features/organizations/components/team-settings";
 import { ThemeSelect } from "./theme-select";
 import { useTheme } from "./theme-provider";
 
 export type SettingsSection =
-  "profile" | "security" | "preferences" | "team" | "github" | "mcp";
+  "profile" | "security" | "preferences" | "team" | "github" | "linear" | "mcp";
 const headings = {
   profile: "Profile",
   security: "Security",
   preferences: "Preferences",
   team: "Team settings",
   github: "GitHub",
+  linear: "Linear",
   mcp: "MCP",
 };
 
@@ -155,6 +157,11 @@ export default function AccountSettings({
             organizationId={organizationId}
             outcome={githubOutcome}
           />
+        ) : section === "linear" ? (
+          <LinearSettings
+            userId={session.data.user.id}
+            organizationId={organizationId}
+          />
         ) : section === "team" ? (
           <TeamSettings
             key={organizationId}
@@ -168,13 +175,15 @@ export default function AccountSettings({
         <div className="settings-sign-in">
           <p className="settings-description">
             Sign in to manage{" "}
-            {section === "github"
-              ? "GitHub connections"
-              : section === "team"
-                ? "your team"
-                : section === "security"
-                  ? "your password, verification methods, and sessions"
-                  : "your name, email, and profile"}
+            {section === "linear"
+              ? "Linear"
+              : section === "github"
+                ? "GitHub connections"
+                : section === "team"
+                  ? "your team"
+                  : section === "security"
+                    ? "your password, verification methods, and sessions"
+                    : "your name, email, and profile"}
             .
           </p>
           <Button render={<Link href="/login" />}>Sign in with WorkOS</Button>
