@@ -290,11 +290,15 @@ export class DrizzlePlanningSessionStore implements PlanningSessionStore {
           .select()
           .from(planningConversations)
           .where(eq(planningConversations.id, input.conversationId));
-        await tx.insert(projects).values({
-          id: conversation.id,
-          organizationId: conversation.organizationId,
-          name: conversation.title,
-        });
+        // Only a conversation with no document of its own gets a new project. One bound to an
+        // existing document already belongs to that document's project.
+        if (!conversation.docId) {
+          await tx.insert(projects).values({
+            id: conversation.id,
+            organizationId: conversation.organizationId,
+            name: conversation.title,
+          });
+        }
       }
       const change = input.applyDocument
         ? await input.applyDocument(docsOn(tx))
