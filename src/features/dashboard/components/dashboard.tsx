@@ -104,6 +104,7 @@ import {
   projectPath,
 } from "@/features/dashboard/routes";
 import { ProjectActionsMenu } from "./project-actions-menu";
+import { ProjectAvatar } from "./project-avatar";
 import { DocumentEditor } from "./document-editor";
 import { DocumentActionsMenu } from "./document-actions-menu";
 import { apiClient } from "@/lib/api-client";
@@ -724,7 +725,7 @@ export function Dashboard({
                   aria-label={projectName(name)}
                   title={projectName(name)}
                 >
-                  <FolderIcon aria-hidden="true" />
+                  <ProjectAvatar projectId={name} />
                   <span className="sidebar-label truncate">
                     {projectName(name)}
                   </span>
@@ -1210,28 +1211,10 @@ export function Dashboard({
                               )}
                               onNavigate={prepareNavigation}
                             >
-                              <div
-                                className={cn(
-                                  "folder-art",
-                                  `folder-tone-${projects.indexOf(name) % 3}`,
-                                )}
-                                aria-hidden="true"
-                              >
-                                <div className="folder-back" />
-                                <div className="folder-paper paper-back">
-                                  <i />
-                                  <i />
-                                  <i />
-                                </div>
-                                <div className="folder-paper paper-front">
-                                  <i />
-                                  <i />
-                                  <i />
-                                </div>
-                                <div className="folder-flap">
-                                  <span className="folder-seam" />
-                                </div>
-                              </div>
+                              <ProjectAvatar
+                                projectId={name}
+                                className="project-card-avatar"
+                              />
                               <div className="project-card-label">
                                 <span>
                                   <strong>{projectName(name)}</strong>
