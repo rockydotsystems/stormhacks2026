@@ -216,4 +216,10 @@ export interface PlanningSessionStore {
     conversationId: string,
     changeId: string,
   ): Promise<ChangeSourceRow | null>;
+  findSummary(conversationId: string, scope: string): Promise<string | null>;
+  saveSummary(
+    conversationId: string,
+    scope: string,
+    summary: string,
+  ): Promise<void>;
 }

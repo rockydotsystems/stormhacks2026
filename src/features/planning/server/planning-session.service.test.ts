@@ -142,6 +142,23 @@ describe("PlanningSessionService", () => {
     expect(cleared.conversation.pendingGate).toBeNull();
   });
 
+  it("summarizes the conversation behind a change once, then serves the stored summary", async () => {
+    ctx.agent.enqueue({}, generate);
+    await ctx.service.sendMessage(user, id, { text: "pitch" });
+    const result = await ctx.service.sendMessage(user, id, {
+      text: "that's enough",
+    });
+    const changeId = result.conversation.changes[0].id;
+    const first = await ctx.service.getChangeSummary(user, id, changeId);
+    const second = await ctx.service.getChangeSummary(user, id, changeId);
+    expect(first).toEqual({ summary: "Summary." });
+    expect(second).toEqual(first);
+    expect(ctx.agent.summaries).toBe(1);
+    await expect(
+      ctx.service.getChangeSummary("user-b", id, changeId),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
   it("generation creates change 1 and a source covering the whole conversation so far", async () => {
     ctx.agent.enqueue({}, generate);
     await ctx.service.sendMessage(user, id, { text: "pitch" });

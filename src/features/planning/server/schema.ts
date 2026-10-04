@@ -274,3 +274,20 @@ export const planningChangeSources = pgTable(
     ),
   ],
 );
+
+// Cached summaries of the conversation behind a change or a published version. `scope` is
+// "change:<id>" or "version:<number>". The draft is never stored, because it keeps growing.
+export const planningSummaries = pgTable(
+  "planning_summaries",
+  {
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => planningConversations.id, { onDelete: "cascade" }),
+    scope: text("scope").notNull(),
+    summary: text("summary").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.conversationId, table.scope] })],
+);

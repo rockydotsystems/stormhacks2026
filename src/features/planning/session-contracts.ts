@@ -225,3 +225,8 @@ export const sessionEventSchema = z.discriminatedUnion("type", [
   }),
 ]);
 export type SessionEvent = z.infer<typeof sessionEventSchema>;
+
+// A short account of the conversation behind a change or a version. Empty when no conversation
+// was recorded for it.
+export const historySummarySchema = z.object({ summary: z.string() });
+export type HistorySummary = z.infer<typeof historySummarySchema>;

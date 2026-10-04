@@ -71,6 +71,22 @@ const SHRINK_RATIO = 0.25;
 const SHRINK_INTENT =
   /\b(delete|remove|shorten|rewrite|trim|cut|drop|condense|simplify|start over|clear|replace)\b/i;
 
+// The part of a stored message the summary reads.
+export type SummaryMessage = {
+  role: "user" | "assistant";
+  content: string;
+  questions: { text: string }[] | null;
+};
+
+const SUMMARY_PROMPT = [
+  "You summarize the conversation between a team and a planning agent that led the agent to change a document.",
+  "Write exactly three lines, in this order, each starting with the label shown:",
+  "Discussed: one or two sentences on what the team talked about.",
+  "Decided: one or two sentences on what the team decided and why.",
+  "Changed: one sentence on what the agent then changed in the document.",
+  "Answers to numbered questions are written as [number: answer]. Match each to the question with that number. Use only what the conversation says. Do not invent reasons or decisions. Use no other headings, bullets, or quotes.",
+].join("\n");
+
 export type TurnEvent =
   | { type: "reasoning"; text: string }
   | { type: "delta"; text: string }
@@ -78,6 +94,25 @@ export type TurnEvent =
 
 export class PlanningService {
   constructor(private readonly dependencies: { model: ModelPort }) {}
+
+  // A short account of what the team discussed that led to a change. Plain text, never stored here.
+  async summarize(messages: SummaryMessage[]): Promise<string> {
+    const transcript = messages
+      .map((message) => {
+        if (message.role === "user") return `Team: ${message.content}`;
+        const questions = (message.questions ?? [])
+          .map((question, index) => `  ${index + 1}. ${question.text}`)
+          .join("\n");
+        return `Agent: ${message.content}${questions ? `\nQuestions asked:\n${questions}` : ""}`;
+      })
+      .join("\n\n")
+      .slice(-SEARCH_CHARS);
+    const text = await this.dependencies.model.generateText({
+      system: SUMMARY_PROMPT,
+      messages: [{ role: "user", content: transcript }],
+    });
+    return text.trim();
+  }
 
   async runTurn(input: AgentTurnInput): Promise<AgentTurnResult> {
     assertTurn(input);

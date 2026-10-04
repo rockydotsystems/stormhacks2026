@@ -13,6 +13,7 @@ import {
   type DocumentDraft,
 } from "@/features/planning/contracts";
 import { ModelError } from "@/features/planning/server/model";
+import type { SummaryMessage } from "@/features/planning/server/planning.service";
 import type {
   ApplyDocument,
   ChangeSourceRow,
@@ -47,6 +48,7 @@ import {
   type MessageDto,
   type ParticipantDto,
   type PublishInput,
+  type HistorySummary,
   type RevertInput,
   type RevertResult,
   type SendMessageInput,
@@ -69,6 +71,7 @@ export type AgentStreamEvent =
 export interface AgentPort {
   runTurn(input: AgentTurnInput): Promise<AgentTurnResult>;
   streamTurn(input: AgentTurnInput): AsyncIterable<AgentStreamEvent>;
+  summarize(messages: SummaryMessage[]): Promise<string>;
 }
 
 // A turn holds its lease for at most this long, then another turn may take over. This keeps a
@@ -508,6 +511,60 @@ export class PlanningSessionService {
         messageDto(row, produced.get(row.id) ?? null),
       ),
     };
+  }
+
+  // A short account of the conversation behind one change. Stored on first view.
+  async getChangeSummary(
+    userId: string,
+    id: string,
+    changeId: string,
+  ): Promise<HistorySummary> {
+    const source = await this.getChangeSource(userId, id, changeId);
+    return this.summaryFor(
+      id,
+      `change:${source.changeId}`,
+      source.messages,
+      true,
+    );
+  }
+
+  // The same for one version. The draft is summarized afresh each time, because it keeps growing.
+  async getVersionSummary(
+    userId: string,
+    id: string,
+    number: number | null,
+  ): Promise<HistorySummary> {
+    const source = await this.getVersionSource(userId, id, number);
+    return this.summaryFor(
+      id,
+      `version:${number}`,
+      source.messages,
+      number !== null,
+    );
+  }
+
+  private async summaryFor(
+    conversationId: string,
+    scope: string,
+    messages: SummaryMessage[],
+    cache: boolean,
+  ): Promise<HistorySummary> {
+    if (messages.length === 0) return { summary: "" };
+    if (cache) {
+      const stored = await this.store.findSummary(conversationId, scope);
+      if (stored !== null) return { summary: stored };
+    }
+    let summary: string;
+    try {
+      summary = await this.dependencies.planningService.summarize(messages);
+    } catch (error) {
+      if (error instanceof ModelError)
+        throw new ApiError(502, "The summary is unavailable. Try again.");
+      throw error;
+    }
+    if (cache && summary)
+      await this.store.saveSummary(conversationId, scope, summary);
+    return { summary };
   }
 
   // A turn runs against the working document. The agent's change is committed in one transaction

@@ -45,6 +45,8 @@ type SessionService = Pick<
   | "getVersion"
   | "getChangeSource"
   | "getVersionSource"
+  | "getChangeSummary"
+  | "getVersionSummary"
   | "sendMessage"
   | "streamMessage"
   | "publish"
@@ -230,6 +232,31 @@ export class PlanningSessionController {
     if (!change.success) throw new ApiError(400, "Change id is invalid.");
     return json(
       await this.service.getChangeSource(user.id, conversation, change.data),
+    );
+  }
+
+  async changeSummary(id: string, changeId: string) {
+    const user = await this.dependencies.authService.requireUser();
+    const conversation = conversationId(id);
+    const change = changeIdSchema.safeParse(changeId);
+    if (!change.success) throw new ApiError(400, "Change id is invalid.");
+    return json(
+      await this.service.getChangeSummary(user.id, conversation, change.data),
+    );
+  }
+
+  async versionSummary(id: string, number: string) {
+    const user = await this.dependencies.authService.requireUser();
+    const conversation = conversationId(id);
+    if (number !== "draft" && !versionNumberSchema.safeParse(number).success) {
+      throw new ApiError(400, "Version number is invalid.");
+    }
+    return json(
+      await this.service.getVersionSummary(
+        user.id,
+        conversation,
+        number === "draft" ? null : Number(number),
+      ),
     );
   }
 

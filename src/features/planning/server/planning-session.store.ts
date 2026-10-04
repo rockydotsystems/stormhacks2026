@@ -38,6 +38,7 @@ import {
   planningConversations,
   planningMessages,
   planningParticipants,
+  planningSummaries,
 } from "@/features/planning/server/schema";
 import type { Database } from "@/server/db";
 
@@ -570,6 +571,26 @@ export class DrizzlePlanningSessionStore implements PlanningSessionStore {
         ),
       );
     return row ? toSource(row) : null;
+  }
+
+  async findSummary(conversationId: string, scope: string) {
+    const [row] = await this.dependencies.db
+      .select({ summary: planningSummaries.summary })
+      .from(planningSummaries)
+      .where(
+        and(
+          eq(planningSummaries.conversationId, conversationId),
+          eq(planningSummaries.scope, scope),
+        ),
+      );
+    return row?.summary ?? null;
+  }
+
+  async saveSummary(conversationId: string, scope: string, summary: string) {
+    await this.dependencies.db
+      .insert(planningSummaries)
+      .values({ conversationId, scope, summary })
+      .onConflictDoNothing();
   }
 
   // The range starts after the previous surviving linked change and ends at the result message,

@@ -14,8 +14,10 @@ import { Badge } from "@/components/ui/badge";
 import { PlanningApiError } from "@/features/planning/client/api";
 import {
   useChangeSource,
+  useChangeSummary,
   useDocumentConversation,
   useVersionSource,
+  useVersionSummary,
 } from "@/features/planning/client/queries";
 import { pairAnswers, parseAnswers } from "@/features/planning/client/answers";
 import type { Question } from "@/features/planning/contracts";
@@ -30,7 +32,7 @@ import {
 } from "../lib/history";
 
 type Scope = "versions" | "changes";
-type View = "diff" | "raw" | "conversation";
+type View = "summary" | "diff" | "raw" | "conversation";
 
 function when(iso: string) {
   return new Date(iso).toLocaleString(undefined, {
@@ -61,7 +63,7 @@ export function DocumentHistoryDialog({
 }) {
   const entries = useMemo(() => historyEntries(data), [data]);
   const [scope, setScope] = useState<Scope>("versions");
-  const [view, setView] = useState<View>("diff");
+  const [view, setView] = useState<View>("summary");
   const [entryKey, setEntryKey] = useState<HistoryEntry["key"] | null>(null);
   const [changeId, setChangeId] = useState<string | null>(null);
 
@@ -104,6 +106,18 @@ export function DocumentHistoryDialog({
     conversationId,
     entry ? entry.key : null,
     open && scope === "versions" && view === "conversation",
+  );
+
+  const changeSummary = useChangeSummary(
+    conversationId,
+    open && scope === "changes" && view === "summary"
+      ? (change?.id ?? null)
+      : null,
+  );
+  const versionSummary = useVersionSummary(
+    conversationId,
+    entry ? entry.key : null,
+    open && scope === "versions" && view === "summary",
   );
 
   return (
@@ -213,6 +227,7 @@ export function DocumentHistoryDialog({
                   onValueChange={(value) => setView(value as View)}
                 >
                   <TabsList>
+                    <TabsTab value="summary">Summary</TabsTab>
                     <TabsTab value="diff">Diff</TabsTab>
                     <TabsTab value="raw">Raw</TabsTab>
                     <TabsTab value="conversation">Conversation</TabsTab>
@@ -222,6 +237,13 @@ export function DocumentHistoryDialog({
               <div className="history-pane">
                 {!head ? (
                   <p className="history-empty">Nothing to show here.</p>
+                ) : view === "summary" ? (
+                  <SummaryPane
+                    query={
+                      scope === "versions" ? versionSummary : changeSummary
+                    }
+                    emptyText="No conversation was recorded for this."
+                  />
                 ) : view === "raw" ? (
                   <RawPane content={head.content} />
                 ) : view === "diff" ? (
@@ -366,4 +388,56 @@ function ConversationPane({
       })}
     </div>
   );
+}
+
+// A short account of what was discussed before the agent made the change.
+function SummaryPane({
+  query,
+  emptyText,
+}: {
+  query: {
+    isPending: boolean;
+    error: Error | null;
+    data?: { summary: string };
+  };
+  emptyText: string;
+}) {
+  if (query.isPending)
+    return (
+      <div className="history-empty" role="status">
+        <Spinner className="size-3.5" />
+      </div>
+    );
+  if (query.error)
+    return (
+      <p className="history-empty text-destructive" role="alert">
+        {query.error.message}
+      </p>
+    );
+  if (!query.data?.summary) return <p className="history-empty">{emptyText}</p>;
+  const parts = summaryParts(query.data.summary);
+  if (parts.length === 0)
+    return <p className="history-summary-text">{query.data.summary}</p>;
+  return (
+    <dl className="history-summary">
+      {parts.map((part) => (
+        <div key={part.label}>
+          <dt>{part.label}</dt>
+          <dd>{part.text}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+const SUMMARY_LABELS = ["Discussed", "Decided", "Changed"];
+
+// Reads the three labeled lines the summary is written in. Anything else shows as plain text.
+function summaryParts(summary: string) {
+  const parts = summary.split("\n").flatMap((line) => {
+    const label = SUMMARY_LABELS.find((item) => line.startsWith(`${item}:`));
+    const text = label ? line.slice(label.length + 1).trim() : "";
+    return label && text ? [{ label, text }] : [];
+  });
+  return parts.length >= 2 ? parts : [];
 }

@@ -2781,3 +2781,48 @@ a {
     transparent
   );
 }
+
+.history-summary {
+  display: grid;
+  max-width: 44rem;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.history-summary > div {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  gap: 16px;
+  padding: 14px 16px;
+}
+.history-summary > div + div {
+  border-top: 1px solid var(--border);
+}
+.history-summary dt {
+  padding-top: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+.history-summary > div:last-child dt {
+  color: var(--success-foreground);
+}
+.history-summary dd {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.history-summary-text {
+  max-width: 65ch;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+@media (max-width: 720px) {
+  .history-summary > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+}

@@ -10,7 +10,9 @@ import {
   applyStandby,
   createConversation,
   getChangeSource,
+  getChangeSummary,
   getVersionSource,
+  getVersionSummary,
   getConversation,
   getVersion,
   listChanges,
@@ -107,6 +109,28 @@ export function useVersionSource(
   return useQuery({
     queryKey: [...planningKeys.all, "version-source", id, number] as const,
     queryFn: () => getVersionSource(id as string, number as number | "draft"),
+    enabled: id !== null && number !== null && enabled,
+    staleTime: number === "draft" ? 0 : Infinity,
+  });
+}
+
+export function useChangeSummary(id: string | null, changeId: string | null) {
+  return useQuery({
+    queryKey: [...planningKeys.all, "change-summary", id, changeId] as const,
+    queryFn: () => getChangeSummary(id as string, changeId as string),
+    enabled: id !== null && changeId !== null,
+    staleTime: Infinity,
+  });
+}
+
+export function useVersionSummary(
+  id: string | null,
+  number: number | "draft" | null,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: [...planningKeys.all, "version-summary", id, number] as const,
+    queryFn: () => getVersionSummary(id as string, number as number | "draft"),
     enabled: id !== null && number !== null && enabled,
     staleTime: number === "draft" ? 0 : Infinity,
   });

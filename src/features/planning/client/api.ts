@@ -2,6 +2,7 @@ import { createSseParser } from "@/features/planning/client/sse";
 import {
   sessionEventSchema,
   type ChangeSourceDetail,
+  type HistorySummary,
   type VersionSource,
   type ChangeSummary,
   type ConversationDetail,
@@ -133,6 +134,20 @@ export function getChangeSource(
   changeId: string,
 ): Promise<ChangeSourceDetail> {
   return request(`${at(id)}/changes/${encodeURIComponent(changeId)}/source`);
+}
+
+export function getChangeSummary(
+  id: string,
+  changeId: string,
+): Promise<HistorySummary> {
+  return request(`${at(id)}/changes/${encodeURIComponent(changeId)}/summary`);
+}
+
+export function getVersionSummary(
+  id: string,
+  number: number | "draft",
+): Promise<HistorySummary> {
+  return request(`${at(id)}/versions/${number}/summary`);
 }
 
 // `number` is a version number, or "draft" for the changes after the latest version.

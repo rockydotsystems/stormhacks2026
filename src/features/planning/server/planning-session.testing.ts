@@ -409,6 +409,16 @@ export class InMemoryStore implements PlanningSessionStore {
     );
   }
 
+  private summaries = new Map<string, string>();
+
+  async findSummary(conversationId: string, scope: string) {
+    return this.summaries.get(`${conversationId}:${scope}`) ?? null;
+  }
+
+  async saveSummary(conversationId: string, scope: string, summary: string) {
+    this.summaries.set(`${conversationId}:${scope}`, summary);
+  }
+
   async insertUserMessage(
     conversationId: string,
     input: {
@@ -596,6 +606,13 @@ type Script = Partial<AgentTurnResult> & {
 // A scripted agent. It only has runTurn and streamTurn, like the real port, so tests can show
 // the agent has no way to publish.
 export class ScriptedAgent implements AgentPort {
+  summaries: number = 0;
+
+  async summarize(): Promise<string> {
+    this.summaries += 1;
+    return "Summary.";
+  }
+
   readonly inputs: AgentTurnInput[] = [];
   gate: Promise<void> | null = null;
   private queue: Script[] = [];
