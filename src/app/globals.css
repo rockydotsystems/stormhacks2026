@@ -585,6 +585,9 @@ a {
 }
 .sidebar-item > .project-folder-icon {
   color: var(--folder-back);
+  stroke: color-mix(in oklab, var(--folder-back) 60%, var(--foreground));
+  stroke-width: 12;
+  stroke-linejoin: round;
 }
 .folder-art {
   width: 132px;
