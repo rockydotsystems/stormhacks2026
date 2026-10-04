@@ -44,8 +44,8 @@ projects. Project shortcuts and recent documents appear in the sidebar.
 
 Projects have a name, description, and optional repository selections. A repository
 can belong to multiple projects. New documents use a Coss project dropdown and
-start with that project's repositories selected; these can be adjusted for the
-specific decision. Reviewer requests are deferred until inside the document.
+inherit repository context from the project; repository selection lives in
+project creation. Reviewer requests are deferred until inside the document.
 Duplicate project names are rejected within the current organization.
 
 Status, Project, and repository selectors use Coss's inline chip multi-selection

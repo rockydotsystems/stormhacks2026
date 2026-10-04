@@ -10,6 +10,7 @@ import {
   ClockIcon,
   FileTextIcon,
   FolderIcon,
+  GitBranchIcon,
   HouseIcon,
   ListIcon,
   MagnifyingGlassIcon,
@@ -33,6 +34,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   Combobox,
+  ComboboxTrigger,
   ComboboxChip,
   ComboboxChips,
   ComboboxChipsInput,
@@ -168,11 +170,13 @@ function FilterMenu({
 }
 
 function MultiFilter({
+  compact = false,
   label,
   values,
   options,
   onChange,
 }: {
+  compact?: boolean;
   label: string;
   values: string[];
   options: string[];
@@ -180,7 +184,9 @@ function MultiFilter({
 }) {
   return (
     <Combobox multiple items={options} value={values} onValueChange={onChange}>
-      <ComboboxChips className="dashboard-multi-select">
+      <ComboboxChips
+        className={cn("dashboard-multi-select", compact && "compact-filter")}
+      >
         <ComboboxValue>
           {(selected: string[]) => (
             <>
@@ -197,13 +203,22 @@ function MultiFilter({
                 id={`dashboard-${label.toLowerCase().replaceAll(" ", "-")}`}
                 aria-label={label}
                 placeholder={selected.length ? undefined : label}
-                size="sm"
+                size={compact ? (selected.length ? 2 : label.length) : "sm"}
               />
             </>
           )}
         </ComboboxValue>
+        {compact && (
+          <ComboboxTrigger
+            className="filter-picker-trigger"
+            aria-label={`Show ${label.toLowerCase()} options`}
+          >
+            <CaretDownIcon aria-hidden="true" />
+          </ComboboxTrigger>
+        )}
       </ComboboxChips>
       <ComboboxPopup
+        className={compact ? "compact-filter-popup" : undefined}
         aria-label={`Select ${label.toLowerCase().replaceAll(" ", "-")}`}
       >
         <ComboboxEmpty>No matching options.</ComboboxEmpty>
@@ -228,9 +243,6 @@ export function Dashboard() {
   const [decisions, setDecisions] = useState(initialDecisions);
   const [organization, setOrganization] = useState("Rocky Dot Systems");
   const [view, setView] = useState("Overview");
-  const [creationRepositories, setCreationRepositories] = useState<string[]>(
-    [],
-  );
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<string[]>([]);
   const [project, setProject] = useState<string[]>([]);
@@ -282,9 +294,6 @@ export function Dashboard() {
   function startDocument() {
     const name = activeProject || project[0] || projects[0];
     setCreationProject(name);
-    setCreationRepositories(
-      orgProjects.find((item) => item.name === name)?.repositories || [],
-    );
     setCreateOpen(true);
   }
   function navigate(nextView: string) {
@@ -332,14 +341,13 @@ export function Dashboard() {
       project: String(fields.get("project")),
       creator: "matthew",
       reviewers: [],
-      repositories: creationRepositories,
       status: "Draft",
       updated: new Date().toISOString(),
       organization,
     };
     setDecisions((items) => [decision, ...items]);
     setCreateOpen(false);
-    resetFilters();
+    openProject(decision.project);
     openDocument(decision.id);
   }
 
@@ -534,15 +542,66 @@ export function Dashboard() {
           >
             <ListIcon />
           </Button>
-          <span>Workspace</span>
-          <span className="breadcrumb-divider">/</span>
-          <span className="breadcrumb-current">
-            {selected
-              ? selected.project
-              : activeProject
-                ? `Projects / ${activeProject}`
-                : view}
-          </span>
+          <nav aria-label="Breadcrumb">
+            <ol className="dashboard-breadcrumb">
+              <li>
+                <button type="button" onClick={() => navigate("Overview")}>
+                  Workspace
+                </button>
+              </li>
+              {activeProject || selected ? (
+                <>
+                  <li className="breadcrumb-divider" aria-hidden="true">
+                    /
+                  </li>
+                  <li>
+                    <button type="button" onClick={() => navigate("Projects")}>
+                      Projects
+                    </button>
+                  </li>
+                  <li className="breadcrumb-divider" aria-hidden="true">
+                    /
+                  </li>
+                  <li>
+                    {selected ? (
+                      <button
+                        type="button"
+                        onClick={() => openProject(selected.project)}
+                      >
+                        {selected.project}
+                      </button>
+                    ) : (
+                      <span className="breadcrumb-current" aria-current="page">
+                        {activeProject}
+                      </span>
+                    )}
+                  </li>
+                  {selected && (
+                    <>
+                      <li className="breadcrumb-divider" aria-hidden="true">
+                        /
+                      </li>
+                      <li
+                        className="breadcrumb-current breadcrumb-document"
+                        aria-current="page"
+                      >
+                        {selected.title}
+                      </li>
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <li className="breadcrumb-divider" aria-hidden="true">
+                    /
+                  </li>
+                  <li className="breadcrumb-current" aria-current="page">
+                    {view}
+                  </li>
+                </>
+              )}
+            </ol>
+          </nav>
         </header>
         <div className="dashboard-scroll" ref={scrollRef}>
           {selected ? (
@@ -641,16 +700,30 @@ export function Dashboard() {
                   {currentProject.description && (
                     <p>{currentProject.description}</p>
                   )}
-                  <div
-                    className="project-repositories"
-                    aria-label="Project repositories"
-                  >
-                    {currentProject.repositories.map((repository) => (
-                      <span key={repository}>{repository}</span>
-                    ))}
-                    {!currentProject.repositories.length && (
-                      <span>No repositories linked</span>
-                    )}
+                  <div className="project-repository-metadata">
+                    <span className="project-repository-label">
+                      <GitBranchIcon aria-hidden="true" />
+                      Repositories
+                    </span>
+                    <div
+                      className="project-repositories"
+                      aria-label="Project repositories"
+                    >
+                      {currentProject.repositories.map((repository) => (
+                        <a
+                          key={repository}
+                          href={`https://github.com/${repository}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {repository}
+                          <ArrowUpRightIcon aria-hidden="true" />
+                        </a>
+                      ))}
+                      {!currentProject.repositories.length && (
+                        <span>No repositories linked</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -722,7 +795,7 @@ export function Dashboard() {
                                     ?.description
                                 }
                               </small>
-                              <small>
+                              <small className="project-document-count">
                                 {documentCount(
                                   orgDocuments.filter(
                                     (decision) => decision.project === name,
@@ -786,6 +859,7 @@ export function Dashboard() {
                           My reviews
                         </Button>
                         <MultiFilter
+                          compact
                           label="Status"
                           values={status}
                           options={statuses}
@@ -793,6 +867,7 @@ export function Dashboard() {
                         />
                         {!activeProject && (
                           <MultiFilter
+                            compact
                             label="Project"
                             values={project}
                             options={projects}
@@ -981,10 +1056,6 @@ export function Dashboard() {
                   onValueChange={(name) => {
                     if (!name) return;
                     setCreationProject(name);
-                    setCreationRepositories(
-                      orgProjects.find((item) => item.name === name)
-                        ?.repositories || [],
-                    );
                   }}
                   required
                 >
@@ -999,19 +1070,6 @@ export function Dashboard() {
                     ))}
                   </SelectPopup>
                 </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="dashboard-repositories">Repositories</Label>
-                <MultiFilter
-                  label="Repositories"
-                  values={creationRepositories}
-                  options={repositoryOptions[organization]}
-                  onChange={setCreationRepositories}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Starts with the project’s repositories. Adjust them for this
-                  decision.
-                </p>
               </div>
             </DialogPanel>
             <DialogFooter>
