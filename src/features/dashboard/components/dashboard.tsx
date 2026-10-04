@@ -17,6 +17,7 @@ import {
   ListIcon,
   MagnifyingGlassIcon,
   PlusIcon,
+  PlugsConnectedIcon,
   UsersIcon,
   UserIcon,
   ShieldCheckIcon,
@@ -552,6 +553,7 @@ export function Dashboard({
               { section: "profile", label: "Profile", icon: UserIcon },
               { section: "security", label: "Security", icon: ShieldCheckIcon },
               { section: "github", label: "GitHub", icon: GitBranchIcon },
+              { section: "mcp", label: "MCP", icon: PlugsConnectedIcon },
               {
                 section: "preferences",
                 label: "Preferences",
@@ -747,8 +749,10 @@ export function Dashboard({
                     ? "Team settings"
                     : settingsSection === "github"
                       ? "GitHub"
-                      : settingsSection.charAt(0).toUpperCase() +
-                        settingsSection.slice(1)}
+                      : settingsSection === "mcp"
+                        ? "MCP"
+                        : settingsSection.charAt(0).toUpperCase() +
+                          settingsSection.slice(1)}
                 </li>
               </ol>
             </nav>

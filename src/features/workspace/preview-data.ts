@@ -14,7 +14,7 @@ export const documents: WorkspaceDocument[] = [
     title: "A calmer place to work",
     eyebrow: "Project brief",
     summary:
-      "Bring your conversations, connected tools, and working documents into one thoughtful workspace.",
+      "Bring your conversations, project decisions, and working documents into one thoughtful workspace.",
     sections: [
       {
         title: "The idea",
@@ -24,10 +24,10 @@ export const documents: WorkspaceDocument[] = [
         title: "What we’re building",
         body: "A workspace that feels familiar from the first conversation.",
         bullets: [
-          "A focused chat, with your tools a message away",
+          "A focused chat, with project context a message away",
           "Living documents alongside the conversation",
           "Clear activity updates, not a wall of reasoning",
-          "Connections that put you in control of access",
+          "AI client access to your project decisions",
         ],
       },
       {
@@ -36,7 +36,7 @@ export const documents: WorkspaceDocument[] = [
       },
       {
         title: "Next up",
-        body: "Connect a source, explore the context, and turn the conversation into something worth keeping.",
+        body: "Explore your project context and turn the conversation into something worth keeping.",
       },
     ],
   },
@@ -77,13 +77,12 @@ export const documents: WorkspaceDocument[] = [
         ],
       },
       {
-        title: "Connections",
-        body: "Give every tool an explicit permission boundary.",
+        title: "AI clients",
+        body: "Connect a client to your project decisions.",
         bullets: [
-          "Register an MCP server",
-          "Review requested permissions",
-          "Authorize with the provider",
-          "Revoke access when it’s no longer needed",
+          "Configure the app’s MCP endpoint",
+          "Sign in through the client’s browser flow",
+          "Review tool requests before approving them",
         ],
       },
     ],

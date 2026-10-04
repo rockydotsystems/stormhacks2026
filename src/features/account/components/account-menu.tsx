@@ -6,6 +6,7 @@ import {
   UserIcon,
   UsersIcon,
   SignOutIcon,
+  PlugsConnectedIcon,
 } from "@phosphor-icons/react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -68,6 +69,10 @@ export function AccountMenu() {
         <MenuLinkItem render={<Link href="/settings/profile" />}>
           <UserIcon aria-hidden="true" />
           Profile
+        </MenuLinkItem>
+        <MenuLinkItem render={<Link href="/settings/mcp" />}>
+          <PlugsConnectedIcon aria-hidden="true" />
+          MCP configuration
         </MenuLinkItem>
         <MenuLinkItem render={<Link href="/settings/team" />}>
           <UsersIcon aria-hidden="true" />

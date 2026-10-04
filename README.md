@@ -157,6 +157,13 @@ separately for each signed-in user. Live widget edits and logout verification
 require a signed-in WorkOS session; security changes should be verified with a
 disposable staging account.
 
+`/settings/mcp` is a personal settings section for connecting AI clients to this
+app's MCP server. Enter a registered endpoint to copy its URL or generate VS Code
+user configuration, then sign in through the client's browser OAuth flow. The
+page does not save endpoints, collect credentials, or contact servers. A hosted
+MCP endpoint is not deployed yet; local setup uses `http://localhost:3001/mcp`.
+See [MCP server](docs/mcp-server.md) for server setup and authorization requirements.
+
 ## GitHub integration
 
 Connect an installed GitHub App from `/settings/github` after selecting an

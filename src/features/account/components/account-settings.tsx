@@ -23,21 +23,23 @@ import {
 import { useSession } from "@/features/auth/client/queries";
 import { useDefaultDocumentSort } from "@/features/account/preferences";
 import { GitHubSettings } from "@/features/github/components/github-settings";
+import { McpSettings } from "@/features/account/components/mcp-settings";
 
 export type SettingsSection =
-  "profile" | "security" | "preferences" | "team" | "github";
+  "profile" | "security" | "preferences" | "team" | "github" | "mcp";
 const headings = {
   profile: "Profile",
   security: "Security",
   preferences: "Preferences",
   team: "Team settings",
   github: "GitHub",
+  mcp: "MCP",
 };
 
 function AuthenticatedWidgets({
   section,
 }: {
-  section: Exclude<SettingsSection, "preferences" | "github">;
+  section: Exclude<SettingsSection, "preferences" | "github" | "mcp">;
 }) {
   const { organizationId, permissions } = useAuth();
   const { getAccessToken } = useAccessToken();
@@ -144,6 +146,8 @@ export default function AccountSettings({
       <h1>{headings[section]}</h1>
       {section === "preferences" ? (
         <Preferences userId={session.data?.user?.id} />
+      ) : section === "mcp" ? (
+        <McpSettings />
       ) : session.isPending ? (
         <p role="status">Loading your account…</p>
       ) : session.error ? (
