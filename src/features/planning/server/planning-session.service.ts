@@ -32,6 +32,7 @@ import type {
   RealtimePort,
 } from "@/features/planning/server/realtime";
 import type { UserDirectory } from "@/features/planning/server/user-directory";
+import type { CodebasePort } from "@/features/planning/server/codebase";
 import type { ActorResolver } from "@/features/planning/server/workspace-context";
 import {
   createConversationSchema,
@@ -253,6 +254,12 @@ export class PlanningSessionService {
       userDirectory: UserDirectory;
       realtime: RealtimePort;
       jev: JevPort;
+      projectCodebase?: {
+        forDocument(
+          organizationId: string,
+          documentId: string,
+        ): Promise<CodebasePort | null>;
+      };
     },
   ) {}
 
@@ -928,6 +935,7 @@ export class PlanningSessionService {
           today: new Date().toISOString().slice(0, 10),
           gate: fresh.pendingGate,
           loadHistory: this.historyLoader(fresh.id),
+          codebase: await this.codebaseFor(fresh),
         },
       };
     } catch (error) {
@@ -937,6 +945,25 @@ export class PlanningSessionService {
   }
 
   // The whole conversation as the search agent reads it, fetched only if a change is held.
+  // The repositories of the project the document lives in. A conversation with no document yet,
+  // or a lookup that fails, plans without code. Reading code never blocks a turn.
+  private async codebaseFor(conversation: {
+    docId: string | null;
+    organizationId: string;
+  }) {
+    const lookup = this.dependencies.projectCodebase;
+    if (!lookup || !conversation.docId) return null;
+    try {
+      return await lookup.forDocument(
+        conversation.organizationId,
+        conversation.docId,
+      );
+    } catch (error) {
+      console.error("Finding the project repositories failed", error);
+      return null;
+    }
+  }
+
   private historyLoader(conversationId: string) {
     return async () => {
       const [history, participants] = await Promise.all([
@@ -1114,6 +1141,7 @@ export class PlanningSessionService {
           today: new Date().toISOString().slice(0, 10),
           gate: conversation.pendingGate,
           loadHistory: this.historyLoader(conversation.id),
+          codebase: await this.codebaseFor(conversation),
         },
       };
     } catch (error) {

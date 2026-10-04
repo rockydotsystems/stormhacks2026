@@ -242,6 +242,64 @@ export class GitHubClient {
     return data.token;
   }
 
+  // Read-only calls for the planning agent. Paths and names are encoded by the caller's inputs
+  // here, never trusted as URL syntax.
+  async defaultBranch(token: string, owner: string, name: string) {
+    const data = await this.request(
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`,
+      token,
+      z.object({ default_branch: z.string().min(1) }),
+    );
+    return data.default_branch;
+  }
+
+  repositoryTree(token: string, owner: string, name: string, branch: string) {
+    return this.request(
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
+      token,
+      z.object({
+        truncated: z.boolean(),
+        tree: z.array(
+          z.object({
+            path: z.string(),
+            type: z.string(),
+            size: z.number().optional(),
+          }),
+        ),
+      }),
+    );
+  }
+
+  repositoryFile(
+    token: string,
+    owner: string,
+    name: string,
+    path: string,
+    branch: string,
+  ) {
+    const encoded = path.split("/").map(encodeURIComponent).join("/");
+    return this.request(
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/contents/${encoded}?ref=${encodeURIComponent(branch)}`,
+      token,
+      z.object({
+        type: z.string(),
+        size: z.number().optional(),
+        encoding: z.string().optional(),
+        content: z.string().optional(),
+      }),
+    );
+  }
+
+  async searchCode(token: string, owner: string, name: string, query: string) {
+    const q = `${query} repo:${owner}/${name}`;
+    const data = await this.request(
+      `/search/code?per_page=20&q=${encodeURIComponent(q)}`,
+      token,
+      z.object({ items: z.array(z.object({ path: z.string() })) }),
+    );
+    return data.items.map((item) => item.path);
+  }
+
   installationRepositories(token: string) {
     return this.pages(
       "/installation/repositories",

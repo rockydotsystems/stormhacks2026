@@ -5,6 +5,7 @@ import { asClass, asFunction, createContainer, InjectionMode } from "awilix";
 import { DashboardController } from "@/features/dashboard/server/dashboard.controller";
 import { AuthController } from "@/features/auth/server/auth.controller";
 import { AuthService } from "@/features/auth/server/auth.service";
+import { ProjectCodebase } from "@/features/github/server/project-codebase";
 import { GitHubService } from "@/features/github/server/github.service";
 import { GitHubController } from "@/features/github/server/github.controller";
 import { GitHubReviewService } from "@/features/github/server/github-review.service";
@@ -44,6 +45,7 @@ export type Dependencies = {
   projectChatService: ProjectChatService;
   projectChatController: ProjectChatController;
   githubService: GitHubService;
+  projectCodebase: ProjectCodebase;
   githubController: GitHubController;
   githubReviewService: GitHubReviewService;
   linearService: LinearService;
@@ -81,6 +83,7 @@ container.register({
   projectChatService: asClass(ProjectChatService).scoped(),
   projectChatController: asClass(ProjectChatController).scoped(),
   githubService: asClass(GitHubService).scoped(),
+  projectCodebase: asClass(ProjectCodebase).scoped(),
   githubController: asClass(GitHubController).scoped(),
   githubReviewService: asClass(GitHubReviewService).scoped(),
   linearService: asClass(LinearService).scoped(),

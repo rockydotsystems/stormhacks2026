@@ -3,7 +3,9 @@ import {
   generateText,
   Output,
   parsePartialJson,
+  stepCountIs,
   streamText,
+  tool,
   type LanguageModel,
 } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
@@ -119,6 +121,27 @@ export class AiSdkModel implements ModelPort {
       messages: request.messages,
       temperature: request.temperature,
       abortSignal: request.signal,
+      ...(request.tools?.length
+        ? {
+            tools: Object.fromEntries(
+              request.tools.map((definition) => [
+                definition.name,
+                tool({
+                  description: definition.description,
+                  inputSchema: definition.schema,
+                  execute: async (input: Record<string, unknown>) => {
+                    try {
+                      return await definition.execute(input);
+                    } catch (error) {
+                      return `Error: ${error instanceof Error ? error.message : "The tool failed."}`;
+                    }
+                  },
+                }),
+              ]),
+            ),
+            stopWhen: stepCountIs(request.maxToolSteps ?? 8),
+          }
+        : {}),
     };
   }
 }

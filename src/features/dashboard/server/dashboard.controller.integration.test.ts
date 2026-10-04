@@ -309,6 +309,70 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         ((await (await list(organizationId)).json()) as DashboardData).projects,
       ).toEqual([]);
     });
+    it("adds and removes the repositories of an existing project", async () => {
+      const org = (await (
+        await controller.create(
+          request({ action: "createOrganization", name: "Edit repos" }),
+        )
+      ).json()) as { id: string };
+      const organizationId = org.id;
+      const ids: Record<string, string> = {};
+      await client`INSERT INTO github_installations (id, organization_id, account_login, connected_by, github_user_id, github_user_login) VALUES ('edit-repos', ${organizationId}, 'org', ${user.id}, '1', 'test')`;
+      for (const name of ["a", "b", "manual"]) {
+        const repo = (await (
+          await controller.create(
+            request({
+              action: "connectRepository",
+              organizationId,
+              owner: "org",
+              name,
+            }),
+          )
+        ).json()) as { id: string };
+        ids[name] = repo.id;
+        if (name !== "manual")
+          await client`INSERT INTO github_repository_access (repository_id, organization_id, installation_id, github_id, available, authorized) VALUES (${repo.id}, ${organizationId}, 'edit-repos', ${name}, true, true)`;
+      }
+      const project = (await (
+        await controller.create(
+          request({
+            action: "createProject",
+            organizationId,
+            name: "Editable",
+            repositoryIds: [ids.a],
+          }),
+        )
+      ).json()) as { id: string };
+      const update = (repositoryIds: string[]) =>
+        controller.updateProject(
+          new Request("http://localhost/api/projects/x", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "setRepositories",
+              organizationId,
+              repositoryIds,
+            }),
+          }),
+          project.id,
+        );
+      const linked = async () =>
+        (
+          (
+            (await (await list(organizationId)).json()) as DashboardData
+          ).projects.find((item) => item.id === project.id)?.repositories ?? []
+        ).sort();
+
+      await update([ids.b, ids.a]);
+      expect(await linked()).toEqual(["org/a", "org/b"]);
+      await update([ids.b]);
+      expect(await linked()).toEqual(["org/b"]);
+      await expect(update([ids.b, ids.manual])).rejects.toMatchObject({
+        status: 400,
+      });
+      await expect(update([])).rejects.toBeDefined();
+      expect(await linked()).toEqual(["org/b"]);
+    });
     it("rejects invalid input before database writes", async () => {
       await expect(
         controller.create(request({ action: "createOrganization", name: " " })),

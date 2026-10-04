@@ -212,8 +212,9 @@ export function QuestionPrompt({
             >
               <kbd aria-hidden="true">{index + 1}</kbd>
               {typing ? (
-                <input
+                <textarea
                   autoFocus
+                  rows={1}
                   className="planning-questions-input"
                   aria-label="Your answer"
                   placeholder="Type your answer, then press Enter"
@@ -224,7 +225,7 @@ export function QuestionPrompt({
                   onKeyDown={(event) => {
                     event.stopPropagation();
                     if (event.nativeEvent.isComposing) return;
-                    if (event.key === "Enter") {
+                    if (event.key === "Enter" && !event.shiftKey) {
                       event.preventDefault();
                       dispatch({ type: "commit" });
                     } else if (event.key === "Escape") {
@@ -249,8 +250,9 @@ export function QuestionPrompt({
 
       <p className="planning-questions-hint">
         <kbd>↑</kbd>
-        <kbd>↓</kbd> choose <kbd>Enter</kbd> select <kbd>←</kbd> back{" "}
-        <kbd>Esc</kbd> answer in chat
+        <kbd>↓</kbd> choose <kbd>Enter</kbd> select <kbd>Shift</kbd>
+        <kbd>Enter</kbd> new line <kbd>←</kbd> back <kbd>Esc</kbd> answer in
+        chat
       </p>
     </div>
   );

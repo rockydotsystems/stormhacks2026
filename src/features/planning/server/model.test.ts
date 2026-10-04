@@ -193,3 +193,93 @@ describe("streamObject", () => {
     });
   });
 });
+
+describe("AiSdkModel tools", () => {
+  const toolCall = {
+    content: [
+      {
+        type: "tool-call" as const,
+        toolCallId: "call-1",
+        toolName: "read_file",
+        input: JSON.stringify({ path: "src/a.ts" }),
+      },
+    ],
+    finishReason: { unified: "tool-calls" as const, raw: undefined },
+    usage,
+    warnings: [],
+  };
+  const answer = {
+    content: [{ type: "text" as const, text: "a.ts exports a" }],
+    finishReason: { unified: "stop" as const, raw: undefined },
+    usage,
+    warnings: [],
+  };
+
+  it("runs a tool the model calls and returns the final text", async () => {
+    const seen: unknown[] = [];
+    let step = 0;
+    const mock = new MockLanguageModelV4({
+      doGenerate: async () => (step++ === 0 ? toolCall : answer),
+    });
+    const text = await new AiSdkModel(mock).generateText({
+      messages: [{ role: "user", content: "look" }],
+      tools: [
+        {
+          name: "read_file",
+          description: "Read a file",
+          schema: z.object({ path: z.string() }),
+          execute: async (input) => {
+            seen.push(input);
+            return "export const a = 1;";
+          },
+        },
+      ],
+    });
+    expect(text).toBe("a.ts exports a");
+    expect(seen).toEqual([{ path: "src/a.ts" }]);
+    expect(JSON.stringify(mock.doGenerateCalls[1].prompt)).toContain(
+      "export const a = 1;",
+    );
+  });
+
+  it("gives the model a failed tool's message instead of throwing", async () => {
+    let step = 0;
+    const mock = new MockLanguageModelV4({
+      doGenerate: async () => (step++ === 0 ? toolCall : answer),
+    });
+    const text = await new AiSdkModel(mock).generateText({
+      messages: [{ role: "user", content: "look" }],
+      tools: [
+        {
+          name: "read_file",
+          description: "Read a file",
+          schema: z.object({ path: z.string() }),
+          execute: async () => {
+            throw new Error("That file is not readable.");
+          },
+        },
+      ],
+    });
+    expect(text).toBe("a.ts exports a");
+    expect(JSON.stringify(mock.doGenerateCalls[1].prompt)).toContain(
+      "Error: That file is not readable.",
+    );
+  });
+
+  it("stops after the step limit", async () => {
+    const mock = new MockLanguageModelV4({ doGenerate: async () => toolCall });
+    await new AiSdkModel(mock).generateText({
+      messages: [{ role: "user", content: "look" }],
+      maxToolSteps: 3,
+      tools: [
+        {
+          name: "read_file",
+          description: "Read a file",
+          schema: z.object({ path: z.string() }),
+          execute: async () => "x",
+        },
+      ],
+    });
+    expect(mock.doGenerateCalls).toHaveLength(3);
+  });
+});

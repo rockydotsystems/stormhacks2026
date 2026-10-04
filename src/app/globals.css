@@ -2046,6 +2046,8 @@ a {
   color: var(--muted-foreground);
 }
 .planning-questions-review strong {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   font-size: 12px;
   font-weight: 500;
 }
@@ -2110,6 +2112,9 @@ a {
   background: transparent;
   font: inherit;
   font-size: 12px;
+  resize: none;
+  field-sizing: content;
+  max-height: 120px;
 }
 .planning-questions-input:focus-visible {
   outline: none;

@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import {
   DotsThreeIcon,
+  GitBranchIcon,
   PencilSimpleIcon,
   TrashIcon,
 } from "@phosphor-icons/react";
@@ -37,7 +38,7 @@ import {
   MenuTrigger,
 } from "@/components/ui/menu";
 
-type Dialogs = "edit" | "delete" | null;
+type Dialogs = "edit" | "repositories" | "delete" | null;
 
 export function ProjectActionsMenu({
   id,
@@ -46,6 +47,8 @@ export function ProjectActionsMenu({
   name,
   description,
   documentCount,
+  repositories,
+  linked,
   onDeleted,
   className,
 }: {
@@ -55,6 +58,9 @@ export function ProjectActionsMenu({
   name: string;
   description: string;
   documentCount: number;
+  // Every repository the organization has connected, and the "owner/name" slugs this project links.
+  repositories: { id: string; owner: string; name: string }[];
+  linked: string[];
   onDeleted?: () => void;
   className?: string;
 }) {
@@ -62,6 +68,7 @@ export function ProjectActionsMenu({
   const [open, setOpen] = useState<Dialogs>(null);
   const [confirmation, setConfirmation] = useState("");
   const error = mutation.error?.message;
+  const [chosen, setChosen] = useState<Set<string>>(new Set());
 
   function show(dialog: Dialogs) {
     mutation.reset();
@@ -76,6 +83,35 @@ export function ProjectActionsMenu({
         action: "update",
         name: String(form.get("name")),
         description: String(form.get("description")),
+      });
+      setOpen(null);
+    } catch {
+      /* The dialog shows the error and stays open for a retry. */
+    }
+  }
+  function showRepositories() {
+    setChosen(
+      new Set(
+        repositories
+          .filter((repo) => linked.includes(`${repo.owner}/${repo.name}`))
+          .map((repo) => repo.id),
+      ),
+    );
+    show("repositories");
+  }
+  function toggle(repositoryId: string) {
+    setChosen((current) => {
+      const next = new Set(current);
+      if (!next.delete(repositoryId)) next.add(repositoryId);
+      return next;
+    });
+  }
+  async function saveRepositories(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    try {
+      await mutation.mutateAsync({
+        action: "setRepositories",
+        repositoryIds: [...chosen],
       });
       setOpen(null);
     } catch {
@@ -115,6 +151,10 @@ export function ProjectActionsMenu({
           <MenuItem className="cursor-pointer" onClick={() => show("edit")}>
             <PencilSimpleIcon aria-hidden="true" />
             Edit project
+          </MenuItem>
+          <MenuItem className="cursor-pointer" onClick={showRepositories}>
+            <GitBranchIcon aria-hidden="true" />
+            Repositories
           </MenuItem>
           <MenuSeparator />
           <MenuItem
@@ -170,6 +210,59 @@ export function ProjectActionsMenu({
               </DialogClose>
               <Button type="submit" disabled={mutation.isPending}>
                 {mutation.isPending ? "Saving…" : "Save project"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogPopup>
+      </Dialog>
+
+      <Dialog
+        open={open === "repositories"}
+        onOpenChange={(next) => !next && setOpen(null)}
+      >
+        <DialogPopup>
+          <form onSubmit={saveRepositories}>
+            <DialogHeader>
+              <DialogTitle>Project repositories</DialogTitle>
+              <DialogDescription>
+                The planning agent reads these to check new documents against
+                your code. Pick at least one.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid max-h-72 gap-1 overflow-y-auto px-6 pb-4">
+              {repositories.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  No connected repositories. Connect GitHub in settings first.
+                </p>
+              )}
+              {repositories.map((repo) => (
+                <label
+                  key={repo.id}
+                  className="flex cursor-pointer items-center gap-2 py-1 text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    checked={chosen.has(repo.id)}
+                    onChange={() => toggle(repo.id)}
+                  />
+                  {repo.owner}/{repo.name}
+                </label>
+              ))}
+              {error && (
+                <p className="text-sm text-destructive-foreground" role="alert">
+                  {error}
+                </p>
+              )}
+            </div>
+            <DialogFooter>
+              <DialogClose render={<Button variant="outline" type="button" />}>
+                Cancel
+              </DialogClose>
+              <Button
+                type="submit"
+                disabled={mutation.isPending || chosen.size === 0}
+              >
+                {mutation.isPending ? "Saving…" : "Save repositories"}
               </Button>
             </DialogFooter>
           </form>

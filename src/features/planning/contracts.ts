@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { CodebasePort } from "@/features/planning/server/codebase";
 
 // Client-safe contracts for the planning session. Shared by server, routes and UI.
 // DTOs are JSON-friendly. This file is the interface between the parallel workstreams.
@@ -198,6 +199,9 @@ export type AgentTurnInput = {
   // Every message of the conversation, for the history search. Called only when a proposal
   // is held, because the input messages are capped.
   loadHistory?: () => Promise<PlanningMessage[]>;
+  // Read-only access to the repositories linked to the document's project. Null or absent when
+  // the project has none. The agent reads it on demand during the turn.
+  codebase?: CodebasePort | null;
 };
 
 export type AgentTurnResult = {

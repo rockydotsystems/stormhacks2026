@@ -82,6 +82,7 @@ export function useProjectAction(
     mutationFn: (
       input:
         | { action: "update"; name?: string; description?: string }
+        | { action: "setRepositories"; repositoryIds: string[] }
         | { action: "delete"; confirmName: string },
     ) =>
       apiClient(`/api/projects/${id}`, {

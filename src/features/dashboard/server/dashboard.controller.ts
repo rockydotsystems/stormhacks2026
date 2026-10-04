@@ -254,6 +254,34 @@ export class DashboardController {
     const service = this.dependencies.projectsService;
     if (input.action === "delete")
       return json(await service.delete(actor, projectId, input.confirmName));
+    if (input.action === "setRepositories") {
+      const { db } = this.dependencies;
+      // Every link change succeeds together or rolls back.
+      await db.transaction(async (tx) => {
+        const scoped = new ProjectsService({ db: tx });
+        const connected = new Set(
+          (await scoped.listConnectedRepositories(actor)).map((row) => row.id),
+        );
+        const wanted = new Set(input.repositoryIds);
+        if ([...wanted].some((id) => !connected.has(id)))
+          throw new ApiError(
+            400,
+            "Choose connected GitHub repositories. Refresh the page or reconnect GitHub.",
+          );
+        const current = new Set(
+          (await scoped.listProjectRepositories(actor, projectId)).map(
+            (row) => row.id,
+          ),
+        );
+        for (const id of wanted)
+          if (!current.has(id))
+            await scoped.linkRepository(actor, projectId, id);
+        for (const id of current)
+          if (!wanted.has(id))
+            await scoped.unlinkRepository(actor, projectId, id);
+      });
+      return json({ ok: true });
+    }
     return json(await service.update(actor, projectId, input));
   }
 

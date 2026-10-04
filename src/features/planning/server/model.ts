@@ -10,12 +10,24 @@ export type ChatMessage = {
 // How hard the model thinks before it answers. Models without reasoning ignore it.
 export type ReasoningLevel = "none" | "low" | "medium" | "high";
 
+// A function the model may call while it writes a text reply. The adapter runs the loop, so
+// feature code only supplies the schema and the work. A thrown error becomes the tool result.
+export type ModelTool = {
+  name: string;
+  description: string;
+  schema: ZodType<Record<string, unknown>>;
+  execute(input: Record<string, unknown>): Promise<string>;
+};
+
 export type ModelRequest = {
   system?: string;
   messages: ChatMessage[];
   temperature?: number;
   signal?: AbortSignal;
   reasoning?: ReasoningLevel;
+  /** Used by generateText only. The loop ends after `maxToolSteps` model calls. */
+  tools?: ModelTool[];
+  maxToolSteps?: number;
 };
 
 export type ObjectRequest<T> = ModelRequest & {

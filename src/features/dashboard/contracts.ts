@@ -57,6 +57,11 @@ export const projectActionSchema = z.discriminatedUnion("action", [
       "Change the name or description.",
     ),
   z.object({
+    action: z.literal("setRepositories"),
+    organizationId,
+    repositoryIds: z.array(z.uuid()).min(1).max(100),
+  }),
+  z.object({
     action: z.literal("delete"),
     organizationId,
     confirmName: z.string().max(80),

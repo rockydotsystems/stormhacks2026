@@ -1279,6 +1279,11 @@ export function Dashboard({
                                   (decision) => decision.project === name,
                                 ).length
                               }
+                              repositories={workspace.data?.repositories ?? []}
+                              linked={
+                                orgProjects.find((item) => item.id === name)
+                                  ?.repositories ?? []
+                              }
                               onDeleted={() => {
                                 if (activeProject === name)
                                   router.push(dashboardPaths.Projects);

@@ -17,11 +17,18 @@ import {
   type Phase,
   type TurnAnalysis,
 } from "@/features/planning/contracts";
-import { ModelError, type ModelPort } from "@/features/planning/server/model";
+import {
+  ModelError,
+  type ModelPort,
+  type ModelTool,
+} from "@/features/planning/server/model";
+import type { CodebasePort } from "@/features/planning/server/codebase";
+import { z } from "zod";
 import {
   buildAnalysisPrompt,
   buildEditPrompt,
   buildGenerationPrompt,
+  researchPrompt,
   editMessages,
   gateRaisePrompt,
   gateResolutionPrompt,
@@ -61,6 +68,11 @@ const NEEDS_REASON =
   "I am still holding the change. Please tell me why we should move this way now, then I will make it.";
 const WITHDRAWN_REPLY = "Understood. I left the document as it is.";
 const MIN_REASON_LENGTH = 8;
+
+// The code reading step. It sees the newest messages only and stops after a few tool rounds.
+const RESEARCH_MESSAGES = 12;
+const RESEARCH_STEPS = 8;
+const MAX_FINDINGS_CHARS = 4000;
 
 // The history search reads at most this much of the conversation, keeping the newest part.
 const SEARCH_CHARS = 200_000;
@@ -117,10 +129,11 @@ export class PlanningService {
   async runTurn(input: AgentTurnInput): Promise<AgentTurnResult> {
     assertTurn(input);
     if (input.phase === "generated") return this.editTurn(input);
+    const codebase = await this.research(input);
     const analysis = await this.dependencies.model.generateObject(
-      this.analysisRequest(input),
+      this.analysisRequest(input, codebase),
     );
-    return this.finishAnalysis(input, analysis);
+    return this.finishAnalysis(input, analysis, codebase);
   }
 
   /**
@@ -136,8 +149,13 @@ export class PlanningService {
       yield { type: "final", result: await this.editTurn(input) };
       return;
     }
+    const reading = (input.codebase?.repositories().length ?? 0) > 0;
+    if (reading) {
+      yield { type: "reasoning", text: "Checking the linked repositories.\n" };
+    }
+    const codebase = await this.research(input);
     const stream = this.dependencies.model.streamObject(
-      this.analysisRequest(input),
+      this.analysisRequest(input, codebase),
     );
     let sent = "";
     for await (const event of stream.events) {
@@ -156,16 +174,46 @@ export class PlanningService {
       }
     }
     const analysis = await stream.result;
-    yield { type: "final", result: await this.finishAnalysis(input, analysis) };
+    yield {
+      type: "final",
+      result: await this.finishAnalysis(input, analysis, codebase),
+    };
   }
 
-  private analysisRequest(input: AgentTurnInput) {
+  // Reads the linked repositories for what bears on the conversation. Findings or null. A failed
+  // read never fails the turn, because the agent can still plan without the code.
+  private async research(input: AgentTurnInput): Promise<string | null> {
+    const codebase = input.codebase;
+    const repositories = codebase?.repositories() ?? [];
+    if (!codebase || repositories.length === 0) return null;
+    try {
+      const text = (
+        await this.dependencies.model.generateText({
+          system: researchPrompt({
+            repositories,
+            projectName: input.projectName,
+          }),
+          messages: input.messages.slice(-RESEARCH_MESSAGES),
+          tools: codebaseTools(codebase),
+          maxToolSteps: RESEARCH_STEPS,
+        })
+      ).trim();
+      if (!text || /^NONE\b/i.test(text)) return null;
+      return text.slice(0, MAX_FINDINGS_CHARS);
+    } catch (error) {
+      console.error("Reading the project code failed", error);
+      return null;
+    }
+  }
+
+  private analysisRequest(input: AgentTurnInput, codebase: string | null) {
     return {
       system: buildAnalysisPrompt({
         phase: input.phase,
         checklist: input.checklist,
         projectName: input.projectName,
         today: input.today,
+        codebase,
       }),
       messages: input.messages,
       schema: turnAnalysisSchema,
@@ -177,6 +225,7 @@ export class PlanningService {
   private async finishAnalysis(
     input: AgentTurnInput,
     analysis: TurnAnalysis,
+    codebase: string | null,
   ): Promise<AgentTurnResult> {
     const checklist = normalizeChecklist(analysis.checklist, input.checklist);
 
@@ -190,6 +239,7 @@ export class PlanningService {
           checklist,
           projectName: input.projectName,
           today: input.today,
+          codebase,
         }),
         messages: input.messages,
         schema: documentDraftSchema,
@@ -270,8 +320,10 @@ export class PlanningService {
     // The gate that stays after this turn. An unrelated message leaves it where it was.
     const carried = held && !cleared ? held : null;
 
+    const codebase = await this.research(input);
     const edit = await this.dependencies.model.generateObject({
       system: buildEditPrompt({
+        codebase,
         checklist: input.checklist,
         projectName: input.projectName,
         today: input.today,
@@ -535,4 +587,38 @@ export function isSatisfied(checklist: ChecklistEntry[]): boolean {
     (id) => byId.get(id)?.status === "covered",
   );
   return required && checklist.every((entry) => entry.status !== "missing");
+}
+
+// The only things the agent can do to a repository: look, read, search.
+function codebaseTools(codebase: CodebasePort): ModelTool[] {
+  const repository = z.string().min(1).max(200);
+  return [
+    {
+      name: "list_tree",
+      description:
+        "List the files and folders directly under a path of a repository, on its default branch. Leave the path empty for the root.",
+      schema: z.object({ repository, path: z.string().max(500).optional() }),
+      execute: async (input) =>
+        codebase.tree(
+          String(input.repository),
+          input.path as string | undefined,
+        ),
+    },
+    {
+      name: "read_file",
+      description:
+        "Read one text file of a repository, on its default branch. Long files are cut.",
+      schema: z.object({ repository, path: z.string().min(1).max(500) }),
+      execute: async (input) =>
+        codebase.readFile(String(input.repository), String(input.path)),
+    },
+    {
+      name: "search_code",
+      description:
+        "Find the files of a repository whose content matches a word or phrase. Returns paths only.",
+      schema: z.object({ repository, query: z.string().min(1).max(120) }),
+      execute: async (input) =>
+        codebase.search(String(input.repository), String(input.query)),
+    },
+  ];
 }
