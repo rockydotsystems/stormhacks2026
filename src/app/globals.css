@@ -228,8 +228,7 @@ a {
   gap: 0;
 }
 .dashboard-sidebar[data-collapsed="true"] .sidebar-section h2,
-.dashboard-sidebar[data-collapsed="true"] .sidebar-empty,
-.dashboard-sidebar[data-collapsed="true"] .product-wordmark {
+.dashboard-sidebar[data-collapsed="true"] .sidebar-empty {
   opacity: 0;
   overflow: hidden;
   white-space: nowrap;
@@ -243,7 +242,6 @@ a {
   .dashboard-sidebar .account-identity,
   .dashboard-sidebar .sidebar-section h2,
   .dashboard-sidebar .sidebar-empty,
-  .dashboard-sidebar .product-wordmark,
   .dashboard-sidebar .org-switcher > svg,
   .dashboard-sidebar .profile-button > svg {
     transition: opacity 140ms ease;
@@ -348,15 +346,6 @@ a {
 .sidebar-bottom {
   margin-top: auto;
   padding-top: 30px;
-}
-.product-wordmark {
-  font-size: 11px;
-  letter-spacing: -0.25px;
-  margin: 0 10px 18px;
-  color: var(--dashboard-text);
-}
-.product-wordmark span {
-  color: var(--primary);
 }
 .profile-button {
   width: 100%;

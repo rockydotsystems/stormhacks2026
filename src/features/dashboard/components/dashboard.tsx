@@ -712,9 +712,6 @@ export function Dashboard({
         </>
       )}
       <div className="sidebar-bottom">
-        <p className="product-wordmark">
-          WhyDidWeChooseThis<span>.Tech</span>
-        </p>
         <AccountMenu />
       </div>
     </div>
