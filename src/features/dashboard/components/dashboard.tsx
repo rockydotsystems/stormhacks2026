@@ -104,7 +104,7 @@ import {
   projectPath,
 } from "@/features/dashboard/routes";
 import { ProjectActionsMenu } from "./project-actions-menu";
-import { ProjectAvatar } from "./project-avatar";
+import { OrganizationAvatar } from "./organization-avatar";
 import { DocumentEditor } from "./document-editor";
 import { DocumentActionsMenu } from "./document-actions-menu";
 import { apiClient } from "@/lib/api-client";
@@ -535,8 +535,7 @@ export function Dashboard({
               aria-label="Switch organization"
             >
               <span className="org-mark" aria-hidden="true">
-                {organizationName.charAt(0).toLowerCase()}
-                <span>•</span>
+                <OrganizationAvatar organizationId={organization} />
               </span>
               <span className="sidebar-label truncate">{organizationName}</span>
               <CaretUpDownIcon aria-hidden="true" />
@@ -554,6 +553,9 @@ export function Dashboard({
                   disabled={switching}
                   onClick={() => switchOrganization(org.id)}
                 >
+                  <span className="org-mark" aria-hidden="true">
+                    <OrganizationAvatar organizationId={org.id} />
+                  </span>
                   <span className="flex-1">{org.name}</span>
                   {organization === org.id && <CheckIcon aria-hidden="true" />}
                 </MenuItem>
@@ -725,7 +727,7 @@ export function Dashboard({
                   aria-label={projectName(name)}
                   title={projectName(name)}
                 >
-                  <ProjectAvatar projectId={name} />
+                  <FolderIcon aria-hidden="true" />
                   <span className="sidebar-label truncate">
                     {projectName(name)}
                   </span>
@@ -1211,10 +1213,28 @@ export function Dashboard({
                               )}
                               onNavigate={prepareNavigation}
                             >
-                              <ProjectAvatar
-                                projectId={name}
-                                className="project-card-avatar"
-                              />
+                              <div
+                                className={cn(
+                                  "folder-art",
+                                  `folder-tone-${projects.indexOf(name) % 3}`,
+                                )}
+                                aria-hidden="true"
+                              >
+                                <div className="folder-back" />
+                                <div className="folder-paper paper-back">
+                                  <i />
+                                  <i />
+                                  <i />
+                                </div>
+                                <div className="folder-paper paper-front">
+                                  <i />
+                                  <i />
+                                  <i />
+                                </div>
+                                <div className="folder-flap">
+                                  <span className="folder-seam" />
+                                </div>
+                              </div>
                               <div className="project-card-label">
                                 <span>
                                   <strong>{projectName(name)}</strong>

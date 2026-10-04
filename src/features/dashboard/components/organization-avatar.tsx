@@ -1,14 +1,14 @@
 import { cn } from "@/lib/utils";
 
-export function ProjectAvatar({
-  projectId,
+export function OrganizationAvatar({
+  organizationId,
   className,
 }: {
-  projectId: string;
+  organizationId: string;
   className?: string;
 }) {
   let hash = 2166136261;
-  for (const character of projectId) {
+  for (const character of organizationId) {
     hash = Math.imul(hash ^ character.codePointAt(0)!, 16777619) >>> 0;
   }
 
@@ -19,7 +19,7 @@ export function ProjectAvatar({
   return (
     <svg
       viewBox="0 0 100 100"
-      className={cn("project-avatar", className)}
+      className={cn("organization-avatar", className)}
       aria-hidden="true"
       focusable="false"
     >
