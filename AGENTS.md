@@ -18,6 +18,27 @@ Node 24, pnpm 12.0.0, and nixfmt are approved project tooling. Format Nix
 with `nix fmt`; retain Prettier for the existing application and documentation.
 Run source apps from the repository root; see README for build and check commands.
 
+## Version-control safety
+
+Use jj with repository-local automatic abandonment disabled:
+
+```sh
+jj config set --repo git.abandon-unreachable-commits false
+```
+
+Check this setting before fetching or importing Git refs in an existing or new
+checkout. Deleted remote branches must not automatically abandon local commits
+and rebase their descendants. Retire obsolete revisions explicitly only after
+verifying that their work is preserved.
+
+Run `jj git fetch` and `jj git import` sequentially, never alongside other jj
+commands in any workspace sharing this repository. Even `jj status` and `jj log`
+can import Git refs in a colocated checkout. Coordinate fetch/import with the
+shared `.jj/repo/agent-workspaces/integration.lock`; stop if another owner holds it.
+After fetching, inspect bookmarks and the graph before moving local `main`.
+Preserve both clean tips when local and remote history diverge; do not rebase
+published collaboration commits or resolve a bookmark by dropping either side.
+
 ## Runtime and deployment
 
 Use vinext/Vite for the Next-compatible App Router and Cloudflare Workers for
