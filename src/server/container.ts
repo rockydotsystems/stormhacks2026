@@ -4,6 +4,7 @@ import { AuthController } from "@/features/auth/server/auth.controller";
 import { AuthService } from "@/features/auth/server/auth.service";
 import { DocsService } from "@/features/docs/server/docs.service";
 import { OrganizationsService } from "@/features/organizations/server/organizations.service";
+import { ProjectsService } from "@/features/projects/server/projects.service";
 import { NotesController } from "@/features/notes/server/notes.controller";
 import { NotesService } from "@/features/notes/server/notes.service";
 import type { ModelPort } from "@/features/planning/server/model";
@@ -35,6 +36,7 @@ export type Dependencies = {
   notesController: NotesController;
   docsService: DocsService;
   organizationsService: OrganizationsService;
+  projectsService: ProjectsService;
 };
 
 export const container = createContainer<Dependencies>({
@@ -61,4 +63,5 @@ container.register({
   notesController: asClass(NotesController).scoped(),
   docsService: asClass(DocsService).scoped(),
   organizationsService: asClass(OrganizationsService).scoped(),
+  projectsService: asClass(ProjectsService).scoped(),
 });

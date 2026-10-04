@@ -42,6 +42,16 @@ jobs:
       - name: Build and validate Worker
         run: pnpm deploy:check
 
+      - name: Apply database migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [[ -z "$DATABASE_URL" ]]; then
+            echo "::error::Set DATABASE_URL in the production environment secrets."
+            exit 1
+          fi
+          pnpm db:migrate
+
       - name: Deploy validated build
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

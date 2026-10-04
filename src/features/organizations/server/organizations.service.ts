@@ -1,13 +1,13 @@
 import "server-only";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
-import type { OrganizationActor } from "@/features/docs/contracts";
+import type { OrganizationActor } from "@/features/organizations/contracts";
+import { requireOrganizationMember } from "@/features/organizations/server/membership";
 import {
   organizationMembers,
   organizations,
   users,
 } from "@/features/organizations/server/schema";
-import { ApiError } from "@/server/errors";
 import type { Database } from "@/server/db";
 
 export class OrganizationsService {
@@ -52,16 +52,7 @@ export class OrganizationsService {
 
   async addMember(actor: OrganizationActor, userId: string) {
     return this.dependencies.db.transaction(async (tx) => {
-      const [member] = await tx
-        .select()
-        .from(organizationMembers)
-        .where(
-          and(
-            eq(organizationMembers.organizationId, actor.organizationId),
-            eq(organizationMembers.userId, actor.userId),
-          ),
-        );
-      if (!member) throw new ApiError(404, "Organization not found.");
+      await requireOrganizationMember(tx, actor);
       await tx.insert(users).values({ id: userId }).onConflictDoNothing();
       await tx
         .insert(organizationMembers)

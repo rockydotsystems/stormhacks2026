@@ -2,22 +2,15 @@ import "server-only";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import {
   changeIdSchema,
-  githubRepositorySchema,
   snapshotSchema,
   type DocChange,
   type DocVersion,
-  type GithubRepositoryInput,
-  type OrganizationActor,
   type Snapshot,
 } from "@/features/docs/contracts";
-import {
-  docChanges,
-  docRepositories,
-  docs,
-  docVersions,
-  githubRepositories,
-} from "@/features/docs/server/schema";
-import { organizationMembers } from "@/features/organizations/server/schema";
+import { docChanges, docs, docVersions } from "@/features/docs/server/schema";
+import type { OrganizationActor } from "@/features/organizations/contracts";
+import { requireOrganizationMember } from "@/features/organizations/server/membership";
+import { requireProject } from "@/features/projects/server/access";
 import type { Database } from "@/server/db";
 import { ApiError } from "@/server/errors";
 
@@ -35,29 +28,13 @@ function versionDto(row: typeof docVersions.$inferSelect): DocVersion {
 export class DocsService {
   constructor(private readonly dependencies: { db: Database }) {}
 
-  private async requireMember(
-    db: Database | Transaction,
-    actor: OrganizationActor,
-  ) {
-    const [member] = await db
-      .select()
-      .from(organizationMembers)
-      .where(
-        and(
-          eq(organizationMembers.organizationId, actor.organizationId),
-          eq(organizationMembers.userId, actor.userId),
-        ),
-      );
-    if (!member) throw new ApiError(404, "Organization not found.");
-  }
-
   private async requireDoc(
     db: Database | Transaction,
     actor: OrganizationActor,
     docId: string,
     lock = false,
   ) {
-    await this.requireMember(db, actor);
+    await requireOrganizationMember(db, actor);
     const query = db
       .select()
       .from(docs)
@@ -69,13 +46,13 @@ export class DocsService {
     return doc;
   }
 
-  async create(actor: OrganizationActor, input: Snapshot) {
+  async create(actor: OrganizationActor, projectId: string, input: Snapshot) {
     const snapshot = snapshotSchema.parse(input);
     return this.dependencies.db.transaction(async (tx) => {
-      await this.requireMember(tx, actor);
+      await requireProject(tx, actor, projectId, true);
       const [doc] = await tx
         .insert(docs)
-        .values({ organizationId: actor.organizationId })
+        .values({ organizationId: actor.organizationId, projectId })
         .returning();
       await tx
         .insert(docChanges)
@@ -84,12 +61,17 @@ export class DocsService {
     });
   }
 
-  async list(actor: OrganizationActor) {
-    await this.requireMember(this.dependencies.db, actor);
+  async list(actor: OrganizationActor, projectId: string) {
+    await requireProject(this.dependencies.db, actor, projectId);
     const rows = await this.dependencies.db
       .select()
       .from(docs)
-      .where(eq(docs.organizationId, actor.organizationId))
+      .where(
+        and(
+          eq(docs.organizationId, actor.organizationId),
+          eq(docs.projectId, projectId),
+        ),
+      )
       .orderBy(asc(docs.createdAt), asc(docs.id));
     return rows.map((row) => ({
       ...row,
@@ -223,99 +205,5 @@ export class DocsService {
       title: row.change.title,
       content: row.change.content,
     };
-  }
-
-  async connectRepository(
-    actor: OrganizationActor,
-    input: GithubRepositoryInput,
-  ) {
-    const repository = githubRepositorySchema.parse(input);
-    return this.dependencies.db.transaction(async (tx) => {
-      await this.requireMember(tx, actor);
-      await tx
-        .insert(githubRepositories)
-        .values({ organizationId: actor.organizationId, ...repository })
-        .onConflictDoNothing();
-      const [row] = await tx
-        .select()
-        .from(githubRepositories)
-        .where(
-          and(
-            eq(githubRepositories.organizationId, actor.organizationId),
-            eq(githubRepositories.owner, repository.owner),
-            eq(githubRepositories.name, repository.name),
-          ),
-        );
-      return row;
-    });
-  }
-
-  async listRepositories(actor: OrganizationActor) {
-    await this.requireMember(this.dependencies.db, actor);
-    return this.dependencies.db
-      .select()
-      .from(githubRepositories)
-      .where(eq(githubRepositories.organizationId, actor.organizationId))
-      .orderBy(asc(githubRepositories.owner), asc(githubRepositories.name));
-  }
-
-  async linkRepository(
-    actor: OrganizationActor,
-    docId: string,
-    repositoryId: string,
-  ) {
-    return this.dependencies.db.transaction(async (tx) => {
-      await this.requireDoc(tx, actor, docId, true);
-      const [repository] = await tx
-        .select()
-        .from(githubRepositories)
-        .where(
-          and(
-            eq(githubRepositories.id, repositoryId),
-            eq(githubRepositories.organizationId, actor.organizationId),
-          ),
-        );
-      if (!repository) throw new ApiError(404, "Repository not found.");
-      await tx
-        .insert(docRepositories)
-        .values({ organizationId: actor.organizationId, docId, repositoryId })
-        .onConflictDoNothing();
-    });
-  }
-
-  async unlinkRepository(
-    actor: OrganizationActor,
-    docId: string,
-    repositoryId: string,
-  ) {
-    return this.dependencies.db.transaction(async (tx) => {
-      await this.requireDoc(tx, actor, docId, true);
-      await tx
-        .delete(docRepositories)
-        .where(
-          and(
-            eq(docRepositories.docId, docId),
-            eq(docRepositories.repositoryId, repositoryId),
-          ),
-        );
-    });
-  }
-
-  async listDocRepositories(actor: OrganizationActor, docId: string) {
-    await this.requireDoc(this.dependencies.db, actor, docId);
-    return this.dependencies.db
-      .select({
-        id: githubRepositories.id,
-        organizationId: githubRepositories.organizationId,
-        owner: githubRepositories.owner,
-        name: githubRepositories.name,
-      })
-      .from(docRepositories)
-      .innerJoin(
-        githubRepositories,
-        eq(githubRepositories.id, docRepositories.repositoryId),
-      )
-      .where(eq(docRepositories.docId, docId))
-      .orderBy(asc(githubRepositories.owner), asc(githubRepositories.name));
   }
 }

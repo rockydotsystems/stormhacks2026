@@ -1,6 +1,6 @@
 {
-  "id": "bd8ccd96-5b3e-46c6-a09b-456ac00ab6fa",
-  "prevId": "9f0dc767-040c-40e1-b97b-ad97bb12c082",
+  "id": "bc7304af-c068-465e-b6a7-6390a71bc97f",
+  "prevId": "bd8ccd96-5b3e-46c6-a09b-456ac00ab6fa",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -497,6 +497,556 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.personal_workspaces": {
+      "name": "personal_workspaces",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "personal_workspaces_user_id_users_id_fk": {
+          "name": "personal_workspaces_user_id_users_id_fk",
+          "tableFrom": "personal_workspaces",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "personal_workspaces_organization_id_organizations_id_fk": {
+          "name": "personal_workspaces_organization_id_organizations_id_fk",
+          "tableFrom": "personal_workspaces",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "personal_workspaces_organization_unique": {
+          "name": "personal_workspaces_organization_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "organization_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.planning_change_sources": {
+      "name": "planning_change_sources",
+      "schema": "",
+      "columns": {
+        "doc_id": {
+          "name": "doc_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "change_id": {
+          "name": "change_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "conversation_id": {
+          "name": "conversation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "trigger_message_id": {
+          "name": "trigger_message_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "result_message_id": {
+          "name": "result_message_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "range_start_message_id": {
+          "name": "range_start_message_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "range_end_message_id": {
+          "name": "range_end_message_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mode": {
+          "name": "mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reverted_to_change_id": {
+          "name": "reverted_to_change_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "planning_change_sources_conversation_idx": {
+          "name": "planning_change_sources_conversation_idx",
+          "columns": [
+            {
+              "expression": "conversation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "change_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "planning_change_sources_change_fk": {
+          "name": "planning_change_sources_change_fk",
+          "tableFrom": "planning_change_sources",
+          "tableTo": "doc_changes",
+          "columnsFrom": [
+            "doc_id",
+            "change_id"
+          ],
+          "columnsTo": [
+            "doc_id",
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "planning_change_sources_conversation_fk": {
+          "name": "planning_change_sources_conversation_fk",
+          "tableFrom": "planning_change_sources",
+          "tableTo": "planning_conversations",
+          "columnsFrom": [
+            "conversation_id",
+            "doc_id"
+          ],
+          "columnsTo": [
+            "id",
+            "doc_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "planning_change_sources_trigger_fk": {
+          "name": "planning_change_sources_trigger_fk",
+          "tableFrom": "planning_change_sources",
+          "tableTo": "planning_messages",
+          "columnsFrom": [
+            "trigger_message_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "planning_change_sources_result_fk": {
+          "name": "planning_change_sources_result_fk",
+          "tableFrom": "planning_change_sources",
+          "tableTo": "planning_messages",
+          "columnsFrom": [
+            "result_message_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "planning_change_sources_range_start_fk": {
+          "name": "planning_change_sources_range_start_fk",
+          "tableFrom": "planning_change_sources",
+          "tableTo": "planning_messages",
+          "columnsFrom": [
+            "range_start_message_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "planning_change_sources_range_end_fk": {
+          "name": "planning_change_sources_range_end_fk",
+          "tableFrom": "planning_change_sources",
+          "tableTo": "planning_messages",
+          "columnsFrom": [
+            "range_end_message_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "planning_change_sources_doc_change_unique": {
+          "name": "planning_change_sources_doc_change_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "doc_id",
+            "change_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "planning_change_sources_mode_check": {
+          "name": "planning_change_sources_mode_check",
+          "value": "\"planning_change_sources\".\"mode\" in ('generated', 'edited', 'reverted')"
+        },
+        "planning_change_sources_revert_check": {
+          "name": "planning_change_sources_revert_check",
+          "value": "(\"planning_change_sources\".\"mode\" = 'reverted') = (\"planning_change_sources\".\"reverted_to_change_id\" is not null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.planning_conversations": {
+      "name": "planning_conversations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "doc_id": {
+          "name": "doc_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "phase": {
+          "name": "phase",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'grilling'"
+        },
+        "checklist": {
+          "name": "checklist",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "skill_version": {
+          "name": "skill_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "turn_locked_at": {
+          "name": "turn_locked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "planning_conversations_user_updated_idx": {
+          "name": "planning_conversations_user_updated_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "updated_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "planning_conversations_member_fk": {
+          "name": "planning_conversations_member_fk",
+          "tableFrom": "planning_conversations",
+          "tableTo": "organization_members",
+          "columnsFrom": [
+            "organization_id",
+            "user_id"
+          ],
+          "columnsTo": [
+            "organization_id",
+            "user_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "planning_conversations_doc_fk": {
+          "name": "planning_conversations_doc_fk",
+          "tableFrom": "planning_conversations",
+          "tableTo": "docs",
+          "columnsFrom": [
+            "organization_id",
+            "doc_id"
+          ],
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "planning_conversations_doc_unique": {
+          "name": "planning_conversations_doc_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "doc_id"
+          ]
+        },
+        "planning_conversations_id_doc_unique": {
+          "name": "planning_conversations_id_doc_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "doc_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "planning_conversations_phase_check": {
+          "name": "planning_conversations_phase_check",
+          "value": "\"planning_conversations\".\"phase\" in ('grilling', 'awaiting-confirmation', 'generated')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.planning_messages": {
+      "name": "planning_messages",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "planning_messages_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "conversation_id": {
+          "name": "conversation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "via": {
+          "name": "via",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'text'"
+        },
+        "questions": {
+          "name": "questions",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "client_message_id": {
+          "name": "client_message_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "planning_messages_conversation_idx": {
+          "name": "planning_messages_conversation_idx",
+          "columns": [
+            {
+              "expression": "conversation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "planning_messages_conversation_id_planning_conversations_id_fk": {
+          "name": "planning_messages_conversation_id_planning_conversations_id_fk",
+          "tableFrom": "planning_messages",
+          "tableTo": "planning_conversations",
+          "columnsFrom": [
+            "conversation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "planning_messages_client_message_unique": {
+          "name": "planning_messages_client_message_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "conversation_id",
+            "client_message_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "planning_messages_role_check": {
+          "name": "planning_messages_role_check",
+          "value": "\"planning_messages\".\"role\" in ('user', 'assistant')"
+        },
+        "planning_messages_via_check": {
+          "name": "planning_messages_via_check",
+          "value": "\"planning_messages\".\"via\" in ('text', 'voice')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.github_repositories": {

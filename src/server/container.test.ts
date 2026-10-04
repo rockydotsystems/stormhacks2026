@@ -11,6 +11,10 @@ describe("request scopes", () => {
     expect(first.cradle.authService).not.toBe(second.cradle.authService);
     expect(first.cradle.docsService).toBe(first.cradle.docsService);
     expect(first.cradle.docsService === second.cradle.docsService).toBe(false);
+    expect(first.cradle.projectsService).toBe(first.cradle.projectsService);
+    expect(first.cradle.projectsService === second.cradle.projectsService).toBe(
+      false,
+    );
     expect(
       first.cradle.organizationsService === second.cradle.organizationsService,
     ).toBe(false);

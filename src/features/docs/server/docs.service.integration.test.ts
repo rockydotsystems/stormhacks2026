@@ -5,7 +5,8 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 import { DocsService } from "@/features/docs/server/docs.service";
 import { OrganizationsService } from "@/features/organizations/server/organizations.service";
-import type { OrganizationActor } from "@/features/docs/contracts";
+import { ProjectsService } from "@/features/projects/server/projects.service";
+import type { OrganizationActor } from "@/features/organizations/contracts";
 
 // Creates and drops only its own database; requires local CREATEDB privileges.
 describe.skipIf(!process.env.TEST_DATABASE_URL)(
@@ -16,6 +17,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
     let client: ReturnType<typeof postgres>;
     let docs: DocsService;
     let organizations: OrganizationsService;
+    let projects: ProjectsService;
     let created = false;
 
     beforeAll(async () => {
@@ -29,6 +31,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       await migrate(db, { migrationsFolder: "./drizzle" });
       docs = new DocsService({ db });
       organizations = new OrganizationsService({ db });
+      projects = new ProjectsService({ db });
     });
 
     afterAll(async () => {
@@ -44,30 +47,31 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       const userId = `test-${randomUUID()}`;
       const org = await organizations.create(userId, "Test organization");
       const actor: OrganizationActor = { userId, organizationId: org.id };
-      const doc = await docs.create(actor, {
+      const project = await projects.create(actor, { name: "Test project" });
+      const doc = await docs.create(actor, project.id, {
         title: "First title",
         content: "Full first snapshot",
       });
-      return { actor, doc };
+      return { actor, doc, project };
     }
 
-    it("supports multiple users, organizations, docs and membership-isolated access", async () => {
-      const { actor, doc } = await fixture();
+    it("supports multiple projects and docs with membership and project-scoped access", async () => {
+      const { actor, doc, project } = await fixture();
       const other = await fixture();
       const memberId = `test-${randomUUID()}`;
       await organizations.addMember(actor, memberId);
       await organizations.addMember(actor, memberId);
       const member = { ...actor, userId: memberId };
-      const second = await docs.create(member, {
+      const second = await docs.create(member, project.id, {
         title: "Another doc",
         content: "",
       });
-      expect((await docs.list(member)).map((row) => row.id)).toEqual(
-        expect.arrayContaining([doc.id, second.id]),
-      );
+      expect(
+        (await docs.list(member, project.id)).map((row) => row.id),
+      ).toEqual(expect.arrayContaining([doc.id, second.id]));
       expect(await organizations.list(memberId)).toHaveLength(1);
       await expect(
-        docs.list({ ...actor, userId: other.actor.userId }),
+        docs.list({ ...actor, userId: other.actor.userId }, project.id),
       ).rejects.toMatchObject({ status: 404 });
       await expect(docs.listChanges(other.actor, doc.id)).rejects.toMatchObject(
         { status: 404 },
@@ -79,6 +83,54 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         organizations.addMember(other.actor, memberId),
       ).resolves.toBeUndefined();
       expect(await organizations.list(memberId)).toHaveLength(2);
+      const anotherProject = await projects.create(actor, {
+        name: "Second project",
+      });
+      const third = await docs.create(actor, anotherProject.id, {
+        title: "Third doc",
+        content: "",
+      });
+      expect(await projects.list(actor)).toHaveLength(2);
+      expect(await projects.get(member, project.id)).toEqual(project);
+      expect(
+        (await docs.list(actor, anotherProject.id)).map((row) => row.id),
+      ).toEqual([third.id]);
+      expect(
+        (await docs.list(actor, project.id)).map((row) => row.id),
+      ).not.toContain(third.id);
+      await expect(projects.get(other.actor, project.id)).rejects.toMatchObject(
+        { status: 404 },
+      );
+      await expect(
+        projects.create(
+          { ...actor, userId: `outsider-${randomUUID()}` },
+          { name: "Forged" },
+        ),
+      ).rejects.toMatchObject({ status: 404 });
+      await expect(
+        docs.create(actor, other.project.id, {
+          title: "Cross-org",
+          content: "",
+        }),
+      ).rejects.toMatchObject({ status: 404 });
+      await expect(
+        docs.create(actor, randomUUID(), { title: "Missing", content: "" }),
+      ).rejects.toMatchObject({ status: 404 });
+      await expect(
+        client`INSERT INTO docs (organization_id, project_id) VALUES (${actor.organizationId}, ${other.project.id})`,
+      ).rejects.toMatchObject({ code: "23503" });
+      await expect(
+        client`INSERT INTO docs (organization_id) VALUES (${actor.organizationId})`,
+      ).rejects.toMatchObject({ code: "23502" });
+      await expect(
+        client`DELETE FROM projects WHERE id = ${project.id}`,
+      ).rejects.toMatchObject({ code: "23503" });
+      await expect(
+        client`UPDATE docs SET project_id = ${anotherProject.id} WHERE id = ${doc.id}`,
+      ).rejects.toThrow("immutable");
+      await expect(
+        client`UPDATE projects SET organization_id = ${other.actor.organizationId} WHERE id = ${project.id}`,
+      ).rejects.toThrow("immutable");
     });
 
     it("deletes arbitrary drafts, recomputes numbers and preserves independent full snapshots", async () => {
@@ -216,49 +268,71 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       ).rejects.toThrow("latest version");
     });
 
-    it("links many repositories to many docs without cross-org references or duplicates", async () => {
-      const { actor, doc } = await fixture();
+    it("links many repositories to projects without cross-org references or duplicates", async () => {
+      const { actor, doc, project } = await fixture();
       const other = await fixture();
-      const second = await docs.create(actor, { title: "Second", content: "" });
-      const repo = await docs.connectRepository(actor, {
+      const second = await projects.create(actor, { name: "Second project" });
+      const anotherDoc = await docs.create(actor, project.id, {
+        title: "Second doc",
+        content: "",
+      });
+      const repo = await projects.connectRepository(actor, {
         owner: "ORG",
         name: "Repository",
       });
       expect(
-        await docs.connectRepository(actor, {
+        await projects.connectRepository(actor, {
           owner: "org",
           name: "repository",
         }),
       ).toEqual(repo);
-      const another = await docs.connectRepository(actor, {
+      const another = await projects.connectRepository(actor, {
         owner: "org",
         name: "another",
       });
-      const foreign = await docs.connectRepository(other.actor, {
+      const foreign = await projects.connectRepository(other.actor, {
         owner: "org",
         name: "repository",
       });
-      for (const docId of [doc.id, second.id]) {
-        await docs.linkRepository(actor, docId, repo.id);
-        await docs.linkRepository(actor, docId, another.id);
-        await docs.linkRepository(actor, docId, repo.id);
-        expect(await docs.listDocRepositories(actor, docId)).toHaveLength(2);
+      for (const projectId of [project.id, second.id]) {
+        await projects.linkRepository(actor, projectId, repo.id);
+        await projects.linkRepository(actor, projectId, another.id);
+        await projects.linkRepository(actor, projectId, repo.id);
+        expect(
+          await projects.listProjectRepositories(actor, projectId),
+        ).toHaveLength(2);
       }
-      expect(await docs.listRepositories(actor)).toHaveLength(2);
+      expect(await projects.listRepositories(actor)).toHaveLength(2);
+      expect((await docs.list(actor, project.id)).map((row) => row.id)).toEqual(
+        expect.arrayContaining([doc.id, anotherDoc.id]),
+      );
       await expect(
-        docs.linkRepository(actor, doc.id, foreign.id),
+        projects.linkRepository(actor, project.id, foreign.id),
       ).rejects.toMatchObject({ status: 404 });
       await expect(
-        client`INSERT INTO doc_repositories (organization_id, doc_id, repository_id) VALUES (${actor.organizationId}, ${doc.id}, ${foreign.id})`,
+        client`INSERT INTO project_repositories (organization_id, project_id, repository_id) VALUES (${actor.organizationId}, ${project.id}, ${foreign.id})`,
       ).rejects.toMatchObject({ code: "23503" });
-      await docs.unlinkRepository(actor, doc.id, repo.id);
-      expect(await docs.listDocRepositories(actor, doc.id)).toHaveLength(1);
-      expect(await docs.listDocRepositories(actor, second.id)).toHaveLength(2);
+      await projects.unlinkRepository(actor, project.id, repo.id);
+      expect(
+        await projects.listProjectRepositories(actor, project.id),
+      ).toHaveLength(1);
+      expect(
+        await projects.listProjectRepositories(actor, second.id),
+      ).toHaveLength(2);
+      await expect(
+        projects.listProjectRepositories(other.actor, project.id),
+      ).rejects.toMatchObject({ status: 404 });
+      await expect(
+        projects.unlinkRepository(other.actor, project.id, repo.id),
+      ).rejects.toMatchObject({ status: 404 });
     });
 
     it("handles missing changes and rejects another doc's snapshot", async () => {
-      const { actor, doc } = await fixture();
-      const second = await docs.create(actor, { title: "Second", content: "" });
+      const { actor, doc, project } = await fixture();
+      const second = await docs.create(actor, project.id, {
+        title: "Second",
+        content: "",
+      });
       const first = (await docs.listChanges(actor, doc.id))[0];
       await expect(
         docs.publish(actor, second.id, first.id),

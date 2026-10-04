@@ -5,23 +5,6 @@ export const snapshotSchema = z.object({
   content: z.string(),
 });
 
-export const githubRepositorySchema = z.object({
-  owner: z
-    .string()
-    .trim()
-    .regex(/^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/)
-    .transform((value) => value.toLowerCase()),
-  name: z
-    .string()
-    .trim()
-    .regex(/^[a-zA-Z0-9_.-]+$/)
-    .refine(
-      (value) => value !== "." && value !== "..",
-      "Use a repository name.",
-    )
-    .transform((value) => value.toLowerCase()),
-});
-
 export const changeIdSchema = z
   .string()
   .regex(/^[1-9][0-9]*$/)
@@ -36,10 +19,12 @@ export const changeIdSchema = z
   );
 
 export type Snapshot = z.infer<typeof snapshotSchema>;
-export type GithubRepositoryInput = z.input<typeof githubRepositorySchema>;
-export type OrganizationActor = { organizationId: string; userId: string };
-
-export type Doc = { id: string; organizationId: string; createdAt: string };
+export type Doc = {
+  id: string;
+  organizationId: string;
+  projectId: string;
+  createdAt: string;
+};
 export type DocChange = Snapshot & {
   id: string;
   docId: string;
