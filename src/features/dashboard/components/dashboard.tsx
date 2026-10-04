@@ -837,31 +837,16 @@ export function Dashboard({
           {settingsSection ? (
             settingsSection === "github" ? (
               <div className="settings-content">
-                <Label htmlFor="github-organization">Organization</Label>
-                <Select
-                  items={
-                    workspace.data?.organizations.map((org) => ({
-                      value: org.id,
-                      label: org.name,
-                    })) || []
-                  }
-                  value={organization || null}
-                  disabled={switching || workspace.isPending}
-                  onValueChange={(value) => {
-                    if (value) void switchOrganization(value);
-                  }}
-                >
-                  <SelectTrigger id="github-organization">
-                    <SelectValue placeholder="Choose organization" />
-                  </SelectTrigger>
-                  <SelectPopup>
-                    {workspace.data?.organizations.map((org) => (
-                      <SelectItem key={org.id} value={org.id}>
-                        {org.name}
-                      </SelectItem>
-                    ))}
-                  </SelectPopup>
-                </Select>
+                {organization && (
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">
+                      Organization
+                    </p>
+                    <h2 className="text-xl font-semibold">
+                      {organizationName}
+                    </h2>
+                  </div>
+                )}
                 {switchError && <p role="alert">{switchError}</p>}
                 {session.data?.user && workspace.isPending ? (
                   <p role="status">Loading your organizations…</p>
