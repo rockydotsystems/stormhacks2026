@@ -14,30 +14,34 @@ function themeType() {
 /** The change from `before` to `after`, with the unchanged lines around it. */
 export function DiffView({ before, after }: { before: string; after: string }) {
   return (
-    <MultiFileDiff
-      oldFile={{ name: NAME, contents: before }}
-      newFile={{ name: NAME, contents: after }}
-      options={{
-        diffStyle: "split",
-        disableFileHeader: true,
-        expandUnchanged: true,
-        overflow: "wrap",
-        themeType: themeType(),
-      }}
-    />
+    <div className="history-code">
+      <MultiFileDiff
+        oldFile={{ name: NAME, contents: before }}
+        newFile={{ name: NAME, contents: after }}
+        options={{
+          diffStyle: "split",
+          disableFileHeader: true,
+          expandUnchanged: true,
+          overflow: "wrap",
+          themeType: themeType(),
+        }}
+      />
+    </div>
   );
 }
 
 /** The document text on its own, with line numbers. */
 export function RawView({ content }: { content: string }) {
   return (
-    <File
-      file={{ name: NAME, contents: content }}
-      options={{
-        disableFileHeader: true,
-        overflow: "wrap",
-        themeType: themeType(),
-      }}
-    />
+    <div className="history-code">
+      <File
+        file={{ name: NAME, contents: content }}
+        options={{
+          disableFileHeader: true,
+          overflow: "wrap",
+          themeType: themeType(),
+        }}
+      />
+    </div>
   );
 }
