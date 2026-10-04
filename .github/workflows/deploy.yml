@@ -42,7 +42,7 @@ jobs:
       - name: Build and validate Worker
         run: pnpm deploy:check
 
-      - name: Validate MCP Worker (no publication)
+      - name: Validate MCP Worker
         run: pnpm mcp:build && pnpm mcp:smoke
 
       - name: Apply database migrations
@@ -64,4 +64,5 @@ jobs:
             echo "::error::Set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in the production environment secrets."
             exit 1
           fi
+          pnpm --filter @stormhacks/mcp run deploy --keep-vars
           node scripts/deploy.mjs

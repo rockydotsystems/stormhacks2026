@@ -312,8 +312,9 @@ Before publishing the workflow:
    not the workflow or build environment.
 
 The job installs the locked dependencies with Node 24 and the pnpm version in
-`package.json`, runs `pnpm check`, then `pnpm deploy:check`. Only after those
-pass does it run `pnpm db:migrate` and deploy that same build through
+`package.json`, runs `pnpm check`, `pnpm deploy:check`, and the MCP build/smoke
+checks. Only after those pass does it run `pnpm db:migrate`, publish the MCP
+Worker with `--keep-vars`, and deploy the realtime and web Workers through
 `scripts/deploy.mjs`, preserving the Hyperdrive placeholder guard and generated
 `dist/server/wrangler.json` config. The database URL is exposed only to the
 migration step; Cloudflare credentials are exposed only to the final deployment

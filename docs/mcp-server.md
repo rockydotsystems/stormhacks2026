@@ -147,14 +147,18 @@ after the dashboard's `0003_quiet_randall_flagg.sql` project-description migrati
 Existing snapshots retain their content, IDs and publication history. It is an
 additive migration and leaves append-only/publication guards active.
 
-The existing main deployment workflow validates the MCP build/smoke but still
-deploys **only the web Worker**. It applies root database migrations before that
-deployment. A separate MCP deployment requires approval, the production AuthKit
+The main deployment workflow validates the MCP build/smoke, applies root database
+migrations, then deploys the MCP, realtime, and web Workers on pushes to `main`
+and manual runs on `main`. The MCP deployment uses `--keep-vars` to preserve
+dashboard-managed variables and existing secrets. A separate manual MCP
+deployment requires approval, the production AuthKit
 issuer/resource configuration, registered resource URL, and the same authorized
 Hyperdrive binding. Its config reuses the existing binding with query caching
 disabled for read-after-write consistency. Set configuration as Worker secrets
 or explicit deployment variables before invoking the app's `deploy` script.
-There is no automatic MCP publication yet.
+The existing production environment and concurrency group gate and serialize
+the complete migration/deployment sequence. Cloudflare credentials remain
+limited to the final deployment step; runtime WorkOS secrets stay in Cloudflare.
 
 ### Hosted endpoint
 
@@ -179,7 +183,8 @@ Deploy the MCP Worker explicitly from the repository root with
 `pnpm run deploy`. Use the intended Cloudflare account credentials and preserve
 existing remote variables with `--keep-vars` when deploying from an environment
 that manages additional dashboard variables. Both commands publish and require
-deployment approval. The existing CI workflow still deploys only the web Worker.
+deployment approval. The CI workflow publishes all three Workers after validation
+and migrations.
 
 ## Implementation record
 
