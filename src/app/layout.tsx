@@ -7,9 +7,17 @@ import { themeScript } from "@/features/account/theme";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "WhyDidWeChooseThis.Tech",
+  title: "why did we choose this · Engineering decisions. Shared context.",
   description:
-    "A shared record of architectural decisions, team intent, and the reasons behind them.",
+    "Bring plans and team discussions into one place. Preserve what you agreed to build—and why.",
+  icons: {
+    icon: [
+      { url: "/brand/favicon.svg", type: "image/svg+xml" },
+      { url: "/brand/favicon-16.png", sizes: "16x16", type: "image/png" },
+      { url: "/brand/favicon-32.png", sizes: "32x32", type: "image/png" },
+    ],
+    apple: "/brand/app-icon-180.png",
+  },
 };
 
 export default async function RootLayout({

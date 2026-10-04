@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Approved v2 · production brand kit</title>
+    <style>
+      @font-face {
+        font-family: Inter;
+        src: url(/fonts/Inter-Regular.woff2);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #f6f7f8;
+        color: #16181b;
+        font:
+          14px/1.5 Inter,
+          Arial,
+          sans-serif;
+      }
+      .board {
+        max-width: 1000px;
+        margin: 48px auto;
+        background: white;
+        padding: 40px;
+        border: 1px solid #dce0e4;
+        border-radius: 12px;
+      }
+      h1 {
+        font-size: 24px;
+        font-weight: 500;
+        margin: 0 0 8px;
+      }
+      p {
+        color: #646a73;
+        margin: 0 0 32px;
+      }
+      .row {
+        padding: 24px 0;
+        border-top: 1px solid #e4e7eb;
+      }
+      .label {
+        display: block;
+        font-size: 12px;
+        color: #646a73;
+        margin-bottom: 20px;
+      }
+      .samples {
+        display: flex;
+        align-items: center;
+        gap: 32px;
+        flex-wrap: wrap;
+      }
+      .sample {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        align-items: flex-start;
+      }
+      .sample small {
+        font-size: 11px;
+        color: #646a73;
+      }
+      .dark {
+        background: #16181b;
+        padding: 24px;
+        border-radius: 8px;
+      }
+      .dark .label,
+      .dark small {
+        color: #c2c6cc;
+      }
+      img {
+        display: block;
+        max-width: 100%;
+      }
+      .palette {
+        display: flex;
+        gap: 24px;
+        flex-wrap: wrap;
+      }
+      .swatch {
+        width: 48px;
+        height: 48px;
+        border-radius: 6px;
+        border: 1px solid #dce0e4;
+        margin-bottom: 8px;
+      }
+      a {
+        color: #087f79;
+      }
+      a:focus-visible {
+        outline: 2px solid #087f79;
+        outline-offset: 4px;
+      }
+      @media (max-width: 600px) {
+        .board {
+          margin: 16px;
+          padding: 24px;
+        }
+        .samples {
+          gap: 24px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="board">
+      <h1>Production identity / 02</h1>
+      <p>
+        Approved twin-plane geometry. All samples below render at their labeled
+        CSS pixel sizes. SVG lettering is outlined.
+      </p>
+      <div class="row">
+        <span class="label">Combined logo · header and footer</span>
+        <div class="samples">
+          <div class="sample">
+            <img
+              src="/brand/logo-dark.svg"
+              height="26"
+              alt="why did we choose this"
+            /><small>26px high · header</small>
+          </div>
+          <div class="sample">
+            <img
+              src="/brand/logo-dark.svg"
+              height="20"
+              alt="why did we choose this"
+            /><small>20px high · footer</small>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <span class="label">Outlined wordmark</span
+        ><img
+          src="/brand/wordmark-dark.svg"
+          height="24"
+          alt="why did we choose this"
+        />
+      </div>
+      <div class="row">
+        <span class="label">Symbol · actual interface sizes</span>
+        <div class="samples">
+          <div class="sample">
+            <img
+              src="/brand/symbol-dark.svg"
+              height="16"
+              alt="Twin-plane symbol"
+            /><small>16px</small>
+          </div>
+          <div class="sample">
+            <img
+              src="/brand/symbol-dark.svg"
+              height="24"
+              alt="Twin-plane symbol"
+            /><small>24px</small>
+          </div>
+          <div class="sample">
+            <img
+              src="/brand/symbol-dark.svg"
+              height="32"
+              alt="Twin-plane symbol"
+            /><small>32px</small>
+          </div>
+          <div class="sample">
+            <img
+              src="/brand/symbol-dark.svg"
+              height="48"
+              alt="Twin-plane symbol"
+            /><small>48px</small>
+          </div>
+        </div>
+      </div>
+      <div class="row dark">
+        <span class="label">White variants · dark surface</span>
+        <div class="samples">
+          <img
+            src="/brand/logo-white.svg"
+            height="26"
+            alt="White combined logo"
+          /><img
+            src="/brand/wordmark-white.svg"
+            height="20"
+            alt="White wordmark"
+          /><img src="/brand/symbol-white.svg" height="32" alt="White symbol" />
+        </div>
+      </div>
+      <div class="row">
+        <span class="label">Favicons · one image pixel per CSS pixel</span>
+        <div class="samples">
+          <div class="sample">
+            <img
+              src="/brand/favicon-16.png"
+              width="16"
+              height="16"
+              alt="16 pixel favicon"
+            /><small>16 × 16</small>
+          </div>
+          <div class="sample">
+            <img
+              src="/brand/favicon-32.png"
+              width="32"
+              height="32"
+              alt="32 pixel favicon"
+            /><small>32 × 32</small>
+          </div>
+          <div class="sample">
+            <img
+              src="/brand/favicon-48.png"
+              width="48"
+              height="48"
+              alt="48 pixel favicon"
+            /><small>48 × 48</small>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <span class="label"
+          >App icon · source PNGs 180, 192, 512, 1024px; platform applies the
+          mask</span
+        >
+        <div class="samples">
+          <div class="sample">
+            <img
+              src="/brand/app-icon-192.png"
+              width="48"
+              height="48"
+              style="border-radius: 10px"
+              alt="App icon at 48 pixels"
+            /><small>48px · launcher</small>
+          </div>
+          <div class="sample">
+            <img
+              src="/brand/app-icon-192.png"
+              width="64"
+              height="64"
+              style="border-radius: 14px"
+              alt="App icon at 64 pixels"
+            /><small>64px · launcher</small>
+          </div>
+          <div class="sample">
+            <img
+              src="/brand/app-icon-180.png"
+              width="180"
+              height="180"
+              alt="180 pixel app icon"
+            /><small>180 × 180 · source</small>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <span class="label">Approved palette</span>
+        <div class="palette">
+          <div>
+            <div class="swatch" style="background: #16181b"></div>
+            #16181B
+          </div>
+          <div>
+            <div class="swatch" style="background: #fff"></div>
+            #FFFFFF
+          </div>
+          <div>
+            <div class="swatch" style="background: #f6f7f8"></div>
+            #F6F7F8
+          </div>
+          <div>
+            <div class="swatch" style="background: #6b7078"></div>
+            #6B7078
+          </div>
+          <div>
+            <div class="swatch" style="background: #087f79"></div>
+            #087F79
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <a href="/">View landing page</a>
+        <p style="margin: 12px 0 0">whydidwechoosethis.tech</p>
+      </div>
+    </main>
+  </body>
+</html>
