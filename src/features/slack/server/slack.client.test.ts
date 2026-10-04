@@ -5,6 +5,23 @@ import { shareableChannel } from "./slack.client";
 const actor = { organizationId: "org_123", userId: "user_123" };
 afterEach(() => vi.unstubAllEnvs());
 describe("Slack bot credentials and replies", () => {
+  it("reports provider status and safe error codes without exposing the response body", async () => {
+    const client = new SlackClient(
+      vi.fn<typeof fetch>().mockResolvedValue(
+        Response.json(
+          {
+            code: "invalid_api_key",
+            message: "sensitive-provider-details",
+            credential: "private-token",
+          },
+          { status: 401 },
+        ),
+      ),
+    );
+    await expect(client.authorize(actor)).rejects.toThrow(
+      "HTTP 401; code invalid_api_key.",
+    );
+  });
   it("uses Workers-compatible manual redirects for provider requests", async () => {
     const fetcher = vi
       .fn<typeof fetch>()

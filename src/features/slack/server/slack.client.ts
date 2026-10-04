@@ -24,7 +24,21 @@ export function shareableChannel(channel: z.infer<typeof channelSchema>) {
 }
 
 async function providerJson(response: Response) {
-  if (!response.ok) throw new Error("Slack provider request failed.");
+  if (!response.ok) {
+    const body = await readLimitedBody(response, 64 * 1024).catch(() => null);
+    let code = "unknown";
+    try {
+      const parsed = z
+        .object({ code: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/) })
+        .safeParse(JSON.parse(body?.toString("utf8") || "null"));
+      if (parsed.success) code = parsed.data.code;
+    } catch {
+      // Provider HTML and arbitrary error bodies must not enter application logs.
+    }
+    throw new Error(
+      `Slack provider request failed. HTTP ${response.status}; code ${code}.`,
+    );
+  }
   return JSON.parse(
     (await readLimitedBody(response, 64 * 1024)).toString("utf8"),
   ) as unknown;
