@@ -46,11 +46,11 @@ Projects have a name, description, and optional repository selections. A reposit
 can belong to multiple projects. New documents use a Coss project dropdown and
 inherit repository context from the project; repository selection lives in
 project creation. Reviewer requests are deferred until inside the document.
-Duplicate project names are rejected within the current organization.
+Projects are identified by UUID, so names do not determine ownership or document scope.
 
 Status, Project, and repository selectors use Coss's inline chip multi-selection
 combobox pattern. Selections within a filter combine with OR, and different filters
-combine with AND. My reviews is a filter, and Bound is a status. Clearing filters
+combine with AND. My reviews is disabled until review requests have a backend. Bound is a status. Clearing filters
 inside a project retains its scope. The inset frame and header remain fixed while
 its content scrolls.
 
@@ -59,12 +59,25 @@ The folder artwork is an original CSS interpretation inspired by
 It respects reduced motion. Coss Menu, Avatar, Badge, Select, and Combobox join
 the existing Button, Input, Dialog, Label, and Textarea primitives.
 
-Dashboard records and repository options are local sample data. Created projects
-and documents reset on reload; repositories are not fetched from GitHub.
-The organization switcher uses sample organizations. The account menu uses real
-WorkOS identity data and links to `/settings/profile`, `/settings/security`,
-`/settings/preferences`, and `/settings/team`. Team management uses the authenticated
-WorkOS organization, not the selected sample organization.
+Dashboard records come from authenticated `/api/dashboard` requests. Organizations,
+projects, descriptions, repository associations, and documents persist in Postgres.
+Repository entries are explicit `owner/name` associations, not GitHub installation
+access or fetched repository contents. Project creation and repository links share
+one transaction. Apply migration `0003_quiet_randall_flagg.sql` before running this UI.
+
+Document details load `/api/documents/[id]`. Saving appends a complete snapshot;
+binding publishes the saved snapshot as an immutable version. Published versions
+remain readable after new drafts. The list shows Bound only when its latest snapshot
+is the latest published version; otherwise it shows Draft. Reviewers are not invented.
+Descriptions are excerpts of the latest document body. Recently viewed document IDs
+are stored on the device, scoped by authenticated user and organization.
+
+The organization switcher uses the backend's membership list. New organization
+creation adds its creator as a member. The backend currently provisions memberships
+locally; it does not sync them from WorkOS. The account menu uses real WorkOS identity
+and links to `/settings/profile`, `/settings/security`, `/settings/preferences`, and
+`/settings/team`. Team management still uses the authenticated WorkOS organization,
+which is separate from the selected database organization.
 
 Verify project creation with multiple repositories, its empty state, creating a
 document with inherited repositories, combined document filters, and organization

@@ -8,6 +8,7 @@ describe("project input contracts", () => {
   it("requires a project name", () => {
     expect(projectSchema.parse({ name: " Project " })).toEqual({
       name: "Project",
+      description: "",
     });
     expect(projectSchema.safeParse({ name: " " }).success).toBe(false);
   });

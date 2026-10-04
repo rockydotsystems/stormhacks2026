@@ -1,5 +1,6 @@
 import "server-only";
 import { asClass, asFunction, createContainer, InjectionMode } from "awilix";
+import { DashboardController } from "@/features/dashboard/server/dashboard.controller";
 import { AuthController } from "@/features/auth/server/auth.controller";
 import { AuthService } from "@/features/auth/server/auth.service";
 import { DocsService } from "@/features/docs/server/docs.service";
@@ -10,6 +11,7 @@ import { NotesService } from "@/features/notes/server/notes.service";
 import { createDatabase, type Database } from "@/server/db";
 
 export type Dependencies = {
+  dashboardController: DashboardController;
   db: Database;
   authService: AuthService;
   authController: AuthController;
@@ -26,6 +28,7 @@ export const container = createContainer<Dependencies>({
 });
 
 container.register({
+  dashboardController: asClass(DashboardController).scoped(),
   db: asFunction(createDatabase)
     .scoped()
     .disposer((db) => db.$client.end({ timeout: 1 })),

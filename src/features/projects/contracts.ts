@@ -1,6 +1,9 @@
 import { z } from "zod";
 
-export const projectSchema = z.object({ name: z.string().trim().min(1) });
+export const projectSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  description: z.string().trim().max(1000).default(""),
+});
 
 export const githubRepositorySchema = z.object({
   owner: z
@@ -19,11 +22,12 @@ export const githubRepositorySchema = z.object({
     .transform((value) => value.toLowerCase()),
 });
 
-export type CreateProject = z.infer<typeof projectSchema>;
+export type CreateProject = z.input<typeof projectSchema>;
 export type GithubRepositoryInput = z.input<typeof githubRepositorySchema>;
 export type Project = {
   id: string;
   organizationId: string;
   name: string;
+  description: string;
   createdAt: string;
 };

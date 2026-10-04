@@ -18,6 +18,7 @@ export const projects = pgTable(
       .notNull()
       .references(() => organizations.id),
     name: text("name").notNull(),
+    description: text("description").notNull().default(""),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),

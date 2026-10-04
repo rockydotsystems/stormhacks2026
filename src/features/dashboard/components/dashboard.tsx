@@ -77,42 +77,36 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import {
   filterDecisions,
-  initialDecisions,
-  initialProjects,
-  type Project,
-  people,
   type Decision,
   type DecisionStatus,
-} from "@/features/dashboard/preview-data";
+} from "@/features/dashboard/data";
+import {
+  useDashboard,
+  useDashboardAction,
+} from "@/features/dashboard/client/queries";
+import type { Person } from "@/features/dashboard/contracts";
+import { useRecentDocuments } from "@/features/dashboard/client/recent-documents";
+import { DocumentEditor } from "./document-editor";
 import { cn } from "@/lib/utils";
 
-const repositoryOptions: Record<string, string[]> = {
-  "Rocky Dot Systems": [
-    "rockydotsystems/stormhacks2026",
-    "rockydotsystems/incident-search",
-    "rockydotsystems/platform",
-  ],
-  "Rocky Dot Labs": [
-    "rockydotsystems/experiments",
-    "rockydotsystems/model-evaluations",
-  ],
-};
-const statuses = ["Draft", "In review", "Bound"];
+const statuses = ["Draft", "Bound"];
 function documentCount(count: number) {
   return `${count} ${count === 1 ? "document" : "documents"}`;
 }
 
-function PersonAvatar({ id, className }: { id: string; className?: string }) {
-  const person = people[id];
+function PersonAvatar({
+  person,
+  className,
+}: {
+  person: Person;
+  className?: string;
+}) {
   return (
     <Avatar
       className={cn("size-6 ring-2 ring-background", className)}
       title={person.name}
     >
-      <AvatarImage
-        src={`https://i.pravatar.cc/80?img=${person.photo}`}
-        alt={person.name}
-      />
+      <AvatarImage src={person.picture || undefined} alt={person.name} />
       <AvatarFallback>{person.initials}</AvatarFallback>
     </Avatar>
   );
@@ -180,19 +174,27 @@ function FilterMenu({
 
 function MultiFilter({
   compact = false,
+  labelFor = (value) => value,
   label,
   values,
   options,
   onChange,
 }: {
   compact?: boolean;
+  labelFor?: (value: string) => string;
   label: string;
   values: string[];
   options: string[];
   onChange: (values: string[]) => void;
 }) {
   return (
-    <Combobox multiple items={options} value={values} onValueChange={onChange}>
+    <Combobox
+      multiple
+      items={options}
+      itemToStringLabel={labelFor}
+      value={values}
+      onValueChange={onChange}
+    >
       <ComboboxChips
         className={cn("dashboard-multi-select", compact && "compact-filter")}
       >
@@ -205,7 +207,7 @@ function MultiFilter({
                   aria-label={value}
                   removeProps={{ "aria-label": `Remove ${value}` }}
                 >
-                  {value}
+                  {labelFor(value)}
                 </ComboboxChip>
               ))}
               <ComboboxChipsInput
@@ -234,7 +236,7 @@ function MultiFilter({
         <ComboboxList>
           {(option: string) => (
             <ComboboxItem key={option} value={option}>
-              {option}
+              {labelFor(option)}
             </ComboboxItem>
           )}
         </ComboboxList>
@@ -251,19 +253,33 @@ export function Dashboard({
   const session = useSession();
   const [defaultSort] = useDefaultDocumentSort(session.data?.user?.id);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [projectRecords, setProjectRecords] = useState(initialProjects);
+  const [organizationOverride, setOrganization] = useState<string | null>(null);
+  const workspace = useDashboard(session.data?.user?.id, organizationOverride);
+  const mutation = useDashboardAction(session.data?.user?.id);
+  const organization = workspace.data?.organizationId || "";
+  const organizationName =
+    workspace.data?.organizations.find((item) => item.id === organization)
+      ?.name || "Choose organization";
+  const projectRecords = workspace.data?.projects || [];
+  const decisions = workspace.data?.documents || [];
+  const people = workspace.data?.people || {};
+  const projectName = (id: string | null) =>
+    projectRecords.find((item) => item.id === id)?.name || "Project";
+  const [organizationCreateOpen, setOrganizationCreateOpen] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [projectCreateOpen, setProjectCreateOpen] = useState(false);
   const [projectRepositories, setProjectRepositories] = useState<string[]>([]);
-  const [creationProject, setCreationProject] = useState("Engineering");
-  const [decisions, setDecisions] = useState(initialDecisions);
-  const [organization, setOrganization] = useState("Rocky Dot Systems");
+  const [creationProject, setCreationProject] = useState("");
   const [view, setView] = useState("Overview");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<string[]>([]);
   const [project, setProject] = useState<string[]>([]);
   const [sortOverride, setSort] = useState<string | null>(null);
   const sort = sortOverride || defaultSort;
-  const [recent, setRecent] = useState(["adr-008", "adr-007", "adr-006"]);
+  const [recent, recordRecent] = useRecentDocuments(
+    session.data?.user?.id,
+    organization,
+  );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -276,17 +292,18 @@ export function Dashboard({
   const orgProjects = projectRecords.filter(
     (item) => item.organization === organization,
   );
-  const projects = orgProjects.map((item) => item.name);
-  const projectItems = projects.map((name) => ({ label: name, value: name }));
-  const currentProject = orgProjects.find(
-    (item) => item.name === activeProject,
-  );
+  const projects = orgProjects.map((item) => item.id);
+  const projectItems = projects.map((name) => ({
+    label: projectName(name),
+    value: name,
+  }));
+  const currentProject = orgProjects.find((item) => item.id === activeProject);
   const projectIsEmpty =
     Boolean(activeProject) &&
     !orgDocuments.some((document) => document.project === activeProject);
   const selectedRepositories =
     selected?.repositories ??
-    orgProjects.find((item) => item.name === selected?.project)?.repositories ??
+    orgProjects.find((item) => item.id === selected?.project)?.repositories ??
     [];
   const recentDocuments = recent
     .map((id) => orgDocuments.find((decision) => decision.id === id))
@@ -304,9 +321,16 @@ export function Dashboard({
     myReviews,
     scope: activeProject,
     sort,
+    people,
+    userId: session.data?.user?.id,
   });
 
   function startDocument() {
+    if (!projects.length) {
+      startProject();
+      return;
+    }
+    setFormError(null);
     const name = activeProject || project[0] || projects[0];
     setCreationProject(name);
     setCreateOpen(true);
@@ -329,7 +353,7 @@ export function Dashboard({
   function openDocument(id: string) {
     scrollRef.current?.scrollTo({ top: 0 });
     setSelectedId(id);
-    setRecent((ids) => [id, ...ids.filter((item) => item !== id)].slice(0, 5));
+    recordRecent(id);
     setMobileOpen(false);
   }
   function resetFilters() {
@@ -338,64 +362,93 @@ export function Dashboard({
     setStatus([]);
     setProject([]);
   }
-  function createDocument(event: FormEvent<HTMLFormElement>) {
+  async function createDocument(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setFormError(null);
     const fields = new FormData(event.currentTarget);
-    const title = String(fields.get("title")).trim();
-    if (!title) {
-      event.currentTarget
-        .querySelector<HTMLInputElement>("input")
-        ?.setCustomValidity("Enter a document name.");
-      event.currentTarget.reportValidity();
-      return;
+    try {
+      const doc = await mutation.mutateAsync({
+        action: "createDocument",
+        organizationId: organization,
+        projectId: creationProject,
+        title: String(fields.get("title")),
+        content: String(fields.get("description")),
+      });
+      setCreateOpen(false);
+      openProject(creationProject);
+      openDocument(doc.id);
+    } catch (error) {
+      setFormError((error as Error).message);
     }
-    const decision: Decision = {
-      id: crypto.randomUUID(),
-      title,
-      description: String(fields.get("description")).trim(),
-      project: String(fields.get("project")),
-      creator: "matthew",
-      reviewers: [],
-      status: "Draft",
-      updated: new Date().toISOString(),
-      organization,
-    };
-    setDecisions((items) => [decision, ...items]);
-    setCreateOpen(false);
-    openProject(decision.project);
-    openDocument(decision.id);
   }
-
   function startProject() {
+    setFormError(null);
     setProjectRepositories([]);
     setProjectCreateOpen(true);
   }
-  function createProject(event: FormEvent<HTMLFormElement>) {
+  async function createProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setFormError(null);
     const fields = new FormData(event.currentTarget);
-    const name = String(fields.get("name")).trim();
-    const input = event.currentTarget.querySelector<HTMLInputElement>("input");
-    if (
-      !name ||
-      projects.some((existing) => existing.toLowerCase() === name.toLowerCase())
-    ) {
-      input?.setCustomValidity(
-        name
-          ? "A project with this name already exists."
-          : "Enter a project name.",
-      );
-      event.currentTarget.reportValidity();
+    try {
+      const result = await mutation.mutateAsync({
+        action: "createProject",
+        organizationId: organization,
+        name: String(fields.get("name")),
+        description: String(fields.get("description")),
+        repositoryIds: projectRepositories.map(
+          (slug) =>
+            workspace.data!.repositories.find(
+              (repo) => `${repo.owner}/${repo.name}` === slug,
+            )!.id,
+        ),
+      });
+      setProjectCreateOpen(false);
+      openProject(result.id);
+    } catch (error) {
+      setFormError((error as Error).message);
+    }
+  }
+  async function createOrganization(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormError(null);
+    const fields = new FormData(event.currentTarget);
+    try {
+      const result = await mutation.mutateAsync({
+        action: "createOrganization",
+        name: String(fields.get("name")),
+      });
+      setOrganization(result.id);
+      setOrganizationCreateOpen(false);
+      navigate("Overview");
+    } catch (error) {
+      setFormError((error as Error).message);
+    }
+  }
+  async function connectRepository(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormError(null);
+    const form = event.currentTarget;
+    const slug = String(new FormData(form).get("repository")).trim();
+    const parts = slug.split("/");
+    if (parts.length !== 2) {
+      setFormError("Enter a repository as owner/name.");
       return;
     }
-    const next: Project = {
-      name,
-      description: String(fields.get("description")).trim(),
-      repositories: projectRepositories,
-      organization,
-    };
-    setProjectRecords((items) => [...items, next]);
-    setProjectCreateOpen(false);
-    openProject(name);
+    try {
+      await mutation.mutateAsync({
+        action: "connectRepository",
+        organizationId: organization,
+        owner: parts[0],
+        name: parts[1],
+      });
+      setProjectRepositories((items) => [
+        ...new Set([...items, slug.toLowerCase()]),
+      ]);
+      form.reset();
+    } catch (error) {
+      setFormError((error as Error).message);
+    }
   }
 
   const sidebar = (
@@ -407,26 +460,37 @@ export function Dashboard({
             aria-label="Switch organization"
           >
             <span className="org-mark" aria-hidden="true">
-              r<span>•</span>
+              {organizationName.charAt(0).toLowerCase()}
+              <span>•</span>
             </span>
-            <span className="truncate">{organization}</span>
+            <span className="truncate">{organizationName}</span>
             <CaretUpDownIcon aria-hidden="true" />
           </MenuTrigger>
           <MenuPopup align="start" className="w-60">
             <MenuGroup>
               <MenuGroupLabel>Organizations</MenuGroupLabel>
-              {["Rocky Dot Systems", "Rocky Dot Labs"].map((org) => (
+              {workspace.data?.organizations.map((org) => (
                 <MenuItem
-                  key={org}
+                  key={org.id}
                   onClick={() => {
-                    setOrganization(org);
+                    setOrganization(org.id);
                     navigate("Overview");
                   }}
                 >
-                  <span className="flex-1">{org}</span>
-                  {organization === org && <CheckIcon aria-hidden="true" />}
+                  <span className="flex-1">{org.name}</span>
+                  {organization === org.id && <CheckIcon aria-hidden="true" />}
                 </MenuItem>
               ))}
+              <MenuItem
+                disabled={!session.data?.user}
+                onClick={() => {
+                  setFormError(null);
+                  setOrganizationCreateOpen(true);
+                }}
+              >
+                <PlusIcon aria-hidden="true" />
+                New organization
+              </MenuItem>
             </MenuGroup>
           </MenuPopup>
         </Menu>
@@ -525,7 +589,7 @@ export function Dashboard({
                   onClick={() => openProject(name)}
                 >
                   <FolderIcon aria-hidden="true" />
-                  <span className="truncate">{name}</span>
+                  <span className="truncate">{projectName(name)}</span>
                   <span className="sidebar-count">
                     {
                       orgDocuments.filter(
@@ -640,14 +704,14 @@ export function Dashboard({
                           type="button"
                           onClick={() => openProject(selected.project)}
                         >
-                          {selected.project}
+                          {projectName(selected.project)}
                         </button>
                       ) : (
                         <span
                           className="breadcrumb-current"
                           aria-current="page"
                         >
-                          {activeProject}
+                          {projectName(activeProject)}
                         </span>
                       )}
                     </li>
@@ -682,6 +746,39 @@ export function Dashboard({
         <div className="dashboard-scroll" ref={scrollRef}>
           {settingsSection ? (
             <AccountSettings section={settingsSection} />
+          ) : session.isPending ||
+            (session.data?.user && workspace.isPending) ? (
+            <div className="documents-empty" role="status">
+              Loading your workspace…
+            </div>
+          ) : !session.data?.user ? (
+            <div className="documents-empty">
+              <h1>Your team’s decisions, together</h1>
+              <p>Sign in to open your projects and documents.</p>
+              <Button render={<Link href="/login" />}>Sign in</Button>
+            </div>
+          ) : workspace.isError ? (
+            <div className="documents-empty" role="alert">
+              <h1>Could not load your workspace</h1>
+              <p>{workspace.error.message}</p>
+              <Button onClick={() => workspace.refetch()}>Try again</Button>
+            </div>
+          ) : !organization ? (
+            <div className="documents-empty">
+              <h1>Create your team’s workspace</h1>
+              <p>
+                Start with an organization, then group your decisions into
+                projects.
+              </p>
+              <Button
+                onClick={() => {
+                  setFormError(null);
+                  setOrganizationCreateOpen(true);
+                }}
+              >
+                New organization
+              </Button>
+            </div>
           ) : selected ? (
             <div className="decision-detail">
               <Button
@@ -690,10 +787,13 @@ export function Dashboard({
                 onClick={() => setSelectedId(null)}
               >
                 <ArrowLeftIcon aria-hidden="true" />
-                Back to {activeProject || view.toLowerCase()}
+                Back to{" "}
+                {activeProject
+                  ? projectName(activeProject)
+                  : view.toLowerCase()}
               </Button>
               <div className="detail-meta">
-                <span>{selected.project}</span>
+                <span>{projectName(selected.project)}</span>
                 <Status status={selected.status} />
               </div>
               <h1>{selected.title}</h1>
@@ -705,7 +805,7 @@ export function Dashboard({
                 <div>
                   <dt>Created by</dt>
                   <dd>
-                    <PersonAvatar id={selected.creator} />
+                    <PersonAvatar person={people[selected.creator]} />
                     {people[selected.creator].name}
                   </dd>
                 </div>
@@ -714,7 +814,7 @@ export function Dashboard({
                   <dd>
                     {selected.reviewers.length
                       ? selected.reviewers.map((id) => (
-                          <PersonAvatar key={id} id={id} />
+                          <PersonAvatar key={id} person={people[id]} />
                         ))
                       : "No reviewers requested"}
                   </dd>
@@ -738,28 +838,19 @@ export function Dashboard({
                   </dd>
                 </div>
               </dl>
-              <div className="detail-note">
-                <h2>
-                  {selected.status === "Bound"
-                    ? "Bound agreement"
-                    : "Planning session"}
-                </h2>
-                <p>
-                  {selected.status === "Bound"
-                    ? "This document represents a bound decision. Draft amendments must be reviewed and explicitly bound as a new version."
-                    : "Discuss the context, consider alternatives, and agree on the constraints before binding a version."}
-                </p>
-                <Button variant="outline" render={<Link href="/workspace" />}>
-                  Open document workspace
-                  <ArrowUpRightIcon aria-hidden="true" />
-                </Button>
-              </div>
+              <DocumentEditor
+                key={`${organization}:${selected.id}`}
+                id={selected.id}
+                organizationId={organization}
+                userId={session.data!.user!.id}
+              />
             </div>
           ) : (
             <div className="dashboard-content">
               <div className="dashboard-heading">
-                <h1>{activeProject || view}</h1>
+                <h1>{activeProject ? projectName(activeProject) : view}</h1>
                 <Button
+                  disabled={mutation.isPending}
                   onClick={
                     view === "Projects" && !activeProject
                       ? startProject
@@ -866,10 +957,10 @@ export function Dashboard({
                           </div>
                           <div className="project-card-label">
                             <span>
-                              <strong>{name}</strong>
+                              <strong>{projectName(name)}</strong>
                               <small className="project-description">
                                 {
-                                  orgProjects.find((item) => item.name === name)
+                                  orgProjects.find((item) => item.id === name)
                                     ?.description
                                 }
                               </small>
@@ -930,6 +1021,8 @@ export function Dashboard({
                         <Button
                           variant={myReviews ? "secondary" : "outline"}
                           className="filter-button"
+                          disabled
+                          title="Review requests are not available yet"
                           aria-pressed={myReviews}
                           onClick={() => setMyReviews(!myReviews)}
                         >
@@ -949,6 +1042,7 @@ export function Dashboard({
                             label="Project"
                             values={project}
                             options={projects}
+                            labelFor={(id) => projectName(id)}
                             onChange={setProject}
                           />
                         )}
@@ -989,7 +1083,7 @@ export function Dashboard({
                             <Status status={decision.status} />
                           </div>
                           <div className="document-creator-cell">
-                            <PersonAvatar id={decision.creator} />
+                            <PersonAvatar person={people[decision.creator]} />
                             <span>
                               {people[decision.creator].name.split(" ")[0]}
                             </span>
@@ -1001,7 +1095,7 @@ export function Dashboard({
                             {decision.reviewers.length ? (
                               <div className="reviewer-stack">
                                 {decision.reviewers.map((id) => (
-                                  <PersonAvatar key={id} id={id} />
+                                  <PersonAvatar key={id} person={people[id]} />
                                 ))}
                               </div>
                             ) : (
@@ -1093,12 +1187,49 @@ export function Dashboard({
           {sidebar}
         </DialogPopup>
       </Dialog>
+      <Dialog
+        open={organizationCreateOpen}
+        onOpenChange={setOrganizationCreateOpen}
+      >
+        <DialogPopup>
+          <DialogHeader>
+            <DialogTitle>New organization</DialogTitle>
+            <DialogDescription>
+              Create a workspace for your team’s projects and decisions.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={createOrganization}>
+            <DialogPanel>
+              <Label htmlFor="organization-name">Name</Label>
+              <Input
+                id="organization-name"
+                name="name"
+                required
+                maxLength={80}
+              />
+            </DialogPanel>
+            {formError && (
+              <p role="alert" className="px-6 text-sm text-destructive">
+                {formError}
+              </p>
+            )}
+            <DialogFooter>
+              <DialogClose render={<Button variant="outline" />}>
+                Cancel
+              </DialogClose>
+              <Button type="submit" disabled={mutation.isPending}>
+                Create organization
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogPopup>
+      </Dialog>
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogPopup>
           <DialogHeader>
             <DialogTitle>New document</DialogTitle>
             <DialogDescription>
-              Create a draft in {organization}.
+              Create a draft in {organizationName}.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={createDocument}>
@@ -1143,18 +1274,25 @@ export function Dashboard({
                   <SelectPopup>
                     {projects.map((name) => (
                       <SelectItem key={name} value={name}>
-                        {name}
+                        {projectName(name)}
                       </SelectItem>
                     ))}
                   </SelectPopup>
                 </Select>
               </div>
             </DialogPanel>
+            {formError && (
+              <p role="alert" className="px-6 text-sm text-destructive">
+                {formError}
+              </p>
+            )}
             <DialogFooter>
               <DialogClose render={<Button variant="outline" />}>
                 Cancel
               </DialogClose>
-              <Button type="submit">Create document</Button>
+              <Button type="submit" disabled={mutation.isPending}>
+                {mutation.isPending ? "Creating…" : "Create document"}
+              </Button>
             </DialogFooter>
           </form>
         </DialogPopup>
@@ -1164,9 +1302,28 @@ export function Dashboard({
           <DialogHeader>
             <DialogTitle>New project</DialogTitle>
             <DialogDescription>
-              Group related decisions and their repositories in {organization}.
+              Group related decisions and their repositories in{" "}
+              {organizationName}.
             </DialogDescription>
           </DialogHeader>
+          <form onSubmit={connectRepository} className="px-6 pb-4 space-y-2">
+            <Label htmlFor="repository-slug">Add a repository</Label>
+            <div className="flex gap-2">
+              <Input
+                id="repository-slug"
+                name="repository"
+                placeholder="owner/repository"
+                required
+              />
+              <Button
+                variant="outline"
+                type="submit"
+                disabled={mutation.isPending}
+              >
+                Add
+              </Button>
+            </div>
+          </form>
           <form onSubmit={createProject}>
             <DialogPanel className="space-y-4">
               <div className="space-y-2">
@@ -1198,7 +1355,11 @@ export function Dashboard({
                 <MultiFilter
                   label="Project repositories"
                   values={projectRepositories}
-                  options={repositoryOptions[organization]}
+                  options={
+                    workspace.data?.repositories.map(
+                      (repo) => `${repo.owner}/${repo.name}`,
+                    ) || []
+                  }
                   onChange={setProjectRepositories}
                 />
                 <p className="text-xs text-muted-foreground">
@@ -1206,11 +1367,18 @@ export function Dashboard({
                 </p>
               </div>
             </DialogPanel>
+            {formError && (
+              <p role="alert" className="px-6 text-sm text-destructive">
+                {formError}
+              </p>
+            )}
             <DialogFooter>
               <DialogClose render={<Button variant="outline" />}>
                 Cancel
               </DialogClose>
-              <Button type="submit">Create project</Button>
+              <Button type="submit" disabled={mutation.isPending}>
+                {mutation.isPending ? "Creating…" : "Create project"}
+              </Button>
             </DialogFooter>
           </form>
         </DialogPopup>

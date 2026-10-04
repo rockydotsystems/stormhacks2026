@@ -18,8 +18,10 @@ import {
 import type { Database } from "@/server/db";
 import { ApiError } from "@/server/errors";
 
+type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
+
 export class ProjectsService {
-  constructor(private readonly dependencies: { db: Database }) {}
+  constructor(private readonly dependencies: { db: Database | Transaction }) {}
 
   async create(
     actor: OrganizationActor,
