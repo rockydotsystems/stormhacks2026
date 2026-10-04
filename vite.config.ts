@@ -10,6 +10,7 @@ export default defineConfig({
   plugins: [
     vinext(),
     cloudflare({
+      auxiliaryWorkers: [{ configPath: "./apps/realtime/wrangler.jsonc" }],
       viteEnvironment: {
         name: "rsc",
         childEnvironments: ["ssr"],

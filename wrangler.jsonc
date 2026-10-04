@@ -16,6 +16,15 @@
   "observability": {
     "enabled": true,
   },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "CHAT_ROOM",
+        "class_name": "ChatRoom",
+        "script_name": "stormhacks2026-realtime",
+      },
+    ],
+  },
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",
@@ -24,7 +33,7 @@
       "localConnectionString": "postgres://stormhacks:stormhacks@127.0.0.1:5432/stormhacks",
     },
   ],
-  "main": "vinext/server/fetch-handler",
+  "main": "worker/entry.ts",
   "assets": {
     "directory": "dist/client",
     "not_found_handling": "none",
