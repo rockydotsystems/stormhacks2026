@@ -3,13 +3,57 @@ export type Decision = {
   id: string;
   title: string;
   description: string;
-  collection: string;
+  project: string;
   creator: string;
   reviewers: string[];
+  repositories?: string[];
   status: DecisionStatus;
   updated: string;
   organization: string;
 };
+
+export type Project = {
+  name: string;
+  description: string;
+  repositories: string[];
+  organization: string;
+};
+
+export const initialProjects: Project[] = [
+  {
+    name: "Engineering",
+    description: "Developer workflows, code reviews, and application delivery.",
+    repositories: ["rockydotsystems/stormhacks2026"],
+    organization: "Rocky Dot Systems",
+  },
+  {
+    name: "Infrastructure",
+    description: "Data storage, hosting, and the services we operate.",
+    repositories: [
+      "rockydotsystems/incident-search",
+      "rockydotsystems/platform",
+    ],
+    organization: "Rocky Dot Systems",
+  },
+  {
+    name: "Product",
+    description: "Planning, collaboration, and the team's decision process.",
+    repositories: [
+      "rockydotsystems/stormhacks2026",
+      "rockydotsystems/platform",
+    ],
+    organization: "Rocky Dot Systems",
+  },
+  {
+    name: "Engineering",
+    description: "Experiments and model evaluations.",
+    repositories: [
+      "rockydotsystems/experiments",
+      "rockydotsystems/model-evaluations",
+    ],
+    organization: "Rocky Dot Labs",
+  },
+];
 
 export const people: Record<
   string,
@@ -28,7 +72,7 @@ export const initialDecisions: Decision[] = [
     title: "Keep incident search inside our infrastructure",
     description:
       "Protect confidential incident data by running search and embeddings within the company boundary.",
-    collection: "Infrastructure",
+    project: "Infrastructure",
     creator: "sarah",
     reviewers: ["matthew", "alex", "david"],
     status: "In review",
@@ -40,7 +84,7 @@ export const initialDecisions: Decision[] = [
     title: "PostgreSQL as our primary datastore",
     description:
       "Use a relational source of truth for documents, immutable bound versions, and review history.",
-    collection: "Infrastructure",
+    project: "Infrastructure",
     creator: "alex",
     reviewers: ["sarah", "david"],
     status: "Bound",
@@ -52,7 +96,7 @@ export const initialDecisions: Decision[] = [
     title: "Human approval before binding a decision",
     description:
       "Make binding an explicit team action, with immutable snapshots and a traceable agreement.",
-    collection: "Product",
+    project: "Product",
     creator: "matthew",
     reviewers: ["sarah", "maya"],
     status: "Draft",
@@ -64,7 +108,7 @@ export const initialDecisions: Decision[] = [
     title: "Request-scoped database connections",
     description:
       "Let Hyperdrive own the pool and dispose of database clients at the end of every request.",
-    collection: "Infrastructure",
+    project: "Infrastructure",
     creator: "david",
     reviewers: ["alex", "matthew"],
     status: "In review",
@@ -76,7 +120,7 @@ export const initialDecisions: Decision[] = [
     title: "Advisory reviews for GitHub pull requests",
     description:
       "Surface deviations from agreed intent with evidence, while keeping merge decisions with the team.",
-    collection: "Engineering",
+    project: "Engineering",
     creator: "maya",
     reviewers: ["sarah", "alex", "matthew"],
     status: "Bound",
@@ -88,7 +132,7 @@ export const initialDecisions: Decision[] = [
     title: "Stable blocks for collaborative documents",
     description:
       "Apply proposals to whole document blocks so every change retains its discussion and rationale.",
-    collection: "Product",
+    project: "Product",
     creator: "sarah",
     reviewers: ["maya", "alex"],
     status: "Draft",
@@ -100,7 +144,7 @@ export const initialDecisions: Decision[] = [
     title: "Cloudflare Workers for application hosting",
     description:
       "Run the App Router at the edge with vinext and use the same runtime in development and production.",
-    collection: "Engineering",
+    project: "Engineering",
     creator: "matthew",
     reviewers: ["david", "alex"],
     status: "Bound",
@@ -112,7 +156,7 @@ export const initialDecisions: Decision[] = [
     title: "One repository, one binding agreement",
     description:
       "Map each repository to an explicit decision document rather than guessing which plan applies.",
-    collection: "Engineering",
+    project: "Engineering",
     creator: "alex",
     reviewers: ["sarah"],
     status: "Bound",
@@ -124,7 +168,7 @@ export const initialDecisions: Decision[] = [
     title: "Evaluate local models for planning sessions",
     description:
       "Compare latency, quality, and operating cost before choosing a model for the next prototype.",
-    collection: "Engineering",
+    project: "Engineering",
     creator: "matthew",
     reviewers: ["alex"],
     status: "Draft",
@@ -139,7 +183,7 @@ export function filterDecisions(
     organization: string;
     query: string;
     status: string[];
-    collection: string[];
+    project: string[];
     myReviews: boolean;
     scope: string | null;
     sort: string;
@@ -155,9 +199,9 @@ export function filterDecisions(
             .toLowerCase()
             .includes(query)) &&
         (!filters.status.length || filters.status.includes(decision.status)) &&
-        (!filters.collection.length ||
-          filters.collection.includes(decision.collection)) &&
-        (!filters.scope || decision.collection === filters.scope) &&
+        (!filters.project.length ||
+          filters.project.includes(decision.project)) &&
+        (!filters.scope || decision.project === filters.scope) &&
         (!filters.myReviews ||
           (decision.status === "In review" &&
             decision.reviewers.includes("matthew"))),

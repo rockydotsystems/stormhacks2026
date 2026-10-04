@@ -5,7 +5,7 @@ const defaults = {
   organization: "Rocky Dot Systems",
   query: "",
   status: [] as string[],
-  collection: [] as string[],
+  project: [] as string[],
   myReviews: false,
   scope: null as string | null,
   sort: "Last updated",
@@ -21,20 +21,20 @@ describe("dashboard document filters", () => {
       }).map((document) => document.id),
     ).toEqual(["labs-001"]);
   });
-  it("combines search with multi-select status and collection filters", () => {
+  it("combines search with multi-select status and project filters", () => {
     expect(
       filterDecisions(initialDecisions, {
         ...defaults,
         query: "  HYPERDRIVE  ",
         status: ["Draft", "In review"],
-        collection: ["Infrastructure", "Product"],
+        project: ["Infrastructure", "Product"],
       }).map((document) => document.id),
     ).toEqual(["adr-005"]);
     expect(
       filterDecisions(initialDecisions, {
         ...defaults,
         status: ["Draft", "In review"],
-        collection: ["Infrastructure", "Product"],
+        project: ["Infrastructure", "Product"],
       }),
     ).toHaveLength(4);
     expect(
@@ -58,7 +58,7 @@ describe("dashboard document filters", () => {
       }),
     ).toEqual([]);
   });
-  it("scopes collection navigation and sorts without mutating the source", () => {
+  it("scopes project navigation and sorts without mutating the source", () => {
     expect(
       filterDecisions(initialDecisions, { ...defaults, scope: "Engineering" }),
     ).toHaveLength(3);
@@ -66,7 +66,7 @@ describe("dashboard document filters", () => {
       filterDecisions(initialDecisions, {
         ...defaults,
         scope: "Engineering",
-        collection: ["Product"],
+        project: ["Product"],
       }),
     ).toEqual([]);
     const sorted = filterDecisions(initialDecisions, {

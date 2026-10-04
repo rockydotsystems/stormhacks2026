@@ -14,7 +14,6 @@ import {
   ListIcon,
   MagnifyingGlassIcon,
   PlusIcon,
-  SlidersHorizontalIcon,
   UsersIcon,
 } from "@phosphor-icons/react";
 import Link from "next/link";
@@ -34,9 +33,11 @@ import {
 } from "@/components/ui/dialog";
 import {
   Combobox,
-  ComboboxTrigger,
+  ComboboxChip,
+  ComboboxChips,
+  ComboboxChipsInput,
+  ComboboxValue,
   ComboboxPopup,
-  ComboboxInput,
   ComboboxEmpty,
   ComboboxList,
   ComboboxItem,
@@ -55,17 +56,36 @@ import {
   MenuSeparator,
   MenuTrigger,
 } from "@/components/ui/menu";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectPopup,
+  SelectItem,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   filterDecisions,
   initialDecisions,
+  initialProjects,
+  type Project,
   people,
   type Decision,
   type DecisionStatus,
 } from "@/features/dashboard/preview-data";
 import { cn } from "@/lib/utils";
 
-const collections = ["Engineering", "Infrastructure", "Product"];
+const repositoryOptions: Record<string, string[]> = {
+  "Rocky Dot Systems": [
+    "rockydotsystems/stormhacks2026",
+    "rockydotsystems/incident-search",
+    "rockydotsystems/platform",
+  ],
+  "Rocky Dot Labs": [
+    "rockydotsystems/experiments",
+    "rockydotsystems/model-evaluations",
+  ],
+};
 const statuses = ["Draft", "In review", "Bound"];
 function documentCount(count: number) {
   return `${count} ${count === 1 ? "document" : "documents"}`;
@@ -128,7 +148,6 @@ function FilterMenu({
         render={<Button variant="outline" className="filter-button" />}
         aria-label={`${label}: ${value}`}
       >
-        {label === "Status" && <SlidersHorizontalIcon aria-hidden="true" />}
         {value === options[0] && label !== "Sort" ? label : value}
         <CaretDownIcon aria-hidden="true" />
       </MenuTrigger>
@@ -161,28 +180,32 @@ function MultiFilter({
 }) {
   return (
     <Combobox multiple items={options} value={values} onValueChange={onChange}>
-      <ComboboxTrigger
-        render={<Button variant="outline" className="filter-button" />}
-        aria-label={`${label}: ${values.join(", ") || "All"}`}
-      >
-        {label === "Status" && <SlidersHorizontalIcon aria-hidden="true" />}
-        {values.length === 1 ? values[0] : label}
-        {values.length > 1 && (
-          <Badge variant="secondary">{values.length}</Badge>
-        )}
-        <CaretDownIcon aria-hidden="true" />
-      </ComboboxTrigger>
+      <ComboboxChips className="dashboard-multi-select">
+        <ComboboxValue>
+          {(selected: string[]) => (
+            <>
+              {selected.map((value) => (
+                <ComboboxChip
+                  key={value}
+                  aria-label={value}
+                  removeProps={{ "aria-label": `Remove ${value}` }}
+                >
+                  {value}
+                </ComboboxChip>
+              ))}
+              <ComboboxChipsInput
+                id={`dashboard-${label.toLowerCase().replaceAll(" ", "-")}`}
+                aria-label={label}
+                placeholder={selected.length ? undefined : label}
+                size="sm"
+              />
+            </>
+          )}
+        </ComboboxValue>
+      </ComboboxChips>
       <ComboboxPopup
-        className="w-60"
-        aria-label={`Select ${label.toLowerCase()}`}
+        aria-label={`Select ${label.toLowerCase().replaceAll(" ", "-")}`}
       >
-        <div className="border-b p-2">
-          <ComboboxInput
-            aria-label={`Search ${label.toLowerCase()}`}
-            placeholder={`Search ${label.toLowerCase()}…`}
-            showTrigger={false}
-          />
-        </div>
         <ComboboxEmpty>No matching options.</ComboboxEmpty>
         <ComboboxList>
           {(option: string) => (
@@ -191,16 +214,6 @@ function MultiFilter({
             </ComboboxItem>
           )}
         </ComboboxList>
-        <div className="border-t p-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start"
-            onClick={() => onChange([])}
-          >
-            Clear selection
-          </Button>
-        </div>
       </ComboboxPopup>
     </Combobox>
   );
@@ -208,51 +221,86 @@ function MultiFilter({
 
 export function Dashboard() {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [projectRecords, setProjectRecords] = useState(initialProjects);
+  const [projectCreateOpen, setProjectCreateOpen] = useState(false);
+  const [projectRepositories, setProjectRepositories] = useState<string[]>([]);
+  const [creationProject, setCreationProject] = useState("Engineering");
   const [decisions, setDecisions] = useState(initialDecisions);
   const [organization, setOrganization] = useState("Rocky Dot Systems");
-  const [view, setView] = useState("Documents");
+  const [view, setView] = useState("Overview");
+  const [creationRepositories, setCreationRepositories] = useState<string[]>(
+    [],
+  );
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<string[]>([]);
-  const [collection, setCollection] = useState<string[]>([]);
+  const [project, setProject] = useState<string[]>([]);
   const [sort, setSort] = useState("Last updated");
   const [recent, setRecent] = useState(["adr-008", "adr-007", "adr-006"]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [activeCollection, setActiveCollection] = useState<string | null>(null);
+  const [activeProject, setActiveProject] = useState<string | null>(null);
   const [myReviews, setMyReviews] = useState(false);
   const selected = decisions.find((decision) => decision.id === selectedId);
   const orgDocuments = decisions.filter(
     (decision) => decision.organization === organization,
   );
+  const orgProjects = projectRecords.filter(
+    (item) => item.organization === organization,
+  );
+  const projects = orgProjects.map((item) => item.name);
+  const projectItems = projects.map((name) => ({ label: name, value: name }));
+  const currentProject = orgProjects.find(
+    (item) => item.name === activeProject,
+  );
+  const projectIsEmpty =
+    Boolean(activeProject) &&
+    !orgDocuments.some((document) => document.project === activeProject);
+  const selectedRepositories =
+    selected?.repositories ??
+    orgProjects.find((item) => item.name === selected?.project)?.repositories ??
+    [];
   const recentDocuments = recent
     .map((id) => orgDocuments.find((decision) => decision.id === id))
     .filter((decision): decision is Decision => Boolean(decision));
+  const frequentProjects = [...projects].sort(
+    (a, b) =>
+      recentDocuments.filter((document) => document.project === b).length -
+      recentDocuments.filter((document) => document.project === a).length,
+  );
   const filtered = filterDecisions(decisions, {
     organization,
     query,
     status,
-    collection,
+    project,
     myReviews,
-    scope: activeCollection,
+    scope: activeProject,
     sort,
   });
 
+  function startDocument() {
+    const name = activeProject || project[0] || projects[0];
+    setCreationProject(name);
+    setCreationRepositories(
+      orgProjects.find((item) => item.name === name)?.repositories || [],
+    );
+    setCreateOpen(true);
+  }
   function navigate(nextView: string) {
     scrollRef.current?.scrollTo({ top: 0 });
     setView(nextView);
-    setActiveCollection(null);
+    setActiveProject(null);
     setMyReviews(false);
     setSelectedId(null);
     setQuery("");
     setStatus([]);
-    setCollection([]);
+    setProject([]);
     setMobileOpen(false);
   }
-  function openCollection(name: string) {
-    navigate("Collections");
-    setActiveCollection(name);
+  function openProject(name: string) {
+    navigate("Projects");
+    setActiveProject(name);
   }
   function openDocument(id: string) {
     scrollRef.current?.scrollTo({ top: 0 });
@@ -264,7 +312,7 @@ export function Dashboard() {
     setMyReviews(false);
     setQuery("");
     setStatus([]);
-    setCollection([]);
+    setProject([]);
   }
   function createDocument(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -281,9 +329,10 @@ export function Dashboard() {
       id: crypto.randomUUID(),
       title,
       description: String(fields.get("description")).trim(),
-      collection: String(fields.get("collection")),
+      project: String(fields.get("project")),
       creator: "matthew",
-      reviewers: fields.getAll("reviewers").map(String),
+      reviewers: [],
+      repositories: creationRepositories,
       status: "Draft",
       updated: new Date().toISOString(),
       organization,
@@ -292,6 +341,38 @@ export function Dashboard() {
     setCreateOpen(false);
     resetFilters();
     openDocument(decision.id);
+  }
+
+  function startProject() {
+    setProjectRepositories([]);
+    setProjectCreateOpen(true);
+  }
+  function createProject(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const fields = new FormData(event.currentTarget);
+    const name = String(fields.get("name")).trim();
+    const input = event.currentTarget.querySelector<HTMLInputElement>("input");
+    if (
+      !name ||
+      projects.some((existing) => existing.toLowerCase() === name.toLowerCase())
+    ) {
+      input?.setCustomValidity(
+        name
+          ? "A project with this name already exists."
+          : "Enter a project name.",
+      );
+      event.currentTarget.reportValidity();
+      return;
+    }
+    const next: Project = {
+      name,
+      description: String(fields.get("description")).trim(),
+      repositories: projectRepositories,
+      organization,
+    };
+    setProjectRecords((items) => [...items, next]);
+    setProjectCreateOpen(false);
+    openProject(name);
   }
 
   const sidebar = (
@@ -316,7 +397,7 @@ export function Dashboard() {
                   key={org}
                   onClick={() => {
                     setOrganization(org);
-                    navigate("Documents");
+                    navigate("Overview");
                   }}
                 >
                   <span className="flex-1">{org}</span>
@@ -329,8 +410,9 @@ export function Dashboard() {
       </div>
       <nav aria-label="Workspace" className="sidebar-navigation">
         {[
-          { name: "Documents", icon: HouseIcon },
-          { name: "Collections", icon: FolderIcon },
+          { name: "Overview", icon: HouseIcon },
+          { name: "Projects", icon: FolderIcon },
+          { name: "Documents", icon: FileTextIcon },
         ].map(({ name, icon: Icon }) => (
           <Button
             key={name}
@@ -340,7 +422,9 @@ export function Dashboard() {
               view === name && "sidebar-item-active",
             )}
             onClick={() => navigate(name)}
-            aria-current={view === name && !selected ? "page" : undefined}
+            aria-current={
+              view === name && !selected && !activeProject ? "page" : undefined
+            }
           >
             <Icon
               aria-hidden="true"
@@ -350,33 +434,31 @@ export function Dashboard() {
           </Button>
         ))}
       </nav>
-      {view === "Collections" && (
-        <div className="sidebar-collection-children">
-          <nav aria-label="Collections">
-            {collections.map((name) => (
-              <Button
-                key={name}
-                variant="ghost"
-                className={cn(
-                  "sidebar-item",
-                  activeCollection === name && "sidebar-item-active",
-                )}
-                onClick={() => openCollection(name)}
-              >
-                <FolderIcon aria-hidden="true" />
-                <span>{name}</span>
-                <span className="sidebar-count">
-                  {
-                    orgDocuments.filter(
-                      (decision) => decision.collection === name,
-                    ).length
-                  }
-                </span>
-              </Button>
-            ))}
-          </nav>
-        </div>
-      )}
+      <div className="sidebar-section">
+        <h2>Projects</h2>
+        <nav aria-label="Projects">
+          {projects.map((name) => (
+            <Button
+              key={name}
+              variant="ghost"
+              className={cn(
+                "sidebar-item",
+                activeProject === name && "sidebar-item-active",
+              )}
+              onClick={() => openProject(name)}
+            >
+              <FolderIcon aria-hidden="true" />
+              <span className="truncate">{name}</span>
+              <span className="sidebar-count">
+                {
+                  orgDocuments.filter((decision) => decision.project === name)
+                    .length
+                }
+              </span>
+            </Button>
+          ))}
+        </nav>
+      </div>
       <div className="sidebar-section sidebar-recents">
         <h2>Recently viewed</h2>
         <nav aria-label="Recently viewed documents">
@@ -456,9 +538,9 @@ export function Dashboard() {
           <span className="breadcrumb-divider">/</span>
           <span className="breadcrumb-current">
             {selected
-              ? selected.collection
-              : activeCollection
-                ? `Collections / ${activeCollection}`
+              ? selected.project
+              : activeProject
+                ? `Projects / ${activeProject}`
                 : view}
           </span>
         </header>
@@ -471,10 +553,10 @@ export function Dashboard() {
                 onClick={() => setSelectedId(null)}
               >
                 <ArrowLeftIcon aria-hidden="true" />
-                Back to {activeCollection || view.toLowerCase()}
+                Back to {activeProject || view.toLowerCase()}
               </Button>
               <div className="detail-meta">
-                <span>{selected.collection}</span>
+                <span>{selected.project}</span>
                 <Status status={selected.status} />
               </div>
               <h1>{selected.title}</h1>
@@ -508,6 +590,16 @@ export function Dashboard() {
                       : "Mutable draft"}
                   </dd>
                 </div>
+                <div>
+                  <dt>Repositories</dt>
+                  <dd className="repository-details">
+                    {selectedRepositories.length
+                      ? selectedRepositories.map((repository) => (
+                          <span key={repository}>{repository}</span>
+                        ))
+                      : "No repositories linked"}
+                  </dd>
+                </div>
               </dl>
               <div className="detail-note">
                 <h2>
@@ -529,123 +621,193 @@ export function Dashboard() {
           ) : (
             <div className="dashboard-content">
               <div className="dashboard-heading">
-                <h1>{activeCollection || view}</h1>
+                <h1>{activeProject || view}</h1>
                 <Button
-                  onClick={() => setCreateOpen(true)}
+                  onClick={
+                    view === "Projects" && !activeProject
+                      ? startProject
+                      : startDocument
+                  }
                   className="new-document-button"
                 >
                   <PlusIcon aria-hidden="true" />
-                  New document
+                  {view === "Projects" && !activeProject
+                    ? "New project"
+                    : "New document"}
                 </Button>
               </div>
-              {view === "Collections" && !activeCollection && (
-                <section
-                  className="collections-section"
-                  aria-labelledby="collections-heading"
-                >
-                  <h2 id="collections-heading" className="sr-only">
-                    Collections
-                  </h2>
-                  <div className="collection-grid">
-                    {collections.map((name, index) => (
-                      <button
-                        key={name}
-                        type="button"
-                        className={cn(
-                          "collection-card",
-                          activeCollection === name && "collection-selected",
-                        )}
-
-                        onClick={() => openCollection(name)}
-                      >
-                        <div
-                          className={cn("folder-art", `folder-tone-${index}`)}
-                          aria-hidden="true"
-                        >
-                          <div className="folder-back" />
-                          <div className="folder-paper paper-back">
-                            <i />
-                            <i />
-                            <i />
-                          </div>
-                          <div className="folder-paper paper-front">
-                            <i />
-                            <i />
-                            <i />
-                          </div>
-                          <div className="folder-flap">
-                            <span className="folder-seam" />
-                          </div>
-                        </div>
-                        <div className="collection-card-label">
-                          <span>
-                            <strong>{name}</strong>
-                            <small>
-                              {documentCount(
-                                orgDocuments.filter(
-                                  (decision) => decision.collection === name,
-                                ).length,
-                              )}
-                            </small>
-                          </span>
-                          <ArrowUpRightIcon aria-hidden="true" />
-                        </div>
-                      </button>
+              {currentProject && (
+                <div className="project-context">
+                  {currentProject.description && (
+                    <p>{currentProject.description}</p>
+                  )}
+                  <div
+                    className="project-repositories"
+                    aria-label="Project repositories"
+                  >
+                    {currentProject.repositories.map((repository) => (
+                      <span key={repository}>{repository}</span>
                     ))}
+                    {!currentProject.repositories.length && (
+                      <span>No repositories linked</span>
+                    )}
+                  </div>
+                </div>
+              )}
+              {(view === "Overview" ||
+                (view === "Projects" && !activeProject)) && (
+                <section
+                  className="projects-section"
+                  aria-labelledby="projects-heading"
+                >
+                  <div className="overview-section-heading">
+                    <h2
+                      id="projects-heading"
+                      className={view === "Overview" ? "" : "sr-only"}
+                    >
+                      Projects
+                    </h2>
+                    {view === "Overview" && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => navigate("Projects")}
+                      >
+                        View all
+                        <ArrowUpRightIcon aria-hidden="true" />
+                      </Button>
+                    )}
+                  </div>
+                  <div className="project-grid">
+                    {(view === "Overview" ? frequentProjects : projects).map(
+                      (name) => (
+                        <button
+                          key={name}
+                          type="button"
+                          className={cn(
+                            "project-card",
+                            activeProject === name && "project-selected",
+                          )}
+
+                          onClick={() => openProject(name)}
+                        >
+                          <div
+                            className={cn(
+                              "folder-art",
+                              `folder-tone-${projects.indexOf(name) % 3}`,
+                            )}
+                            aria-hidden="true"
+                          >
+                            <div className="folder-back" />
+                            <div className="folder-paper paper-back">
+                              <i />
+                              <i />
+                              <i />
+                            </div>
+                            <div className="folder-paper paper-front">
+                              <i />
+                              <i />
+                              <i />
+                            </div>
+                            <div className="folder-flap">
+                              <span className="folder-seam" />
+                            </div>
+                          </div>
+                          <div className="project-card-label">
+                            <span>
+                              <strong>{name}</strong>
+                              <small className="project-description">
+                                {
+                                  orgProjects.find((item) => item.name === name)
+                                    ?.description
+                                }
+                              </small>
+                              <small>
+                                {documentCount(
+                                  orgDocuments.filter(
+                                    (decision) => decision.project === name,
+                                  ).length,
+                                )}
+                              </small>
+                            </span>
+                            <ArrowUpRightIcon aria-hidden="true" />
+                          </div>
+                        </button>
+                      ),
+                    )}
                   </div>
                 </section>
               )}
-              {(view === "Documents" || activeCollection) && (
+              {(view === "Overview" ||
+                view === "Documents" ||
+                activeProject) && (
                 <section
                   className="documents-section"
                   aria-labelledby="documents-heading"
                 >
-                  <h2 id="documents-heading" className="sr-only">
-                    Documents
-                  </h2>
-                  <div className="document-toolbar">
-                    <div className="document-search">
-                      <MagnifyingGlassIcon aria-hidden="true" />
-                      <Input
-                        type="search"
-                        aria-label="Search documents"
-                        placeholder="Search documents…"
-                        value={query}
-                        onChange={(event) => setQuery(event.target.value)}
-                      />
-                    </div>
-                    <div className="document-filters">
+                  <div className="overview-section-heading">
+                    <h2
+                      id="documents-heading"
+                      className={view === "Overview" ? "" : "sr-only"}
+                    >
+                      {view === "Overview" ? "Recently viewed" : "Documents"}
+                    </h2>
+                    {view === "Overview" && (
                       <Button
-                        variant={myReviews ? "secondary" : "outline"}
-                        className="filter-button"
-                        aria-pressed={myReviews}
-                        onClick={() => setMyReviews(!myReviews)}
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => navigate("Documents")}
                       >
-                        <CheckCircleIcon aria-hidden="true" />
-                        My reviews
+                        View all documents
+                        <ArrowUpRightIcon aria-hidden="true" />
                       </Button>
-                      <MultiFilter
-                        label="Status"
-                        values={status}
-                        options={statuses}
-                        onChange={setStatus}
-                      />
-                      {!activeCollection && (
-                        <MultiFilter
-                          label="Collection"
-                          values={collection}
-                          options={collections}
-                          onChange={setCollection}
-                        />
-                      )}
-                      <FilterMenu
-                        label="Sort"
-                        value={sort}
-                        options={["Last updated", "Name"]}
-                        onChange={setSort}
-                      />
-                    </div>
+                    )}
                   </div>
+                  {view !== "Overview" && (
+                    <div className="document-toolbar">
+                      <div className="document-search">
+                        <MagnifyingGlassIcon aria-hidden="true" />
+                        <Input
+                          type="search"
+                          aria-label="Search documents"
+                          placeholder="Search documents…"
+                          value={query}
+                          onChange={(event) => setQuery(event.target.value)}
+                        />
+                      </div>
+                      <div className="document-filters">
+                        <Button
+                          variant={myReviews ? "secondary" : "outline"}
+                          className="filter-button"
+                          aria-pressed={myReviews}
+                          onClick={() => setMyReviews(!myReviews)}
+                        >
+                          <CheckCircleIcon aria-hidden="true" />
+                          My reviews
+                        </Button>
+                        <MultiFilter
+                          label="Status"
+                          values={status}
+                          options={statuses}
+                          onChange={setStatus}
+                        />
+                        {!activeProject && (
+                          <MultiFilter
+                            label="Project"
+                            values={project}
+                            options={projects}
+                            onChange={setProject}
+                          />
+                        )}
+                        <FilterMenu
+                          label="Sort"
+                          value={sort}
+                          options={["Last updated", "Name"]}
+                          onChange={setSort}
+                        />
+                      </div>
+                    </div>
+                  )}
                   <div className="document-list">
                     <div className="document-table-heading" aria-hidden="true">
                       <span>Document</span>
@@ -654,77 +816,112 @@ export function Dashboard() {
                       <span>Reviewers</span>
                       <span>Updated</span>
                     </div>
-                    {filtered.map((decision) => (
-                      <div className="document-row" key={decision.id}>
-                        <button
-                          type="button"
-                          className="document-title-cell"
-                          onClick={() => openDocument(decision.id)}
-                        >
-                          <FileTextIcon aria-hidden="true" />
-                          <span>
-                            <strong>{decision.title}</strong>
-                            <small>
-                              {decision.description || "No description yet"}
-                            </small>
-                          </span>
-                        </button>
-                        <div className="document-status-cell">
-                          <Status status={decision.status} />
+                    {(view === "Overview" ? recentDocuments : filtered).map(
+                      (decision) => (
+                        <div className="document-row" key={decision.id}>
+                          <button
+                            type="button"
+                            className="document-title-cell"
+                            onClick={() => openDocument(decision.id)}
+                          >
+                            <FileTextIcon aria-hidden="true" />
+                            <span>
+                              <strong>{decision.title}</strong>
+                              <small>
+                                {decision.description || "No description yet"}
+                              </small>
+                            </span>
+                          </button>
+                          <div className="document-status-cell">
+                            <Status status={decision.status} />
+                          </div>
+                          <div className="document-creator-cell">
+                            <PersonAvatar id={decision.creator} />
+                            <span>
+                              {people[decision.creator].name.split(" ")[0]}
+                            </span>
+                          </div>
+                          <div
+                            className="document-reviewers-cell"
+                            aria-label={`Requested reviewers: ${decision.reviewers.map((id) => people[id].name).join(", ") || "None"}`}
+                          >
+                            {decision.reviewers.length ? (
+                              <div className="reviewer-stack">
+                                {decision.reviewers.map((id) => (
+                                  <PersonAvatar key={id} id={id} />
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </div>
+                          <time
+                            className="document-updated-cell"
+                            dateTime={decision.updated}
+                          >
+                            {new Intl.DateTimeFormat("en", {
+                              month: "short",
+                              day: "numeric",
+                              timeZone: "America/Edmonton",
+                            }).format(new Date(decision.updated))}
+                          </time>
                         </div>
-                        <div className="document-creator-cell">
-                          <PersonAvatar id={decision.creator} />
-                          <span>
-                            {people[decision.creator].name.split(" ")[0]}
-                          </span>
-                        </div>
-                        <div
-                          className="document-reviewers-cell"
-                          aria-label={`Requested reviewers: ${decision.reviewers.map((id) => people[id].name).join(", ") || "None"}`}
-                        >
-                          {decision.reviewers.length ? (
-                            <div className="reviewer-stack">
-                              {decision.reviewers.map((id) => (
-                                <PersonAvatar key={id} id={id} />
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </div>
-                        <time
-                          className="document-updated-cell"
-                          dateTime={decision.updated}
-                        >
-                          {new Intl.DateTimeFormat("en", {
-                            month: "short",
-                            day: "numeric",
-                            timeZone: "America/Edmonton",
-                          }).format(new Date(decision.updated))}
-                        </time>
-                      </div>
-                    ))}
-                    {filtered.length === 0 && (
+                      ),
+                    )}
+                    {(view === "Overview"
+                      ? recentDocuments.length
+                      : filtered.length) === 0 && (
                       <div className="documents-empty">
                         <FileTextIcon aria-hidden="true" />
-                        <h3>No matching documents</h3>
-                        <p>Try another search or clear the filters.</p>
-                        <Button variant="outline" onClick={resetFilters}>
-                          Clear search & filters
+                        <h3>
+                          {view === "Overview"
+                            ? "No recently viewed documents"
+                            : projectIsEmpty
+                              ? "No documents yet"
+                              : "No matching documents"}
+                        </h3>
+                        <p>
+                          {view === "Overview"
+                            ? "Open a document to pick up your work here."
+                            : projectIsEmpty
+                              ? "Create the first decision for this project."
+                              : "Try another search or clear the filters."}
+                        </p>
+                        <Button
+                          variant="outline"
+                          onClick={
+                            view === "Overview"
+                              ? () => navigate("Documents")
+                              : projectIsEmpty
+                                ? startDocument
+                                : resetFilters
+                          }
+                        >
+                          {view === "Overview"
+                            ? "Browse documents"
+                            : projectIsEmpty
+                              ? "New document"
+                              : "Clear search & filters"}
                         </Button>
                       </div>
                     )}
                   </div>
                   <div className="document-list-footer">
                     <span role="status">
-                      {filtered.length} of{" "}
-                      {activeCollection
-                        ? orgDocuments.filter(
-                            (decision) =>
-                              decision.collection === activeCollection,
-                          ).length
-                        : orgDocuments.length}{" "}
-                      documents
+                      {view === "Overview" ? (
+                        `${recentDocuments.length} recently viewed documents`
+                      ) : (
+                        <>
+                          {filtered.length} of{" "}
+                          {activeProject
+                            ? orgDocuments.filter(
+                                (decision) =>
+                                  decision.project === activeProject,
+                              ).length
+                            : orgDocuments.length}{" "}
+                          documents
+                        </>
+                      )}
                     </span>
                     <span>
                       <UsersIcon aria-hidden="true" />
@@ -776,38 +973,108 @@ export function Dashboard() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="document-collection">Collection</Label>
-                <select
-                  className="dashboard-select"
-                  id="document-collection"
-                  name="collection"
-                  defaultValue={
-                    activeCollection || collection[0] || "Engineering"
-                  }
+                <Label htmlFor="document-project">Project</Label>
+                <Select
+                  name="project"
+                  items={projectItems}
+                  value={creationProject}
+                  onValueChange={(name) => {
+                    if (!name) return;
+                    setCreationProject(name);
+                    setCreationRepositories(
+                      orgProjects.find((item) => item.name === name)
+                        ?.repositories || [],
+                    );
+                  }}
+                  required
                 >
-                  {collections.map((name) => (
-                    <option key={name}>{name}</option>
-                  ))}
-                </select>
+                  <SelectTrigger id="document-project">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectPopup>
+                    {projects.map((name) => (
+                      <SelectItem key={name} value={name}>
+                        {name}
+                      </SelectItem>
+                    ))}
+                  </SelectPopup>
+                </Select>
               </div>
-              <fieldset className="reviewer-fields">
-                <legend>Requested reviewers</legend>
-                {Object.entries(people)
-                  .filter(([id]) => id !== "matthew")
-                  .map(([id, person]) => (
-                    <label key={id}>
-                      <input type="checkbox" name="reviewers" value={id} />
-                      <PersonAvatar id={id} />
-                      {person.name}
-                    </label>
-                  ))}
-              </fieldset>
+              <div className="space-y-2">
+                <Label htmlFor="dashboard-repositories">Repositories</Label>
+                <MultiFilter
+                  label="Repositories"
+                  values={creationRepositories}
+                  options={repositoryOptions[organization]}
+                  onChange={setCreationRepositories}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Starts with the project’s repositories. Adjust them for this
+                  decision.
+                </p>
+              </div>
             </DialogPanel>
             <DialogFooter>
               <DialogClose render={<Button variant="outline" />}>
                 Cancel
               </DialogClose>
               <Button type="submit">Create document</Button>
+            </DialogFooter>
+          </form>
+        </DialogPopup>
+      </Dialog>
+      <Dialog open={projectCreateOpen} onOpenChange={setProjectCreateOpen}>
+        <DialogPopup>
+          <DialogHeader>
+            <DialogTitle>New project</DialogTitle>
+            <DialogDescription>
+              Group related decisions and their repositories in {organization}.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={createProject}>
+            <DialogPanel className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="project-name">Name</Label>
+                <Input
+                  id="project-name"
+                  name="name"
+                  required
+                  maxLength={80}
+                  placeholder="e.g. Frontend or Billing"
+                  onChange={(event) =>
+                    event.currentTarget.setCustomValidity("")
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="project-description">Description</Label>
+                <Textarea
+                  id="project-description"
+                  name="description"
+                  maxLength={1000}
+                  placeholder="What does this project cover?"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="dashboard-project-repositories">
+                  Repositories
+                </Label>
+                <MultiFilter
+                  label="Project repositories"
+                  values={projectRepositories}
+                  options={repositoryOptions[organization]}
+                  onChange={setProjectRepositories}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Repositories can belong to more than one project.
+                </p>
+              </div>
+            </DialogPanel>
+            <DialogFooter>
+              <DialogClose render={<Button variant="outline" />}>
+                Cancel
+              </DialogClose>
+              <Button type="submit">Create project</Button>
             </DialogFooter>
           </form>
         </DialogPopup>

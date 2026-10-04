@@ -34,37 +34,36 @@ latter is a deployment dry run, not publication.
 
 ## Decision dashboard
 
-`/` now opens the WhyDidWeChooseThis.Tech dashboard. The original conversation
-and document prototype is at `/workspace`; document details link to it explicitly
-as a separate prototype.
+`/` opens the WhyDidWeChooseThis.Tech dashboard. The original conversation and
+document workspace is at `/workspace`, and authentication remains at `/starter`.
 
-The dashboard includes organization switching, recent document history,
-collections, requested reviews, bound decisions, search, combined status and
-collection filters, sorting, reviewer avatars, and a new draft form. These use
-sample data held in memory, including newly created drafts. Reloading resets
-changes. Account authentication remains at `/starter`; the dashboard profile and
-organizations are illustrative and do not represent authenticated memberships.
+The three primary destinations are Overview, Projects, and Documents. Overview
+shows commonly visited projects and recently viewed documents. Projects group
+related decisions and associated repositories; Documents searches across all
+projects. Project shortcuts and recent documents appear in the sidebar.
 
-The folder collection artwork is an original CSS interpretation inspired by
+Projects have a name, description, and optional repository selections. A repository
+can belong to multiple projects. New documents use a Coss project dropdown and
+start with that project's repositories selected; these can be adjusted for the
+specific decision. Reviewer requests are deferred until inside the document.
+Duplicate project names are rejected within the current organization.
+
+Status, Project, and repository selectors use Coss's inline chip multi-selection
+combobox pattern. Selections within a filter combine with OR, and different filters
+combine with AND. My reviews is a filter, and Bound is a status. Clearing filters
+inside a project retains its scope. The inset frame and header remain fixed while
+its content scrolls.
+
+The folder artwork is an original CSS interpretation inspired by
 [Rare UI's folder component](https://www.rareui.com/components/foldercomponent).
-It uses no additional animation dependency and respects reduced motion.
-Coss Menu, Avatar, and Badge join the existing Button, Input, Dialog, Label,
-and Textarea primitives.
+It respects reduced motion. Coss Menu, Avatar, Badge, Select, and Combobox join
+the existing Button, Input, Dialog, Label, and Textarea primitives.
 
-Check the dashboard by switching organizations, combining filters, searching for
-an absent title and clearing it, opening documents, inspecting the recently
-viewed list, and creating a draft with reviewers. At narrow widths, open the
-navigation dialog and verify its keyboard dismissal. Run `pnpm check` and
-`pnpm deploy:check` before publication.
+Dashboard records and repository options are local sample data. Created projects
+and documents reset on reload; repositories are not fetched from GitHub.
+Organization switching and profile data do not represent authenticated memberships.
 
-## Dashboard navigation and filters
-
-The dashboard frame fills the viewport. Its header and border remain fixed while
-the inner document area scrolls. Documents is the cross-collection list; Collections
-is a separate directory with document lists inside Engineering, Infrastructure,
-and Product. Requested reviews are a list toggle, and bound decisions are selected
-through the Status filter. Status and Collection use searchable Coss multi-select
-comboboxes: selections within a filter combine with OR, and different filters
-combine with AND. Empty selections include all values. Clearing filters inside a
-collection retains that collection's scope. Sidebar search and UI preview labels
-have been removed; data is still held in memory.
+Verify project creation with multiple repositories, its empty state, creating a
+document with inherited repositories, combined document filters, and organization
+isolation. At narrow widths, check navigation, dialog dismissal, and chip wrapping.
+Run `pnpm check` and `pnpm deploy:check` before publication.
