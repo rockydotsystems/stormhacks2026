@@ -10,7 +10,6 @@ import {
 } from "react";
 import {
   ArrowUpIcon,
-  FileTextIcon,
   MoonIcon,
   SparkleIcon,
   WarningIcon,
@@ -126,7 +125,6 @@ export function PlanningSession({
   const loading = binding.isPending || (conversationId && detail.isPending);
   const loadError = binding.error ?? detail.error;
   const workingDocument = conversation?.workingDocument;
-  const hasDocument = Boolean(workingDocument?.content.trim());
 
   // A teammate's change, or one made while this tab was in the background, reaches the page
   // through the conversation. The page's own copy of the document must follow it, or the
@@ -396,16 +394,6 @@ export function PlanningSession({
               ) : (
                 <p>{item.content}</p>
               )}
-              {item.producedChangeId && hasDocument ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-3"
-                  onClick={onOpenDocument}
-                >
-                  <FileTextIcon aria-hidden="true" /> View document
-                </Button>
-              ) : null}
             </div>
           );
         })}
