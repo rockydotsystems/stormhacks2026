@@ -60,10 +60,25 @@ describe("turnReducer", () => {
     expect(turnReducer(state, { type: "send", turn: other })).toBe(state);
   });
 
-  it("clears everything when the turn succeeds", () => {
-    expect(turnReducer(sending(), { type: "succeeded" })).toEqual(
+  it("clears everything but the reasoning when the turn succeeds", () => {
+    let state = turnReducer(sending(), { type: "reasoning", text: "Hmm. " });
+    state = turnReducer(state, { type: "reasoning", text: "Gaps in scope." });
+    state = turnReducer(state, { type: "delta", text: "Reply" });
+    expect(turnReducer(state, { type: "succeeded" })).toEqual({
+      ...initialTurnUi,
+      reasoningText: "Hmm. Gaps in scope.",
+    });
+  });
+
+  it("collects reasoning only while a turn is running and clears it on the next", () => {
+    expect(turnReducer(initialTurnUi, { type: "reasoning", text: "x" })).toBe(
       initialTurnUi,
     );
+    const done = turnReducer(
+      turnReducer(sending(), { type: "reasoning", text: "old" }),
+      { type: "succeeded" },
+    );
+    expect(turnReducer(done, { type: "send", turn }).reasoningText).toBe("");
   });
 
   it("discards streamed text on failure and keeps the turn for a retry", () => {

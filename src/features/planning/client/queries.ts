@@ -18,6 +18,7 @@ import {
   revert,
   streamMessage,
   type PlanningApiError,
+  type StreamHandlers,
 } from "@/features/planning/client/api";
 import type {
   ConversationDetail,
@@ -30,6 +31,8 @@ import type {
 export const planningKeys = {
   all: ["planning"] as const,
   conversations: () => [...planningKeys.all, "conversations"] as const,
+  document: (documentId: string) =>
+    [...planningKeys.all, "document", documentId] as const,
   conversation: (id: string) =>
     [...planningKeys.all, "conversation", id] as const,
   changes: (id: string) => [...planningKeys.all, "changes", id] as const,
@@ -45,6 +48,25 @@ export function useConversations(enabled = true) {
     queryKey: planningKeys.conversations(),
     queryFn: listConversations,
     enabled,
+  });
+}
+
+// The conversation that plans one document. The server creates it on first use and returns the
+// same one afterwards, so asking is safe to repeat.
+export function useDocumentConversation(input: {
+  documentId: string;
+  organizationId: string;
+  title: string;
+}) {
+  return useQuery({
+    queryKey: planningKeys.document(input.documentId),
+    queryFn: () =>
+      createConversation({
+        projectName: input.title,
+        documentId: input.documentId,
+        organizationId: input.organizationId,
+      }),
+    staleTime: Infinity,
   });
 }
 
@@ -121,7 +143,9 @@ export function useCreateConversation() {
 export type SendMessageVariables = {
   conversationId: string;
   input: SendMessageInput;
+  onReasoning?: (text: string) => void;
   onDelta?: (text: string) => void;
+  onDocumentChanged?: StreamHandlers["onDocumentChanged"];
   signal?: AbortSignal;
 };
 
@@ -134,10 +158,17 @@ export function useSendMessage() {
     mutationFn: ({
       conversationId,
       input,
+      onReasoning,
       onDelta,
+      onDocumentChanged,
       signal,
     }: SendMessageVariables) =>
-      streamMessage(conversationId, input, { onDelta, signal }),
+      streamMessage(conversationId, input, {
+        onReasoning,
+        onDelta,
+        onDocumentChanged,
+        signal,
+      }),
     onSettled: (_data, _error, { conversationId }) =>
       refresh(queryClient, conversationId),
   });

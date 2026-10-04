@@ -29,11 +29,15 @@ export type TurnUi = {
   status: TurnStatus;
   pending: PendingTurn | null;
   streamText: string;
+  // What the model reasoned while it worked. Streamed, never saved. It stays after the turn
+  // ends so the user can open it, and clears when the next turn starts.
+  reasoningText: string;
   error: { kind: ErrorKind; message: string } | null;
 };
 
 export type TurnAction =
   | { type: "send"; turn: PendingTurn }
+  | { type: "reasoning"; text: string }
   | { type: "delta"; text: string }
   | { type: "succeeded" }
   | { type: "failed"; kind: ErrorKind; message: string }
@@ -44,6 +48,7 @@ export const initialTurnUi: TurnUi = {
   status: "idle",
   pending: null,
   streamText: "",
+  reasoningText: "",
   error: null,
 };
 
@@ -55,14 +60,18 @@ export function turnReducer(state: TurnUi, action: TurnAction): TurnUi {
         status: "sending",
         pending: action.turn,
         streamText: "",
+        reasoningText: "",
         error: null,
       };
+    case "reasoning":
+      if (state.status !== "sending") return state;
+      return { ...state, reasoningText: state.reasoningText + action.text };
     case "delta":
       if (state.status !== "sending") return state;
       return { ...state, streamText: state.streamText + action.text };
     case "succeeded":
       if (state.status !== "sending") return state;
-      return initialTurnUi;
+      return { ...initialTurnUi, reasoningText: state.reasoningText };
     case "failed":
       if (state.status !== "sending") return state;
       // The streamed text is discarded because it was never saved.
@@ -74,7 +83,13 @@ export function turnReducer(state: TurnUi, action: TurnAction): TurnUi {
       };
     case "retry":
       if (state.status !== "error" || !state.pending) return state;
-      return { ...state, status: "sending", streamText: "", error: null };
+      return {
+        ...state,
+        status: "sending",
+        streamText: "",
+        reasoningText: "",
+        error: null,
+      };
     case "dismiss":
       return state.status === "error" ? initialTurnUi : state;
   }

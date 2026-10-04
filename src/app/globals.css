@@ -1489,6 +1489,219 @@ a {
   justify-content: flex-end;
   gap: 10px;
 }
+.planning-confirm {
+  margin-bottom: 10px;
+}
+.planning-asked {
+  margin-top: 12px;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted-foreground);
+}
+.planning-answers {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+}
+.planning-answers li {
+  display: grid;
+  gap: 2px;
+}
+.planning-answers span {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.planning-answers strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+.planning-answers strong[data-skipped] {
+  font-weight: 400;
+  color: var(--muted-foreground);
+}
+.planning-reasoning {
+  margin-bottom: 12px;
+}
+.planning-reasoning-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  border-radius: 5px;
+}
+.planning-reasoning-toggle:hover {
+  color: var(--foreground);
+}
+.planning-reasoning-toggle svg {
+  width: 10px;
+  height: 10px;
+  transition: transform 120ms ease;
+}
+.planning-reasoning-toggle svg[data-open] {
+  transform: rotate(90deg);
+}
+.planning-reasoning-body {
+  margin-top: 8px;
+  max-height: 150px;
+  overflow-y: auto;
+  padding: 2px 0 2px 12px;
+  border-left: 2px solid var(--border);
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--muted-foreground);
+}
+.planning-questions {
+  margin-bottom: 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--background);
+  box-shadow: 0 2px 8px #00000004;
+  padding: 10px;
+}
+.planning-questions:focus-visible {
+  outline: none;
+  border-color: var(--ring);
+}
+.planning-questions-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.planning-questions-steps {
+  display: flex;
+  gap: 5px;
+  list-style: none;
+}
+.planning-questions-step {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+.planning-questions-step svg {
+  width: 10px;
+  height: 10px;
+}
+.planning-questions-step[data-done] {
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 40%, transparent);
+}
+.planning-questions-step[data-active] {
+  color: var(--primary-foreground);
+  background: var(--primary);
+  border-color: var(--primary);
+}
+.planning-questions-step:disabled {
+  opacity: 0.5;
+}
+.planning-questions-title {
+  margin: 10px 2px 8px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.6;
+}
+.planning-questions-review {
+  display: grid;
+  gap: 8px;
+  margin: 0 2px 10px;
+  list-style: none;
+}
+.planning-questions-review li {
+  display: grid;
+  gap: 1px;
+}
+.planning-questions-review span {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.planning-questions-review strong {
+  font-size: 12px;
+  font-weight: 500;
+}
+.planning-questions-review strong[data-skipped] {
+  font-weight: 400;
+  color: var(--muted-foreground);
+}
+.planning-questions-options {
+  display: grid;
+  gap: 2px;
+  list-style: none;
+}
+.planning-questions-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.planning-questions-option[data-active] {
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+.planning-questions-option[data-kind="skip"],
+.planning-questions-option[data-kind="back"] {
+  color: var(--muted-foreground);
+}
+.planning-questions-option[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.planning-questions-option > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.planning-questions-option > svg {
+  width: 12px;
+  height: 12px;
+  color: var(--muted-foreground);
+}
+.planning-questions kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 10px;
+  color: var(--muted-foreground);
+  background: var(--background);
+}
+.planning-questions-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+}
+.planning-questions-input:focus-visible {
+  outline: none;
+}
+.planning-questions-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 8px 2px 0;
+  font-size: 10px;
+  color: var(--muted-foreground);
+}
 .document-surface {
   display: flex;
   flex-direction: column;

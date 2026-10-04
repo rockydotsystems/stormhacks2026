@@ -4,7 +4,6 @@ import type { Question } from "@/features/planning/contracts";
 import {
   ArrowUpIcon,
   FileTextIcon,
-  InfoIcon,
   MicrophoneIcon,
   SparkleIcon,
   SpeakerHighIcon,
@@ -56,6 +55,7 @@ import {
   isRecordingSupported,
   useVoiceRecorder,
 } from "@/features/planning/client/use-voice-recorder";
+import { TurnAlert } from "@/features/planning/components/turn-alert";
 import { ChecklistStrip } from "@/features/planning/components/checklist-strip";
 import { cn } from "@/lib/utils";
 
@@ -560,48 +560,5 @@ export function PlanningConversation({
         </div>
       </div>
     </div>
-  );
-}
-
-function TurnAlert({
-  kind,
-  message,
-  onRetry,
-  onDismiss,
-}: {
-  kind: "auth" | "config" | "conflict" | "missing" | "other";
-  message: string;
-  onRetry: () => void;
-  onDismiss: () => void;
-}) {
-  if (kind === "auth") {
-    return (
-      <Alert variant="info" className="mb-3">
-        <InfoIcon aria-hidden="true" />
-        <AlertDescription>{message}</AlertDescription>
-        <AlertAction>
-          <Button size="sm" render={<a href="/login" />}>
-            Sign in
-          </Button>
-          <Button size="sm" variant="ghost" onClick={onRetry}>
-            Retry
-          </Button>
-        </AlertAction>
-      </Alert>
-    );
-  }
-  return (
-    <Alert variant="error" className="mb-3">
-      <WarningCircleIcon aria-hidden="true" />
-      <AlertDescription>{message}</AlertDescription>
-      <AlertAction>
-        <Button size="sm" variant="outline" onClick={onRetry}>
-          Retry
-        </Button>
-        <Button size="sm" variant="ghost" onClick={onDismiss}>
-          Dismiss
-        </Button>
-      </AlertAction>
-    </Alert>
   );
 }

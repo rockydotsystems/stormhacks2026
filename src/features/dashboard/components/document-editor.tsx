@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ChatCircleIcon,
   CheckCircleIcon,
@@ -12,7 +13,6 @@ import {
 } from "@phosphor-icons/react";
 import { useDocument, useDocumentAction } from "../client/queries";
 import type { DocumentData, Person } from "../contracts";
-import type { Snapshot } from "@/features/docs/contracts";
 import { PlanningSession } from "@/features/workspace/components/planning-session";
 import { DocumentCanvas } from "@/features/workspace/components/document-canvas";
 import { Button } from "@/components/ui/button";
@@ -49,6 +49,7 @@ export function DocumentEditor({
   creator: Person;
   repositories: string[];
 }) {
+  const queryClient = useQueryClient();
   const document = useDocument(userId, organizationId, id);
   const mutation = useDocumentAction(userId, organizationId, id);
   if (document.isPending)
@@ -67,12 +68,18 @@ export function DocumentEditor({
   return (
     <DocumentWorkspace
       {...context}
+      documentId={id}
+      organizationId={organizationId}
       data={document.data}
       pending={mutation.isPending}
       error={mutation.error?.message}
-      onSave={(snapshot) =>
-        mutation.mutateAsync({ action: "save", ...snapshot })
-      }
+      onDocumentChanged={() => {
+        // The planning agent wrote to the document, so load it and the lists that show it.
+        void queryClient.invalidateQueries({
+          queryKey: ["document", userId, organizationId, id],
+        });
+        void queryClient.invalidateQueries({ queryKey: ["dashboard", userId] });
+      }}
       onBind={(changeId) =>
         mutation.mutateAsync({ action: "publish", changeId })
       }
@@ -82,17 +89,21 @@ export function DocumentEditor({
 
 export function DocumentWorkspace({
   data,
+  documentId,
+  organizationId,
   creator,
   repositories,
-  onSave,
+  onDocumentChanged,
   onBind,
   pending,
   error,
 }: {
   data: DocumentData;
+  documentId: string;
+  organizationId: string;
   creator: Person;
   repositories: string[];
-  onSave: (snapshot: Snapshot) => Promise<unknown>;
+  onDocumentChanged: () => void;
   onBind: (changeId: string) => Promise<unknown>;
   pending: boolean;
   error?: string;
@@ -124,13 +135,6 @@ export function DocumentWorkspace({
       /* Keep the confirmation open for retry. */
     }
   }
-  async function accept(text: string) {
-    const content = latest?.content || "";
-    await onSave({
-      title: latest?.title || "Untitled document",
-      content: `${content.trimEnd()}${content.trim() ? "\n\n" : ""}${text}`,
-    });
-  }
 
   return (
     <div
@@ -161,10 +165,10 @@ export function DocumentWorkspace({
       <div className="document-workspace-body">
         <PlanningSession
           title={latest?.title || "this plan"}
+          documentId={documentId}
+          organizationId={organizationId}
           onOpenDocument={() => setPane("document")}
-          onAccept={accept}
-          readOnly={Boolean(frozen)}
-          pending={pending}
+          onDocumentChanged={onDocumentChanged}
         />
         {hasDocument && (
           <section className="document-surface" aria-label="Decision document">
