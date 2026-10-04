@@ -203,8 +203,10 @@ Changing `.env.local` changes the migration target, not the Worker binding.
 Never point `TEST_DATABASE_URL` at the hosted hackathon database.
 
 GitHub's `production` environment contains the Cloudflare deployment credentials
-and allows only the `main` branch. CI does not receive the direct database URL or
-run hosted migrations. WorkOS runtime secrets must be configured separately.
+and the direct Postgres `DATABASE_URL`, and allows only the `main` branch. After
+checks and build validation, CI applies committed Drizzle migrations before
+deploying the Worker. A missing database secret or failed migration stops the
+deployment. WorkOS runtime secrets must be configured separately.
 
 Local provisioning credentials are in ignored `.env.cloudflare.local`, separate
 from the migration URL in `.env.local`. Load the Cloudflare file explicitly into
@@ -229,20 +231,33 @@ Before publishing the workflow:
    `blacksmith-2vcpu-ubuntu-2404` runners.
 2. Create a GitHub **production** environment. Restrict its deployment branches
    to `main` and configure required reviewers if you want an approval gate.
-3. Add `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as environment secrets.
+3. Add `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, and `DATABASE_URL` as environment secrets.
    Use an **Edit Cloudflare Workers** API token scoped to the intended account
-   and the permissions required by its bindings.
+   and the permissions required by its bindings. Use the direct Postgres URL,
+   not Hyperdrive, with migration permissions and `sslmode=verify-full`; omit
+   `sslrootcert=system` for Postgres.js compatibility.
 4. Complete the live-deploy prerequisites above: replace the Hyperdrive
-   placeholder in `wrangler.jsonc`, migrate the hosted database, and provision
-   the WorkOS Worker secrets and dashboard URLs. Runtime auth secrets stay in
-   Cloudflare, not the workflow or build environment.
+   placeholder in `wrangler.jsonc`, ensure the migration credential can apply
+   schema changes, and provision the WorkOS Worker secrets and dashboard URLs.
+   CI applies the database migrations. Runtime auth secrets stay in Cloudflare,
+   not the workflow or build environment.
 
 The job installs the locked dependencies with Node 24 and the pnpm version in
 `package.json`, runs `pnpm check`, then `pnpm deploy:check`. Only after those
-pass does it deploy that same build through `scripts/deploy.mjs`, preserving the
-Hyperdrive placeholder guard and generated `dist/server/wrangler.json` config.
-Cloudflare credentials are exposed only to the final deployment step. pnpm's
-dependency cache uses Blacksmith's colocated cache through `actions/setup-node`.
+pass does it run `pnpm db:migrate` and deploy that same build through
+`scripts/deploy.mjs`, preserving the Hyperdrive placeholder guard and generated
+`dist/server/wrangler.json` config. The database URL is exposed only to the
+migration step; Cloudflare credentials are exposed only to the final deployment
+step. pnpm's dependency cache uses Blacksmith's colocated cache through
+`actions/setup-node`.
+
+Every main push and manual main deployment checks for pending committed
+migrations. Drizzle records applied migrations, so repeats do not reapply them.
+The production concurrency group serializes the migrate/deploy sequence. Review
+migrations before pushing; keep them compatible with the currently deployed
+Worker, since schema changes happen before the new Worker is published. If a
+deployment fails after a successful migration, the schema changes remain; there
+is no automatic database rollback.
 
 Adding the workflow does not publish it or configure remote resources. Once the
 prerequisites are ready, publishing it to `main` triggers the first deployment.

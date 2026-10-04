@@ -136,7 +136,10 @@ not PostgreSQL row-level security; never expose a raw SQL tool to an MCP client.
   committed migration, not generated from the Drizzle table declarations.
 
 Apply migrations with `pnpm db:migrate` against an explicitly chosen direct
-database URL. **No hosted migration or deployment was performed for this task.**
+database URL. GitHub Actions now runs this command automatically after checks
+and build validation, before every main Worker deployment, using the
+`production` environment's `DATABASE_URL` secret. Missing credentials or a
+failed migration block deployment. Drizzle skips already-applied migrations.
 Migrations are not run inside Worker requests. Retain trigger SQL when changing
 the schema; a future Drizzle generation does not regenerate trigger definitions.
 
@@ -188,3 +191,20 @@ cluster:
 Local evidence: `/tmp/opencode/mcp-data-check.log` and
 `/tmp/opencode/mcp-data-deploy-check.log`. Actual GitHub access, WorkOS membership
 sync, MCP calls, and deployed Worker database behavior remain outside this phase.
+
+## Follow-up: automatic migrations
+
+- Added `Apply database migrations` to `.github/workflows/deploy.yml` between
+  Worker validation and deployment, for both main pushes and manual main runs.
+- Configured the direct database URL as a GitHub `production` environment secret,
+  scoped to the migration step. TLS certificate verification stays enabled;
+  the Postgres.js-incompatible `sslrootcert=system` parameter is omitted.
+- The existing production concurrency group serializes deployments and migrations.
+  A failed migration prevents deploying the new Worker. Applied schema changes
+  are not automatically rolled back if a subsequent Worker deployment fails.
+- Follow-up checks: `pnpm check` passed (27 tests passed; 10 opt-in Postgres tests
+  skipped for this workflow-only change). Parsed the workflow and verified step
+  order and secret isolation; executed its migration script with a simulated
+  command to verify missing-secret failure, migration-error propagation, and
+  successful `pnpm db:migrate` invocation. The production secret was confirmed
+  present via GitHub's secret metadata without retrieving its value.
