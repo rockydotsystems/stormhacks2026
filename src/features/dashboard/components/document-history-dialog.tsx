@@ -108,7 +108,7 @@ export function DocumentHistoryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogPopup className="h-[min(46rem,calc(100dvh-2rem))] max-w-5xl">
+      <DialogPopup className="h-[min(48rem,calc(100dvh-2rem))] max-w-none">
         <DialogHeader>
           <DialogTitle>Document history</DialogTitle>
           <DialogDescription>
