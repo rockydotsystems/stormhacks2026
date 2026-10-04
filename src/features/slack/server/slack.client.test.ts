@@ -5,6 +5,32 @@ import { shareableChannel } from "./slack.client";
 const actor = { organizationId: "org_123", userId: "user_123" };
 afterEach(() => vi.unstubAllEnvs());
 describe("Slack bot credentials and replies", () => {
+  it("uses Workers-compatible manual redirects for provider requests", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async (_url, init) => {
+        if (init?.redirect === "error")
+          throw new TypeError("Invalid redirect value in Workers");
+        expect(init?.redirect).toBe("manual");
+        return Response.json({ url: "https://api.workos.com/test-authorize" });
+      });
+    await expect(new SlackClient(fetcher).authorize(actor)).resolves.toBe(
+      "https://api.workos.com/test-authorize",
+    );
+  });
+  it("rejects provider redirects without following them or forwarding credentials", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(null, {
+        status: 302,
+        headers: { Location: "https://attacker.invalid" },
+      }),
+    );
+    await expect(new SlackClient(fetcher).authorize(actor)).rejects.toThrow(
+      "Slack provider request failed.",
+    );
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher.mock.calls[0][1]?.redirect).toBe("manual");
+  });
   it("authorizes the acting admin through organization-owned Pipes with a fixed return URL", async () => {
     vi.stubEnv("WORKOS_API_KEY", "test-key");
     const fetcher = vi

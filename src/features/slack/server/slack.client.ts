@@ -39,7 +39,7 @@ export class SlackClient {
     return providerJson(
       await this.fetcher(url, {
         method: "POST",
-        redirect: "error",
+        redirect: "manual",
         signal: AbortSignal.timeout(15000),
         headers: {
           Authorization: `Bearer ${token}`,
