@@ -1,3 +1,4 @@
+import { CORE_CHECKLIST_IDS } from "@/features/planning/contracts";
 import { describe, expect, it } from "vitest";
 import {
   activeQuestions,
@@ -9,6 +10,7 @@ import {
   isPublished,
   newestFirst,
   nextVersionNumber,
+  allTopicsCovered,
   showConfirmButton,
   showTyping,
   titleFromPitch,
@@ -246,5 +248,29 @@ describe("document history helpers", () => {
     expect(isPublished("v2")).toBe(true);
     expect(isPublished("v0")).toBe(false);
     expect(isPublished("working, after v2")).toBe(false);
+  });
+});
+
+describe("allTopicsCovered", () => {
+  it("is false for an empty or partly covered checklist", () => {
+    expect(allTopicsCovered([])).toBe(false);
+    expect(
+      allTopicsCovered([{ id: "pain", status: "covered", evidence: "x" }]),
+    ).toBe(false);
+  });
+
+  it("is true only when every row is covered", () => {
+    const all = CORE_CHECKLIST_IDS.map((id) => ({
+      id,
+      status: "covered" as const,
+      evidence: "x",
+    }));
+    expect(allTopicsCovered(all)).toBe(true);
+    expect(
+      allTopicsCovered([
+        { ...all[0], status: "partial" as const },
+        ...all.slice(1),
+      ]),
+    ).toBe(false);
   });
 });

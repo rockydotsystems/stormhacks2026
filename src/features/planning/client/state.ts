@@ -13,6 +13,8 @@ import type { MessageDto } from "@/features/planning/session-contracts";
 // know yet: the turn in flight, the reply streaming in, and the last failure.
 
 export const CONFIRM_TEXT = "Yes, generate it.";
+// Sent by the generate button and by auto-generate. The agent reads it as "enough, write it".
+export const GENERATE_TEXT = "That is enough. Please write the document now.";
 
 export type PendingTurn = {
   // Reused on retry, so the server treats a resend as the same message.
@@ -163,6 +165,12 @@ export function activeQuestions(
   if (isBusy(ui) || ui.status === "error") return [];
   const last = messages.at(-1);
   return last?.role === "assistant" ? (last.questions ?? []) : [];
+}
+
+/** Every recommended topic is covered, so the interview has nothing left to ask. */
+export function allTopicsCovered(checklist: ChecklistEntry[]): boolean {
+  const { covered, total } = checklistProgress(checklistRows(checklist));
+  return total > 0 && covered === total;
 }
 
 export function showConfirmButton(phase: Phase, ui: TurnUi): boolean {

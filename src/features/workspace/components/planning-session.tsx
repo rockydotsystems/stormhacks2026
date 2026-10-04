@@ -18,13 +18,13 @@ import {
   useSendMessage,
 } from "@/features/planning/client/queries";
 import {
-  CONFIRM_TEXT,
+  GENERATE_TEXT,
   activeQuestions,
+  allTopicsCovered,
   chatItems,
   errorText,
   initialTurnUi,
   isBusy,
-  showConfirmButton,
   showTyping,
   turnReducer,
   type PendingTurn,
@@ -145,6 +145,20 @@ export function PlanningSession({
   function submitAnswers(answers: Answer[]) {
     send(formatAnswers(answers));
   }
+
+  // Once every recommended topic is covered there is nothing left to ask, so write the document.
+  const autoFired = useRef<string | null>(null);
+  const coveredAll =
+    conversation && phase !== "generated"
+      ? allTopicsCovered(conversation.checklist)
+      : false;
+  useEffect(() => {
+    if (!coveredAll || busy || !conversationId || ui.status !== "idle") return;
+    if (autoFired.current === conversationId) return;
+    autoFired.current = conversationId;
+    send(GENERATE_TEXT);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coveredAll, busy, conversationId, ui.status]);
 
   useEffect(() => {
     end.current?.scrollIntoView({ block: "nearest" });
@@ -300,9 +314,6 @@ export function PlanningSession({
             onDismiss={() => dispatch({ type: "dismiss" })}
           />
         ) : null}
-        {conversation && phase !== "generated" && items.length > 0 ? (
-          <ChecklistStrip checklist={conversation.checklist} />
-        ) : null}
         {popupOpen && lastAssistant ? (
           <QuestionPrompt
             key={lastAssistant.id}
@@ -314,12 +325,18 @@ export function PlanningSession({
             }}
           />
         ) : null}
-        {showConfirmButton(phase, ui) ? (
-          <div className="planning-confirm">
-            <Button onClick={() => send(CONFIRM_TEXT)}>
-              <SparkleIcon aria-hidden="true" /> Yes, generate the document
+        {conversation && phase !== "generated" && items.length > 0 ? (
+          <ChecklistStrip checklist={conversation.checklist}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={busy || !conversationId}
+              onClick={() => send(GENERATE_TEXT)}
+            >
+              <SparkleIcon aria-hidden="true" /> Skip ahead &amp; draft
             </Button>
-          </div>
+          </ChecklistStrip>
         ) : null}
         <form className="planning-composer" onSubmit={submit}>
           <Textarea
