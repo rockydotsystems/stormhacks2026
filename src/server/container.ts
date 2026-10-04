@@ -1,4 +1,6 @@
 import "server-only";
+import { ProjectChatService } from "@/features/project-chat/server/project-chat.service";
+import { ProjectChatController } from "@/features/project-chat/server/project-chat.controller";
 import { asClass, asFunction, createContainer, InjectionMode } from "awilix";
 import { DashboardController } from "@/features/dashboard/server/dashboard.controller";
 import { AuthController } from "@/features/auth/server/auth.controller";
@@ -36,6 +38,8 @@ import { createSpeech } from "@/features/planning/server/speech.factory";
 import { createDatabase, type Database } from "@/server/db";
 
 export type Dependencies = {
+  projectChatService: ProjectChatService;
+  projectChatController: ProjectChatController;
   githubService: GitHubService;
   githubController: GitHubController;
   dashboardController: DashboardController;
@@ -68,6 +72,8 @@ export const container = createContainer<Dependencies>({
 });
 
 container.register({
+  projectChatService: asClass(ProjectChatService).scoped(),
+  projectChatController: asClass(ProjectChatController).scoped(),
   githubService: asClass(GitHubService).scoped(),
   githubController: asClass(GitHubController).scoped(),
   dashboardController: asClass(DashboardController).scoped(),

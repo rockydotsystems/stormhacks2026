@@ -108,6 +108,10 @@ import { DocumentEditor } from "./document-editor";
 import { DocumentActionsMenu } from "./document-actions-menu";
 import { apiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { ProjectChat } from "@/features/project-chat/components/project-chat";
+import { ProjectChatList } from "@/features/project-chat/components/project-chat-list";
+import { useCreateProjectChat } from "@/features/project-chat/client/queries";
+import { projectChatPath } from "@/features/project-chat/contracts";
 
 const statuses = ["Draft", "Published"];
 function documentCount(count: number) {
@@ -275,11 +279,10 @@ export function Dashboard({
   mcpEndpoint?: string;
 }) {
   const router = useRouter();
-  const {
-    view,
-    projectId,
-    documentId: selectedId,
-  } = dashboardRoute(usePathname());
+  const pathname = usePathname();
+  const chatId =
+    pathname.match(/^\/projects\/[^/]+\/chats\/([^/]+)$/)?.[1] || null;
+  const { view, projectId, documentId: selectedId } = dashboardRoute(pathname);
   const session = useSession();
   const [defaultSort] = useDefaultDocumentSort(session.data?.user?.id);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -334,6 +337,21 @@ export function Dashboard({
     value: name,
   }));
   const currentProject = orgProjects.find((item) => item.id === activeProject);
+  const chatScope = {
+    userId: session.data?.user?.id || "",
+    organizationId: organization,
+    projectId: activeProject || "",
+  };
+  const createChat = useCreateProjectChat(chatScope);
+  async function startChat() {
+    try {
+      const chat = await createChat.mutateAsync();
+      prepareNavigation();
+      router.push(projectChatPath(chatScope.projectId, chat.id));
+    } catch {
+      /* The project section shows the creation error. */
+    }
+  }
   const projectIsEmpty =
     Boolean(activeProject) &&
     !orgDocuments.some((document) => document.project === activeProject);
@@ -721,6 +739,14 @@ export function Dashboard({
               ))}
             </nav>
           </div>
+          {currentProject && !sidebarCollapsed && (
+            <ProjectChatList
+              scope={chatScope}
+              activeId={chatId}
+              compact
+              onNavigate={prepareNavigation}
+            />
+          )}
           <div className="sidebar-section sidebar-shortcuts sidebar-recents">
             <h2>Recently viewed</h2>
             <nav aria-label="Recently viewed documents">
@@ -1032,6 +1058,13 @@ export function Dashboard({
                 {selectedId ? "Browse documents" : "Browse projects"}
               </Button>
             </div>
+          ) : chatId && currentProject ? (
+            <ProjectChat
+              key={`${chatScope.userId}:${organization}:${chatId}`}
+              scope={chatScope}
+              id={chatId}
+              projectName={currentProject.name}
+            />
           ) : selected ? (
             <DocumentEditor
               key={`${organization}:${selected.id}`}
@@ -1050,22 +1083,46 @@ export function Dashboard({
               <div className="dashboard-heading">
                 <h1>{activeProject ? projectName(activeProject) : view}</h1>
                 {projects.length > 0 && (
-                  <Button
-                    disabled={mutation.isPending}
-                    onClick={
-                      view === "Projects" && !activeProject
-                        ? startProject
-                        : startDocument
-                    }
-                    className="new-document-button"
-                  >
-                    <PlusIcon aria-hidden="true" />
-                    {view === "Projects" && !activeProject
-                      ? "New project"
-                      : "New document"}
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {currentProject && (
+                      <Button
+                        variant="outline"
+                        disabled={createChat.isPending}
+                        onClick={startChat}
+                      >
+                        <PlusIcon aria-hidden="true" /> New chat
+                      </Button>
+                    )}
+                    <Button
+                      disabled={mutation.isPending}
+                      onClick={
+                        view === "Projects" && !activeProject
+                          ? startProject
+                          : startDocument
+                      }
+                      className="new-document-button"
+                    >
+                      <PlusIcon aria-hidden="true" />
+                      {view === "Projects" && !activeProject
+                        ? "New project"
+                        : "New document"}
+                    </Button>
+                  </div>
                 )}
               </div>
+              {currentProject && (
+                <>
+                  <ProjectChatList
+                    scope={chatScope}
+                    onNavigate={prepareNavigation}
+                  />
+                  {createChat.error && (
+                    <p role="alert" className="text-sm text-destructive">
+                      {createChat.error.message}
+                    </p>
+                  )}
+                </>
+              )}
               {!projects.length && (
                 <div className="first-project-empty">
                   <FolderIcon aria-hidden="true" />

@@ -16,6 +16,7 @@ export default defineConfig({
     "./packages/data/src/**/schema.ts",
     "./src/features/notes/server/schema.ts",
     "./src/features/planning/server/schema.ts",
+    "./src/features/project-chat/server/schema.ts",
   ],
   out: "./drizzle",
   dbCredentials: { url: process.env.DATABASE_URL },

@@ -52,6 +52,7 @@ export function DocumentHistoryDialog({
   documentId,
   organizationId,
   title,
+  initialChangeId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -59,12 +60,17 @@ export function DocumentHistoryDialog({
   documentId: string;
   organizationId: string;
   title: string;
+  initialChangeId?: string | null;
 }) {
   const entries = useMemo(() => historyEntries(data), [data]);
-  const [scope, setScope] = useState<Scope>("versions");
+  const [scope, setScope] = useState<Scope>(
+    initialChangeId ? "changes" : "versions",
+  );
   const [view, setView] = useState<View>("summary");
   const [entryKey, setEntryKey] = useState<HistoryEntry["key"] | null>(null);
-  const [changeId, setChangeId] = useState<string | null>(null);
+  const [changeId, setChangeId] = useState<string | null>(
+    initialChangeId || null,
+  );
 
   const entry = entries.find((item) => item.key === entryKey) ?? entries[0];
   // The Changes tab lists every change in the document's history, whatever version it is in.
@@ -129,7 +135,13 @@ export function DocumentHistoryDialog({
             the conversation behind them.
           </DialogDescription>
         </DialogHeader>
-        {entries.length === 0 ? (
+        {initialChangeId &&
+        !data.changes.some((item) => item.id === initialChangeId) ? (
+          <p role="alert" className="px-6 pb-6 text-sm text-muted-foreground">
+            This cited change is no longer available. Its draft snapshot may
+            have been deleted.
+          </p>
+        ) : entries.length === 0 ? (
           <p className="px-6 pb-6 text-sm text-muted-foreground">
             Nothing has been saved yet.
           </p>

@@ -129,6 +129,36 @@ or document selection does not leak into the new workspace. Account settings kee
 their existing `/settings/:section` routes. `/workspace` and `/starter` are separate
 demo surfaces.
 
+## Private project chats
+
+Open a project and choose **New chat** alongside its documents. Chats have their
+own `/projects/:projectId/chats/:chatId` URLs and appear under **Private chats**
+in the project and sidebar. Only the creator can list, open, or ask questions in
+a chat, including when teammates know its URL. Active organization membership
+and project access are checked on every request.
+
+Chats are read-only: they search all non-deleted project document snapshots and
+the recorded conversations linked to changes. Retrieval includes the current
+snapshot of matching documents, so older decisions can be distinguished from
+current ones. Answers cite stable change IDs with links that open document
+history; missing rationale is not inferred. Search uses bounded full-text
+results/excerpts, not an exhaustive semantic index or live repository search.
+No chat operation edits, proposes, or publishes documents.
+
+Type a question or choose **Speak question**, finish recording, review the
+transcript, and send. Voice answers are read aloud; any answer also has a
+**Read aloud** action. This reuses the configured planning model and speech
+providers. Only transcripts are saved, not recordings. Browser microphone
+permission and a secure context are required; text remains available when
+voice is unsupported or a provider fails.
+
+Apply migration `0014_oval_may_parker` with `pnpm db:migrate` before using chats.
+Verification against a disposable local Postgres:
+`TEST_DATABASE_URL=postgres://… pnpm test src/features/project-chat`.
+The integration suite creates and drops its own database, checks privacy,
+retrieval, retries, lease recovery, persistence, and unchanged document history;
+model and identity providers are simulated.
+
 ## WorkOS authentication
 
 Use a WorkOS **staging** environment. Set these in `.dev.vars` for the local Worker runtime (keep `.env.local` for Drizzle's direct database URL):

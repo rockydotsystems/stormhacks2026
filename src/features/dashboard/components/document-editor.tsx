@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { createPortal } from "react-dom";
+import { useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircleIcon,
@@ -132,10 +133,12 @@ export function DocumentWorkspace({
 }) {
   const latest = data.changes.at(-1);
   const documentPaneId = useId();
+  const searchParams = useSearchParams();
+  const linkedChangeId = searchParams.get("change");
   const [pane, setPane] = useState("conversation");
   const [reviewers, setReviewers] = useState<TeamData["members"]>([]);
   const [publishOpen, setPublishOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(Boolean(linkedChangeId));
   const [versionId, setVersionId] = useState("draft");
   const version = data.versions.find((item) => item.id === versionId);
   const frozen = data.changes.find((item) => item.id === version?.changeId);
@@ -361,6 +364,8 @@ export function DocumentWorkspace({
         )}
       </div>
       <DocumentHistoryDialog
+        key={linkedChangeId || "history"}
+        initialChangeId={linkedChangeId}
         open={historyOpen}
         onOpenChange={(open) => {
           // The page's copy can be older than the server's, so look again as the history opens.
