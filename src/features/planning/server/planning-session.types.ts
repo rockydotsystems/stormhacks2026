@@ -1,0 +1,152 @@
+import type { DocsService } from "@/features/docs/server/docs.service";
+import type {
+  ChecklistEntry,
+  Phase,
+  Question,
+} from "@/features/planning/contracts";
+import type { ChangeMode } from "@/features/planning/session-contracts";
+
+// The slice of the docs data layer the planning session uses. Publishing is here for the human
+// publish button only. The agent port below has no handle on it.
+export type DocsPort = Pick<
+  DocsService,
+  | "create"
+  | "addChange"
+  | "listChanges"
+  | "publish"
+  | "listVersions"
+  | "getVersion"
+>;
+
+export type ConversationRow = {
+  id: string;
+  userId: string;
+  organizationId: string;
+  docId: string | null;
+  title: string;
+  phase: Phase;
+  checklist: ChecklistEntry[];
+  skillVersion: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type MessageRow = {
+  id: string;
+  conversationId: string;
+  role: "user" | "assistant";
+  content: string;
+  via: "text" | "voice";
+  questions: Question[] | null;
+  clientMessageId: string | null;
+  createdAt: Date;
+};
+
+export type ChangeSourceRow = {
+  docId: string;
+  changeId: string;
+  conversationId: string;
+  triggerMessageId: string;
+  resultMessageId: string;
+  rangeStartMessageId: string;
+  rangeEndMessageId: string;
+  mode: ChangeMode;
+  revertedToChangeId: string | null;
+  createdAt: Date;
+};
+
+export type AppliedChange = { docId: string; changeId: string };
+
+// Runs inside the commit transaction against a docs port bound to that transaction, so the
+// change, the assistant message, the change source and the conversation state commit together.
+export type ApplyDocument = (docs: DocsPort) => Promise<AppliedChange>;
+
+export type CommitTurnInput = {
+  conversationId: string;
+  triggerMessageId: string;
+  reply: string;
+  questions: Question[];
+  phase: Phase;
+  checklist: ChecklistEntry[];
+  skillVersion: string;
+  // Used only when applyDocument is set.
+  mode: ChangeMode;
+  revertedToChangeId: string | null;
+  applyDocument: ApplyDocument | null;
+};
+
+export type CommitTurnResult = {
+  assistant: MessageRow;
+  conversation: ConversationRow;
+  change: AppliedChange | null;
+};
+
+export type CommitRevertInput = {
+  conversationId: string;
+  requestText: string;
+  replyText: string;
+  revertedToChangeId: string;
+  applyDocument: ApplyDocument;
+};
+
+export type CommitRevertResult = {
+  userMessage: MessageRow;
+  assistant: MessageRow;
+  change: AppliedChange;
+  conversation: ConversationRow;
+};
+
+// All reads and writes the session service needs. The Drizzle implementation is the real one.
+// Tests use an in-memory implementation, so service rules run without a database.
+export interface PlanningSessionStore {
+  createConversation(input: {
+    userId: string;
+    organizationId: string;
+    title: string;
+  }): Promise<ConversationRow>;
+  findConversation(
+    userId: string,
+    organizationId: string,
+    id: string,
+  ): Promise<ConversationRow | null>;
+  listConversations(
+    userId: string,
+    organizationId: string,
+  ): Promise<ConversationRow[]>;
+  // Takes the turn lease. False when another turn holds an unexpired lease.
+  claimTurn(conversationId: string, leaseSeconds: number): Promise<boolean>;
+  releaseTurn(conversationId: string): Promise<void>;
+  findMessageByClientId(
+    conversationId: string,
+    clientMessageId: string,
+  ): Promise<MessageRow | null>;
+  insertUserMessage(
+    conversationId: string,
+    input: {
+      content: string;
+      via: "text" | "voice";
+      clientMessageId: string | null;
+    },
+  ): Promise<{ message: MessageRow; created: boolean }>;
+  findAssistantAfter(
+    conversationId: string,
+    messageId: string,
+  ): Promise<MessageRow | null>;
+  // Ascending by id. With a limit, the most recent messages.
+  listMessages(
+    conversationId: string,
+    options?: { limit?: number },
+  ): Promise<MessageRow[]>;
+  listMessageRange(
+    conversationId: string,
+    startMessageId: string,
+    endMessageId: string,
+  ): Promise<MessageRow[]>;
+  commitTurn(input: CommitTurnInput): Promise<CommitTurnResult>;
+  commitRevert(input: CommitRevertInput): Promise<CommitRevertResult>;
+  listChangeSources(conversationId: string): Promise<ChangeSourceRow[]>;
+  findChangeSource(
+    conversationId: string,
+    changeId: string,
+  ): Promise<ChangeSourceRow | null>;
+}

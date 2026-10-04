@@ -24,4 +24,14 @@ describe("request scopes", () => {
     );
     await Promise.all([first.dispose(), second.dispose()]);
   });
+
+  it("shares the stateless model adapter across requests", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "k");
+    vi.stubEnv("OPENROUTER_MODEL", "google/gemini-3.8-flash");
+    const first = container.createScope();
+    const second = container.createScope();
+    expect(first.cradle.model === second.cradle.model).toBe(true);
+    await Promise.all([first.dispose(), second.dispose()]);
+    vi.unstubAllEnvs();
+  });
 });

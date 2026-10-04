@@ -96,7 +96,15 @@ export type Message = {
   text: string;
   documentId?: DocumentId;
 };
-export type Conversation = { id: string; title: string; messages: Message[] };
+export type Conversation = {
+  id: string;
+  title: string;
+  messages: Message[];
+  // Planning conversations are driven by the planning agent in `features/planning`.
+  kind?: "planning";
+  // Set once a planning conversation is saved on the server.
+  serverId?: string;
+};
 
 export const initialConversations: Conversation[] = [
   {
