@@ -4,9 +4,10 @@ import { filterDecisions, initialDecisions } from "./preview-data";
 const defaults = {
   organization: "Rocky Dot Systems",
   query: "",
-  status: "All statuses",
-  collection: "All collections",
-  view: "Documents",
+  status: [] as string[],
+  collection: [] as string[],
+  myReviews: false,
+  scope: null as string | null,
   sort: "Last updated",
 };
 
@@ -20,15 +21,22 @@ describe("dashboard document filters", () => {
       }).map((document) => document.id),
     ).toEqual(["labs-001"]);
   });
-  it("combines search, status, and collection filters", () => {
+  it("combines search with multi-select status and collection filters", () => {
     expect(
       filterDecisions(initialDecisions, {
         ...defaults,
         query: "  HYPERDRIVE  ",
-        status: "In review",
-        collection: "Infrastructure",
+        status: ["Draft", "In review"],
+        collection: ["Infrastructure", "Product"],
       }).map((document) => document.id),
     ).toEqual(["adr-005"]);
+    expect(
+      filterDecisions(initialDecisions, {
+        ...defaults,
+        status: ["Draft", "In review"],
+        collection: ["Infrastructure", "Product"],
+      }),
+    ).toHaveLength(4);
     expect(
       filterDecisions(initialDecisions, {
         ...defaults,
@@ -36,24 +44,31 @@ describe("dashboard document filters", () => {
       }),
     ).toEqual([]);
   });
-  it("shows only pending reviews requested from the current member", () => {
+  it("combines requested reviews with the selected statuses", () => {
     expect(
-      filterDecisions(initialDecisions, {
-        ...defaults,
-        view: "My reviews",
-      }).map((document) => document.id),
+      filterDecisions(initialDecisions, { ...defaults, myReviews: true }).map(
+        (document) => document.id,
+      ),
     ).toEqual(["adr-008", "adr-005"]);
-  });
-  it("filters personal and bound views and sorts without mutating the source", () => {
-    expect(
-      filterDecisions(initialDecisions, { ...defaults, view: "Created by me" }),
-    ).toHaveLength(2);
     expect(
       filterDecisions(initialDecisions, {
         ...defaults,
-        view: "Bound decisions",
+        myReviews: true,
+        status: ["Bound"],
       }),
-    ).toHaveLength(4);
+    ).toEqual([]);
+  });
+  it("scopes collection navigation and sorts without mutating the source", () => {
+    expect(
+      filterDecisions(initialDecisions, { ...defaults, scope: "Engineering" }),
+    ).toHaveLength(3);
+    expect(
+      filterDecisions(initialDecisions, {
+        ...defaults,
+        scope: "Engineering",
+        collection: ["Product"],
+      }),
+    ).toEqual([]);
     const sorted = filterDecisions(initialDecisions, {
       ...defaults,
       sort: "Name",

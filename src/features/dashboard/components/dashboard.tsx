@@ -15,11 +15,10 @@ import {
   MagnifyingGlassIcon,
   PlusIcon,
   SlidersHorizontalIcon,
-  StackIcon,
   UsersIcon,
 } from "@phosphor-icons/react";
 import Link from "next/link";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,6 +32,15 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Combobox,
+  ComboboxTrigger,
+  ComboboxPopup,
+  ComboboxInput,
+  ComboboxEmpty,
+  ComboboxList,
+  ComboboxItem,
+} from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -58,7 +66,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const collections = ["Engineering", "Infrastructure", "Product"];
-const statuses = ["All statuses", "Draft", "In review", "Bound"];
+const statuses = ["Draft", "In review", "Bound"];
 function documentCount(count: number) {
   return `${count} ${count === 1 ? "document" : "documents"}`;
 }
@@ -140,24 +148,80 @@ function FilterMenu({
   );
 }
 
+function MultiFilter({
+  label,
+  values,
+  options,
+  onChange,
+}: {
+  label: string;
+  values: string[];
+  options: string[];
+  onChange: (values: string[]) => void;
+}) {
+  return (
+    <Combobox multiple items={options} value={values} onValueChange={onChange}>
+      <ComboboxTrigger
+        render={<Button variant="outline" className="filter-button" />}
+        aria-label={`${label}: ${values.join(", ") || "All"}`}
+      >
+        {label === "Status" && <SlidersHorizontalIcon aria-hidden="true" />}
+        {values.length === 1 ? values[0] : label}
+        {values.length > 1 && (
+          <Badge variant="secondary">{values.length}</Badge>
+        )}
+        <CaretDownIcon aria-hidden="true" />
+      </ComboboxTrigger>
+      <ComboboxPopup
+        className="w-60"
+        aria-label={`Select ${label.toLowerCase()}`}
+      >
+        <div className="border-b p-2">
+          <ComboboxInput
+            aria-label={`Search ${label.toLowerCase()}`}
+            placeholder={`Search ${label.toLowerCase()}…`}
+            showTrigger={false}
+          />
+        </div>
+        <ComboboxEmpty>No matching options.</ComboboxEmpty>
+        <ComboboxList>
+          {(option: string) => (
+            <ComboboxItem key={option} value={option}>
+              {option}
+            </ComboboxItem>
+          )}
+        </ComboboxList>
+        <div className="border-t p-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start"
+            onClick={() => onChange([])}
+          >
+            Clear selection
+          </Button>
+        </div>
+      </ComboboxPopup>
+    </Combobox>
+  );
+}
+
 export function Dashboard() {
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [decisions, setDecisions] = useState(initialDecisions);
   const [organization, setOrganization] = useState("Rocky Dot Systems");
   const [view, setView] = useState("Documents");
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("All statuses");
-  const [collection, setCollection] = useState("All collections");
+  const [status, setStatus] = useState<string[]>([]);
+  const [collection, setCollection] = useState<string[]>([]);
   const [sort, setSort] = useState("Last updated");
   const [recent, setRecent] = useState(["adr-008", "adr-007", "adr-006"]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const searchRef = useRef<HTMLInputElement>(null);
-  const [searchRequested, setSearchRequested] = useState(0);
-  useEffect(() => {
-    if (searchRequested) searchRef.current?.focus();
-  }, [searchRequested]);
+  const [activeCollection, setActiveCollection] = useState<string | null>(null);
+  const [myReviews, setMyReviews] = useState(false);
   const selected = decisions.find((decision) => decision.id === selectedId);
   const orgDocuments = decisions.filter(
     (decision) => decision.organization === organization,
@@ -165,36 +229,42 @@ export function Dashboard() {
   const recentDocuments = recent
     .map((id) => orgDocuments.find((decision) => decision.id === id))
     .filter((decision): decision is Decision => Boolean(decision));
-  const reviewCount = orgDocuments.filter(
-    (decision) =>
-      decision.status === "In review" && decision.reviewers.includes("matthew"),
-  ).length;
   const filtered = filterDecisions(decisions, {
     organization,
     query,
     status,
     collection,
-    view,
+    myReviews,
+    scope: activeCollection,
     sort,
   });
 
   function navigate(nextView: string) {
+    scrollRef.current?.scrollTo({ top: 0 });
     setView(nextView);
+    setActiveCollection(null);
+    setMyReviews(false);
     setSelectedId(null);
     setQuery("");
-    setStatus("All statuses");
-    setCollection("All collections");
+    setStatus([]);
+    setCollection([]);
     setMobileOpen(false);
   }
+  function openCollection(name: string) {
+    navigate("Collections");
+    setActiveCollection(name);
+  }
   function openDocument(id: string) {
+    scrollRef.current?.scrollTo({ top: 0 });
     setSelectedId(id);
     setRecent((ids) => [id, ...ids.filter((item) => item !== id)].slice(0, 5));
     setMobileOpen(false);
   }
   function resetFilters() {
+    setMyReviews(false);
     setQuery("");
-    setStatus("All statuses");
-    setCollection("All collections");
+    setStatus([]);
+    setCollection([]);
   }
   function createDocument(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -220,7 +290,7 @@ export function Dashboard() {
     };
     setDecisions((items) => [decision, ...items]);
     setCreateOpen(false);
-    navigate("Documents");
+    resetFilters();
     openDocument(decision.id);
   }
 
@@ -257,23 +327,10 @@ export function Dashboard() {
           </MenuPopup>
         </Menu>
       </div>
-      <Button
-        variant="ghost"
-        className="sidebar-search"
-        onClick={() => {
-          setMobileOpen(false);
-          setSelectedId(null);
-          setSearchRequested((request) => request + 1);
-        }}
-      >
-        <MagnifyingGlassIcon aria-hidden="true" />
-        Search documents
-      </Button>
       <nav aria-label="Workspace" className="sidebar-navigation">
         {[
           { name: "Documents", icon: HouseIcon },
-          { name: "My reviews", icon: CheckCircleIcon },
-          { name: "Bound decisions", icon: StackIcon },
+          { name: "Collections", icon: FolderIcon },
         ].map(({ name, icon: Icon }) => (
           <Button
             key={name}
@@ -290,41 +347,36 @@ export function Dashboard() {
               weight={view === name ? "fill" : "regular"}
             />
             <span>{name}</span>
-            {name === "My reviews" && reviewCount > 0 && (
-              <span className="sidebar-count">{reviewCount}</span>
-            )}
           </Button>
         ))}
       </nav>
-      <div className="sidebar-section">
-        <h2>Collections</h2>
-        <nav aria-label="Collections">
-          {collections.map((name) => (
-            <Button
-              key={name}
-              variant="ghost"
-              className={cn(
-                "sidebar-item",
-                collection === name && "sidebar-item-active",
-              )}
-              onClick={() => {
-                navigate("Documents");
-                setCollection(name);
-              }}
-            >
-              <FolderIcon aria-hidden="true" />
-              <span>{name}</span>
-              <span className="sidebar-count">
-                {
-                  orgDocuments.filter(
-                    (decision) => decision.collection === name,
-                  ).length
-                }
-              </span>
-            </Button>
-          ))}
-        </nav>
-      </div>
+      {view === "Collections" && (
+        <div className="sidebar-collection-children">
+          <nav aria-label="Collections">
+            {collections.map((name) => (
+              <Button
+                key={name}
+                variant="ghost"
+                className={cn(
+                  "sidebar-item",
+                  activeCollection === name && "sidebar-item-active",
+                )}
+                onClick={() => openCollection(name)}
+              >
+                <FolderIcon aria-hidden="true" />
+                <span>{name}</span>
+                <span className="sidebar-count">
+                  {
+                    orgDocuments.filter(
+                      (decision) => decision.collection === name,
+                    ).length
+                  }
+                </span>
+              </Button>
+            ))}
+          </nav>
+        </div>
+      )}
       <div className="sidebar-section sidebar-recents">
         <h2>Recently viewed</h2>
         <nav aria-label="Recently viewed documents">
@@ -367,7 +419,7 @@ export function Dashboard() {
           </MenuTrigger>
           <MenuPopup side="top" align="start" className="w-56">
             <MenuGroup>
-              <MenuGroupLabel>Matthew · Preview profile</MenuGroupLabel>
+              <MenuGroupLabel>Matthew</MenuGroupLabel>
               <MenuItem onClick={() => setProfileOpen(true)}>
                 View profile
               </MenuItem>
@@ -403,274 +455,287 @@ export function Dashboard() {
           <span>Workspace</span>
           <span className="breadcrumb-divider">/</span>
           <span className="breadcrumb-current">
-            {selected ? selected.collection : view}
+            {selected
+              ? selected.collection
+              : activeCollection
+                ? `Collections / ${activeCollection}`
+                : view}
           </span>
-          <Badge variant="outline" className="preview-badge">
-            Preview
-          </Badge>
         </header>
-        {selected ? (
-          <div className="decision-detail">
-            <Button
-              variant="ghost"
-              className="back-button"
-              onClick={() => setSelectedId(null)}
-            >
-              <ArrowLeftIcon aria-hidden="true" />
-              Back to documents
-            </Button>
-            <div className="detail-meta">
-              <span>{selected.collection}</span>
-              <Status status={selected.status} />
-            </div>
-            <h1>{selected.title}</h1>
-            <p className="detail-description">
-              {selected.description ||
-                "Start a planning session to develop this decision with your team."}
-            </p>
-            <dl className="detail-properties">
-              <div>
-                <dt>Created by</dt>
-                <dd>
-                  <PersonAvatar id={selected.creator} />
-                  {people[selected.creator].name}
-                </dd>
-              </div>
-              <div>
-                <dt>Reviewers</dt>
-                <dd>
-                  {selected.reviewers.length
-                    ? selected.reviewers.map((id) => (
-                        <PersonAvatar key={id} id={id} />
-                      ))
-                    : "No reviewers requested"}
-                </dd>
-              </div>
-              <div>
-                <dt>Status</dt>
-                <dd>
-                  {selected.status === "Bound"
-                    ? "Immutable agreement"
-                    : "Mutable draft"}
-                </dd>
-              </div>
-            </dl>
-            <div className="detail-note">
-              <h2>
-                {selected.status === "Bound"
-                  ? "Bound agreement"
-                  : "Planning session"}
-              </h2>
-              <p>
-                {selected.status === "Bound"
-                  ? "This preview represents a bound decision. Draft amendments must be reviewed and explicitly bound as a new version."
-                  : "Discuss the context, consider alternatives, and agree on the constraints before binding a version."}
-              </p>
-              <Button variant="outline" render={<Link href="/workspace" />}>
-                Open document workspace prototype
-                <ArrowUpRightIcon aria-hidden="true" />
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="dashboard-content">
-            <div className="dashboard-heading">
-              <h1>{view}</h1>
+        <div className="dashboard-scroll" ref={scrollRef}>
+          {selected ? (
+            <div className="decision-detail">
               <Button
-                onClick={() => setCreateOpen(true)}
-                className="new-document-button"
+                variant="ghost"
+                className="back-button"
+                onClick={() => setSelectedId(null)}
               >
-                <PlusIcon aria-hidden="true" />
-                New document
+                <ArrowLeftIcon aria-hidden="true" />
+                Back to {activeCollection || view.toLowerCase()}
               </Button>
-            </div>
-            {view === "Documents" && (
-              <section
-                className="collections-section"
-                aria-labelledby="collections-heading"
-              >
-                <div className="section-heading">
-                  <h2 id="collections-heading">Collections</h2>
-                  <span>{collections.length} collections</span>
+              <div className="detail-meta">
+                <span>{selected.collection}</span>
+                <Status status={selected.status} />
+              </div>
+              <h1>{selected.title}</h1>
+              <p className="detail-description">
+                {selected.description ||
+                  "Start a planning session to develop this decision with your team."}
+              </p>
+              <dl className="detail-properties">
+                <div>
+                  <dt>Created by</dt>
+                  <dd>
+                    <PersonAvatar id={selected.creator} />
+                    {people[selected.creator].name}
+                  </dd>
                 </div>
-                <div className="collection-grid">
-                  {collections.map((name, index) => (
-                    <button
-                      key={name}
-                      type="button"
-                      className={cn(
-                        "collection-card",
-                        collection === name && "collection-selected",
-                      )}
-                      aria-pressed={collection === name}
-                      onClick={() =>
-                        setCollection(
-                          collection === name ? "All collections" : name,
-                        )
-                      }
-                    >
-                      <div
-                        className={cn("folder-art", `folder-tone-${index}`)}
-                        aria-hidden="true"
-                      >
-                        <div className="folder-back" />
-                        <div className="folder-paper paper-back">
-                          <i />
-                          <i />
-                          <i />
-                        </div>
-                        <div className="folder-paper paper-front">
-                          <i />
-                          <i />
-                          <i />
-                        </div>
-                        <div className="folder-flap">
-                          <span className="folder-seam" />
-                        </div>
-                      </div>
-                      <div className="collection-card-label">
-                        <span>
-                          <strong>{name}</strong>
-                          <small>
-                            {documentCount(
-                              orgDocuments.filter(
-                                (decision) => decision.collection === name,
-                              ).length,
-                            )}
-                          </small>
-                        </span>
-                        <ArrowUpRightIcon aria-hidden="true" />
-                      </div>
-                    </button>
-                  ))}
+                <div>
+                  <dt>Reviewers</dt>
+                  <dd>
+                    {selected.reviewers.length
+                      ? selected.reviewers.map((id) => (
+                          <PersonAvatar key={id} id={id} />
+                        ))
+                      : "No reviewers requested"}
+                  </dd>
                 </div>
-              </section>
-            )}
-            <section
-              className="documents-section"
-              aria-labelledby="documents-heading"
-            >
-              <div className="section-heading document-section-heading">
-                <h2 id="documents-heading">
-                  {view === "Documents" ? "All documents" : view}
+                <div>
+                  <dt>Status</dt>
+                  <dd>
+                    {selected.status === "Bound"
+                      ? "Immutable agreement"
+                      : "Mutable draft"}
+                  </dd>
+                </div>
+              </dl>
+              <div className="detail-note">
+                <h2>
+                  {selected.status === "Bound"
+                    ? "Bound agreement"
+                    : "Planning session"}
                 </h2>
-                <span>
-                  {filtered.length}{" "}
-                  {filtered.length === 1 ? "document" : "documents"}
-                </span>
+                <p>
+                  {selected.status === "Bound"
+                    ? "This document represents a bound decision. Draft amendments must be reviewed and explicitly bound as a new version."
+                    : "Discuss the context, consider alternatives, and agree on the constraints before binding a version."}
+                </p>
+                <Button variant="outline" render={<Link href="/workspace" />}>
+                  Open document workspace
+                  <ArrowUpRightIcon aria-hidden="true" />
+                </Button>
               </div>
-              <div className="document-toolbar">
-                <div className="document-search">
-                  <MagnifyingGlassIcon aria-hidden="true" />
-                  <Input
-                    ref={searchRef}
-                    type="search"
-                    aria-label="Search documents"
-                    placeholder="Search documents…"
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                  />
-                </div>
-                <div className="document-filters">
-                  <FilterMenu
-                    label="Status"
-                    value={status}
-                    options={statuses}
-                    onChange={setStatus}
-                  />
-                  <FilterMenu
-                    label="Collection"
-                    value={collection}
-                    options={["All collections", ...collections]}
-                    onChange={setCollection}
-                  />
-                  <FilterMenu
-                    label="Sort"
-                    value={sort}
-                    options={["Last updated", "Name"]}
-                    onChange={setSort}
-                  />
-                </div>
+            </div>
+          ) : (
+            <div className="dashboard-content">
+              <div className="dashboard-heading">
+                <h1>{activeCollection || view}</h1>
+                <Button
+                  onClick={() => setCreateOpen(true)}
+                  className="new-document-button"
+                >
+                  <PlusIcon aria-hidden="true" />
+                  New document
+                </Button>
               </div>
-              <div className="document-list">
-                <div className="document-table-heading" aria-hidden="true">
-                  <span>Document</span>
-                  <span>Status</span>
-                  <span>Created by</span>
-                  <span>Reviewers</span>
-                  <span>Updated</span>
-                </div>
-                {filtered.map((decision) => (
-                  <div className="document-row" key={decision.id}>
-                    <button
-                      type="button"
-                      className="document-title-cell"
-                      onClick={() => openDocument(decision.id)}
-                    >
-                      <FileTextIcon aria-hidden="true" />
-                      <span>
-                        <strong>{decision.title}</strong>
-                        <small>
-                          {decision.description || "No description yet"}
-                        </small>
-                      </span>
-                    </button>
-                    <div className="document-status-cell">
-                      <Status status={decision.status} />
-                    </div>
-                    <div className="document-creator-cell">
-                      <PersonAvatar id={decision.creator} />
-                      <span>{people[decision.creator].name.split(" ")[0]}</span>
-                    </div>
-                    <div
-                      className="document-reviewers-cell"
-                      aria-label={`Requested reviewers: ${decision.reviewers.map((id) => people[id].name).join(", ") || "None"}`}
-                    >
-                      {decision.reviewers.length ? (
-                        <div className="reviewer-stack">
-                          {decision.reviewers.map((id) => (
-                            <PersonAvatar key={id} id={id} />
-                          ))}
+              {view === "Collections" && !activeCollection && (
+                <section
+                  className="collections-section"
+                  aria-labelledby="collections-heading"
+                >
+                  <h2 id="collections-heading" className="sr-only">
+                    Collections
+                  </h2>
+                  <div className="collection-grid">
+                    {collections.map((name, index) => (
+                      <button
+                        key={name}
+                        type="button"
+                        className={cn(
+                          "collection-card",
+                          activeCollection === name && "collection-selected",
+                        )}
+
+                        onClick={() => openCollection(name)}
+                      >
+                        <div
+                          className={cn("folder-art", `folder-tone-${index}`)}
+                          aria-hidden="true"
+                        >
+                          <div className="folder-back" />
+                          <div className="folder-paper paper-back">
+                            <i />
+                            <i />
+                            <i />
+                          </div>
+                          <div className="folder-paper paper-front">
+                            <i />
+                            <i />
+                            <i />
+                          </div>
+                          <div className="folder-flap">
+                            <span className="folder-seam" />
+                          </div>
                         </div>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
+                        <div className="collection-card-label">
+                          <span>
+                            <strong>{name}</strong>
+                            <small>
+                              {documentCount(
+                                orgDocuments.filter(
+                                  (decision) => decision.collection === name,
+                                ).length,
+                              )}
+                            </small>
+                          </span>
+                          <ArrowUpRightIcon aria-hidden="true" />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
+              {(view === "Documents" || activeCollection) && (
+                <section
+                  className="documents-section"
+                  aria-labelledby="documents-heading"
+                >
+                  <h2 id="documents-heading" className="sr-only">
+                    Documents
+                  </h2>
+                  <div className="document-toolbar">
+                    <div className="document-search">
+                      <MagnifyingGlassIcon aria-hidden="true" />
+                      <Input
+                        type="search"
+                        aria-label="Search documents"
+                        placeholder="Search documents…"
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                      />
                     </div>
-                    <time
-                      className="document-updated-cell"
-                      dateTime={decision.updated}
-                    >
-                      {new Intl.DateTimeFormat("en", {
-                        month: "short",
-                        day: "numeric",
-                        timeZone: "America/Edmonton",
-                      }).format(new Date(decision.updated))}
-                    </time>
+                    <div className="document-filters">
+                      <Button
+                        variant={myReviews ? "secondary" : "outline"}
+                        className="filter-button"
+                        aria-pressed={myReviews}
+                        onClick={() => setMyReviews(!myReviews)}
+                      >
+                        <CheckCircleIcon aria-hidden="true" />
+                        My reviews
+                      </Button>
+                      <MultiFilter
+                        label="Status"
+                        values={status}
+                        options={statuses}
+                        onChange={setStatus}
+                      />
+                      {!activeCollection && (
+                        <MultiFilter
+                          label="Collection"
+                          values={collection}
+                          options={collections}
+                          onChange={setCollection}
+                        />
+                      )}
+                      <FilterMenu
+                        label="Sort"
+                        value={sort}
+                        options={["Last updated", "Name"]}
+                        onChange={setSort}
+                      />
+                    </div>
                   </div>
-                ))}
-                {filtered.length === 0 && (
-                  <div className="documents-empty">
-                    <FileTextIcon aria-hidden="true" />
-                    <h3>No matching documents</h3>
-                    <p>Try another search or clear the filters.</p>
-                    <Button variant="outline" onClick={resetFilters}>
-                      Clear search & filters
-                    </Button>
+                  <div className="document-list">
+                    <div className="document-table-heading" aria-hidden="true">
+                      <span>Document</span>
+                      <span>Status</span>
+                      <span>Created by</span>
+                      <span>Reviewers</span>
+                      <span>Updated</span>
+                    </div>
+                    {filtered.map((decision) => (
+                      <div className="document-row" key={decision.id}>
+                        <button
+                          type="button"
+                          className="document-title-cell"
+                          onClick={() => openDocument(decision.id)}
+                        >
+                          <FileTextIcon aria-hidden="true" />
+                          <span>
+                            <strong>{decision.title}</strong>
+                            <small>
+                              {decision.description || "No description yet"}
+                            </small>
+                          </span>
+                        </button>
+                        <div className="document-status-cell">
+                          <Status status={decision.status} />
+                        </div>
+                        <div className="document-creator-cell">
+                          <PersonAvatar id={decision.creator} />
+                          <span>
+                            {people[decision.creator].name.split(" ")[0]}
+                          </span>
+                        </div>
+                        <div
+                          className="document-reviewers-cell"
+                          aria-label={`Requested reviewers: ${decision.reviewers.map((id) => people[id].name).join(", ") || "None"}`}
+                        >
+                          {decision.reviewers.length ? (
+                            <div className="reviewer-stack">
+                              {decision.reviewers.map((id) => (
+                                <PersonAvatar key={id} id={id} />
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </div>
+                        <time
+                          className="document-updated-cell"
+                          dateTime={decision.updated}
+                        >
+                          {new Intl.DateTimeFormat("en", {
+                            month: "short",
+                            day: "numeric",
+                            timeZone: "America/Edmonton",
+                          }).format(new Date(decision.updated))}
+                        </time>
+                      </div>
+                    ))}
+                    {filtered.length === 0 && (
+                      <div className="documents-empty">
+                        <FileTextIcon aria-hidden="true" />
+                        <h3>No matching documents</h3>
+                        <p>Try another search or clear the filters.</p>
+                        <Button variant="outline" onClick={resetFilters}>
+                          Clear search & filters
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              <div className="document-list-footer">
-                <span role="status">
-                  {filtered.length} of {orgDocuments.length} documents
-                </span>
-                <span>
-                  <UsersIcon aria-hidden="true" />
-                  Shared with your team
-                </span>
-              </div>
-            </section>
-          </div>
-        )}
+                  <div className="document-list-footer">
+                    <span role="status">
+                      {filtered.length} of{" "}
+                      {activeCollection
+                        ? orgDocuments.filter(
+                            (decision) =>
+                              decision.collection === activeCollection,
+                          ).length
+                        : orgDocuments.length}{" "}
+                      documents
+                    </span>
+                    <span>
+                      <UsersIcon aria-hidden="true" />
+                      Shared with your team
+                    </span>
+                  </div>
+                </section>
+              )}
+            </div>
+          )}
+        </div>
       </main>
       <Dialog open={mobileOpen} onOpenChange={setMobileOpen}>
         <DialogPopup className="dashboard-mobile-popup">
@@ -683,8 +748,7 @@ export function Dashboard() {
           <DialogHeader>
             <DialogTitle>New document</DialogTitle>
             <DialogDescription>
-              Create a draft in {organization}. Preview changes last until you
-              reload.
+              Create a draft in {organization}.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={createDocument}>
@@ -718,9 +782,7 @@ export function Dashboard() {
                   id="document-collection"
                   name="collection"
                   defaultValue={
-                    collection === "All collections"
-                      ? "Engineering"
-                      : collection
+                    activeCollection || collection[0] || "Engineering"
                   }
                 >
                   {collections.map((name) => (
@@ -755,7 +817,7 @@ export function Dashboard() {
           <DialogHeader>
             <DialogTitle>Profile</DialogTitle>
             <DialogDescription>
-              This dashboard uses a sample team profile.
+              Manage your account and team workspace.
             </DialogDescription>
           </DialogHeader>
           <DialogPanel>

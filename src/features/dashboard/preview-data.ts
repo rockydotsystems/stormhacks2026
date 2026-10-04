@@ -138,9 +138,10 @@ export function filterDecisions(
   filters: {
     organization: string;
     query: string;
-    status: string;
-    collection: string;
-    view: string;
+    status: string[];
+    collection: string[];
+    myReviews: boolean;
+    scope: string | null;
     sort: string;
   },
 ) {
@@ -153,15 +154,13 @@ export function filterDecisions(
           `${decision.title} ${decision.description} ${people[decision.creator].name}`
             .toLowerCase()
             .includes(query)) &&
-        (filters.status === "All statuses" ||
-          decision.status === filters.status) &&
-        (filters.collection === "All collections" ||
-          decision.collection === filters.collection) &&
-        (filters.view !== "My reviews" ||
+        (!filters.status.length || filters.status.includes(decision.status)) &&
+        (!filters.collection.length ||
+          filters.collection.includes(decision.collection)) &&
+        (!filters.scope || decision.collection === filters.scope) &&
+        (!filters.myReviews ||
           (decision.status === "In review" &&
-            decision.reviewers.includes("matthew"))) &&
-        (filters.view !== "Bound decisions" || decision.status === "Bound") &&
-        (filters.view !== "Created by me" || decision.creator === "matthew"),
+            decision.reviewers.includes("matthew"))),
     )
     .sort((a, b) =>
       filters.sort === "Name"

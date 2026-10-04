@@ -365,9 +365,6 @@ export function Workspace() {
               </span>
               <h1 className="truncate font-medium">{active.title}</h1>
             </div>
-            <span className="ml-auto shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] text-muted-foreground">
-              Preview
-            </span>
             <Button
               variant="ghost"
               size="icon-sm"
@@ -566,9 +563,6 @@ export function Workspace() {
                 </div>
               </div>
             </form>
-            <p className="mt-2.5 text-center text-[10px] text-muted-foreground">
-              UI preview · Sample replies · Nothing is sent to an AI provider
-            </p>
           </div>
         </section>
         {selectedDocument && (

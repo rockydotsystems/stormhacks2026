@@ -56,3 +56,15 @@ an absent title and clearing it, opening documents, inspecting the recently
 viewed list, and creating a draft with reviewers. At narrow widths, open the
 navigation dialog and verify its keyboard dismissal. Run `pnpm check` and
 `pnpm deploy:check` before publication.
+
+## Dashboard navigation and filters
+
+The dashboard frame fills the viewport. Its header and border remain fixed while
+the inner document area scrolls. Documents is the cross-collection list; Collections
+is a separate directory with document lists inside Engineering, Infrastructure,
+and Product. Requested reviews are a list toggle, and bound decisions are selected
+through the Status filter. Status and Collection use searchable Coss multi-select
+comboboxes: selections within a filter combine with OR, and different filters
+combine with AND. Empty selections include all values. Clearing filters inside a
+collection retains that collection's scope. Sidebar search and UI preview labels
+have been removed; data is still held in memory.
