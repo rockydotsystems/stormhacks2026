@@ -49,7 +49,9 @@ import type { OrganizationActor } from "@/features/organizations/contracts";
 // The agent as the session service sees it. It can run a turn and nothing else: no publish, no
 // doc access. The real PlanningService satisfies this shape.
 export type AgentStreamEvent =
-  { type: "delta"; text: string } | { type: "final"; result: AgentTurnResult };
+  | { type: "reasoning"; text: string }
+  | { type: "delta"; text: string }
+  | { type: "final"; result: AgentTurnResult };
 
 export interface AgentPort {
   runTurn(input: AgentTurnInput): Promise<AgentTurnResult>;
@@ -125,6 +127,7 @@ function listItem(row: ConversationRow): ConversationListItem {
     title: row.title,
     phase: row.phase,
     hasDocument: row.docId !== null,
+    documentId: row.docId,
     createdAt: iso(row.createdAt),
     updatedAt: iso(row.updatedAt),
   };
@@ -212,14 +215,15 @@ export class PlanningSessionService {
   }
 
   // Every method starts here. A conversation another user owns is a 404, never a 403.
+  // The conversation's own organization decides what the user acts as. A conversation bound to
+  // a document lives in the document's organization, which may not be the personal one.
   private async load(userId: string, id: string) {
-    const actor = await this.dependencies.workspaceContext.resolveActor(userId);
-    const conversation = await this.store.findConversation(
-      userId,
-      actor.organizationId,
-      id,
-    );
+    const conversation = await this.store.findOwnedConversation(userId, id);
     if (!conversation) throw new ApiError(404, "Conversation not found.");
+    const actor: OrganizationActor = {
+      userId,
+      organizationId: conversation.organizationId,
+    };
     return { actor, conversation };
   }
 
@@ -228,11 +232,46 @@ export class PlanningSessionService {
     input: CreateConversationInput,
   ): Promise<ConversationDetail> {
     const parsed = createConversationSchema.parse(input);
+    if (parsed.documentId && parsed.organizationId) {
+      return this.bindToDocument(userId, {
+        title: parsed.projectName,
+        documentId: parsed.documentId,
+        organizationId: parsed.organizationId,
+      });
+    }
     const actor = await this.dependencies.workspaceContext.resolveActor(userId);
     const conversation = await this.store.createConversation({
       userId,
       organizationId: actor.organizationId,
       title: parsed.projectName,
+    });
+    return this.detail(actor, conversation);
+  }
+
+  // Plans a document that already exists. The docs layer checks that the user belongs to the
+  // organization and that the document is in it. One conversation plans one document, so asking
+  // again returns the same conversation.
+  private async bindToDocument(
+    userId: string,
+    input: { title: string; documentId: string; organizationId: string },
+  ): Promise<ConversationDetail> {
+    const actor: OrganizationActor = {
+      userId,
+      organizationId: input.organizationId,
+    };
+    const changes = await this.docs.listChanges(actor, input.documentId);
+    const existing = await this.store.findConversationByDoc(
+      userId,
+      input.documentId,
+    );
+    if (existing) return this.detail(actor, existing);
+    const hasText = Boolean(changes.at(-1)?.content.trim());
+    const conversation = await this.store.createConversation({
+      userId,
+      organizationId: input.organizationId,
+      title: input.title,
+      docId: input.documentId,
+      phase: hasText ? "generated" : "grilling",
     });
     return this.detail(actor, conversation);
   }
@@ -397,7 +436,12 @@ export class PlanningSessionService {
         for await (const event of this.dependencies.planningService.streamTurn(
           prepared.input,
         )) {
-          if (event.type === "delta") {
+          if (event.type === "reasoning") {
+            yield envelope({
+              type: "reasoning.delta" as const,
+              text: event.text,
+            });
+          } else if (event.type === "delta") {
             yield envelope({
               type: "message.delta" as const,
               text: event.text,
@@ -652,8 +696,11 @@ export class PlanningSessionService {
         };
       } else {
         const docId = conversation.docId;
-        // An edit that restores the previous change's text is recorded as a revert.
-        if (previous && sameDocument(previous, draft)) {
+        if (!working) {
+          // The first text for a document that already existed with none.
+          mode = "generated";
+        } else if (previous && sameDocument(previous, draft)) {
+          // An edit that restores the previous change's text is recorded as a revert.
           mode = "reverted";
           revertedTo = previous.changeId;
         }
@@ -707,8 +754,9 @@ export class PlanningSessionService {
   ) {
     if (!conversation.docId) return { working: null, previous: null };
     const changes = await this.docs.listChanges(actor, conversation.docId);
+    // A document the dashboard just created holds one empty change. That is no draft yet.
     const toDraft = (change: DocChange | undefined): Draft | null =>
-      change
+      change?.content.trim()
         ? { changeId: change.id, title: change.title, content: change.content }
         : null;
     return {

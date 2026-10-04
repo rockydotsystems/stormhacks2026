@@ -14,7 +14,11 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import type { ChecklistEntry } from "@/features/planning/contracts";
+import {
+  normalizeQuestions,
+  type ChecklistEntry,
+  type Phase,
+} from "@/features/planning/contracts";
 import { DocsService } from "@/features/docs/server/docs.service";
 import { projects } from "@/features/projects/server/schema";
 import type {
@@ -61,7 +65,7 @@ function toMessage(row: typeof planningMessages.$inferSelect): MessageRow {
     role: row.role,
     content: row.content,
     via: row.via,
-    questions: row.questions,
+    questions: row.questions ? normalizeQuestions(row.questions) : null,
     clientMessageId: row.clientMessageId,
     createdAt: row.createdAt,
   };
@@ -98,12 +102,40 @@ export class DrizzlePlanningSessionStore implements PlanningSessionStore {
     userId: string;
     organizationId: string;
     title: string;
+    docId?: string | null;
+    phase?: Phase;
   }) {
     const [row] = await this.dependencies.db
       .insert(planningConversations)
       .values(input)
       .returning();
     return toConversation(row);
+  }
+
+  async findOwnedConversation(userId: string, id: string) {
+    const [row] = await this.dependencies.db
+      .select()
+      .from(planningConversations)
+      .where(
+        and(
+          eq(planningConversations.id, id),
+          eq(planningConversations.userId, userId),
+        ),
+      );
+    return row ? toConversation(row) : null;
+  }
+
+  async findConversationByDoc(userId: string, docId: string) {
+    const [row] = await this.dependencies.db
+      .select()
+      .from(planningConversations)
+      .where(
+        and(
+          eq(planningConversations.docId, docId),
+          eq(planningConversations.userId, userId),
+        ),
+      );
+    return row ? toConversation(row) : null;
   }
 
   async findConversation(userId: string, organizationId: string, id: string) {

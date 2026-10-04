@@ -1,5 +1,6 @@
 "use client";
 
+import type { Question } from "@/features/planning/contracts";
 import {
   ArrowUpIcon,
   FileTextIcon,
@@ -62,6 +63,15 @@ import { cn } from "@/lib/utils";
 // the conversation. This component shows it, and keeps only the turn in flight, the reply
 // streaming in, and the last failure. A conversation is created on the first message, so an
 // empty "New conversation" never reaches the database.
+// The first suggestion of each question, as chips above the composer.
+function suggestionsOf(questions: Question[]) {
+  return questions.flatMap((q) =>
+    q.suggestions[0]
+      ? [{ question: q.text, suggestion: q.suggestions[0] }]
+      : [],
+  );
+}
+
 export function PlanningConversation({
   serverId,
   active,
@@ -359,29 +369,27 @@ export function PlanningConversation({
               </Button>
             </div>
           ) : null}
-          {questions.some((q) => q.suggestion) ? (
+          {suggestionsOf(questions).length > 0 ? (
             <div
               className="mb-3 flex flex-wrap gap-2"
               role="group"
               aria-label="Suggested answers"
             >
-              {questions
-                .filter((q) => q.suggestion)
-                .map((q) => (
-                  <Button
-                    key={q.text}
-                    size="sm"
-                    variant="outline"
-                    title={q.text}
-                    className="h-auto max-w-full whitespace-normal py-1.5 text-left text-xs sm:h-auto"
-                    onClick={() => {
-                      setDraft(q.suggestion ?? "");
-                      composer.current?.focus();
-                    }}
-                  >
-                    {q.suggestion}
-                  </Button>
-                ))}
+              {suggestionsOf(questions).map(({ question, suggestion }) => (
+                <Button
+                  key={`${question}:${suggestion}`}
+                  size="sm"
+                  variant="outline"
+                  title={question}
+                  className="h-auto max-w-full whitespace-normal py-1.5 text-left text-xs sm:h-auto"
+                  onClick={() => {
+                    setDraft(suggestion);
+                    composer.current?.focus();
+                  }}
+                >
+                  {suggestion}
+                </Button>
+              ))}
             </div>
           ) : null}
           {phase === "generated" ? (

@@ -3,6 +3,7 @@ import {
   CORE_CHECKLIST_IDS,
   documentDraftSchema,
   editResultSchema,
+  normalizeQuestions,
   turnAnalysisSchema,
   type AgentTurnInput,
   type AgentTurnResult,
@@ -21,6 +22,7 @@ import {
 import {
   ALLOWED_IDS,
   EXTRA_IDS,
+  MUST_COVER_IDS,
   SKILL_VERSION,
 } from "@/features/planning/skill/planning-skill";
 import { ApiError } from "@/server/errors";
@@ -33,13 +35,21 @@ const NOTHING_TO_REVERT = "There is no earlier version to go back to.";
 const SHRINK_BLOCKED =
   "I did not change the document. That edit would have removed most of it. If you meant to shorten or remove that much, say so and I will do it.";
 
+// Items the interview cannot end without, covered in full. See the planning skill.
+const MUST_BE_COVERED = MUST_COVER_IDS;
+
+// How hard the model thinks while interviewing. Generation and edits stay on the default.
+const ANALYSIS_REASONING = "medium" as const;
+
 // A rewrite below this share of the old length needs the user to have asked for it.
 const SHRINK_RATIO = 0.25;
 const SHRINK_INTENT =
   /\b(delete|remove|shorten|rewrite|trim|cut|drop|condense|simplify|start over|clear|replace)\b/i;
 
 export type TurnEvent =
-  { type: "delta"; text: string } | { type: "final"; result: AgentTurnResult };
+  | { type: "reasoning"; text: string }
+  | { type: "delta"; text: string }
+  | { type: "final"; result: AgentTurnResult };
 
 export class PlanningService {
   constructor(private readonly dependencies: { model: ModelPort }) {}
@@ -70,8 +80,12 @@ export class PlanningService {
       this.analysisRequest(input),
     );
     let sent = "";
-    for await (const partial of stream.partials) {
-      const reply = (partial as { reply?: unknown } | null)?.reply;
+    for await (const event of stream.events) {
+      if (event.type === "reasoning") {
+        yield { type: "reasoning", text: event.text };
+        continue;
+      }
+      const reply = (event.value as { reply?: unknown } | null)?.reply;
       if (
         typeof reply === "string" &&
         reply.length > sent.length &&
@@ -96,6 +110,7 @@ export class PlanningService {
       messages: input.messages,
       schema: turnAnalysisSchema,
       schemaName: "TurnAnalysis",
+      reasoning: ANALYSIS_REASONING,
     };
   }
 
@@ -149,7 +164,7 @@ export class PlanningService {
     }
     return {
       reply: analysis.reply,
-      questions: analysis.questions,
+      questions: normalizeQuestions(analysis.questions),
       checklist,
       phase: nextPhase,
       document: null,
@@ -278,7 +293,15 @@ function sanitize(entry: ChecklistEntry): ChecklistEntry {
   return { id: entry.id, status: entry.status, evidence };
 }
 
-/** Every core item and every tracked extra is covered or partial. */
+/**
+ * The interview may end when the items the document cannot be written without are fully
+ * covered and nothing else is missing. Every other core item and tracked extra may stay
+ * partial, because a partial entry names its open decision and the document records it.
+ */
 export function isSatisfied(checklist: ChecklistEntry[]): boolean {
-  return checklist.every((entry) => entry.status !== "missing");
+  const byId = new Map(checklist.map((entry) => [entry.id, entry]));
+  const required = MUST_BE_COVERED.every(
+    (id) => byId.get(id)?.status === "covered",
+  );
+  return required && checklist.every((entry) => entry.status !== "missing");
 }

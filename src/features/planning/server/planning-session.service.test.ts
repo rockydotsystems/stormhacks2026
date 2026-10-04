@@ -63,7 +63,9 @@ describe("PlanningSessionService", () => {
   it("persists a grilling turn without creating a document", async () => {
     ctx.agent.enqueue({
       reply: "Who searches?",
-      questions: [{ text: "Who searches?", suggestion: "On-call engineers" }],
+      questions: [
+        { text: "Who searches?", suggestions: ["On-call engineers"] },
+      ],
       checklist: [{ id: "pain", status: "covered", evidence: "waste time" }],
     });
     const result = await ctx.service.sendMessage(user, id, {
@@ -76,7 +78,7 @@ describe("PlanningSessionService", () => {
       "assistant",
     ]);
     expect(result.assistantMessage.questions).toEqual([
-      { text: "Who searches?", suggestion: "On-call engineers" },
+      { text: "Who searches?", suggestions: ["On-call engineers"] },
     ]);
     expect(ctx.docs.calls).toEqual([]);
   });
@@ -461,5 +463,79 @@ describe("PlanningSessionService", () => {
       expect(await ctx.service.listConversations(other)).toEqual([]);
       expect(ctx.docs.calls.filter((c) => c === "publish")).toEqual([]);
     });
+  });
+});
+
+describe("PlanningSessionService: a document that already exists", () => {
+  const user = "user-a";
+  const org = "org-dashboard";
+  const actor = { userId: user, organizationId: org };
+
+  async function bound() {
+    const ctx = setup();
+    const doc = await ctx.docs.create(actor, "project", draft("Doc", ""));
+    const detail = await ctx.service.createConversation(user, {
+      projectName: "Doc",
+      documentId: doc.id,
+      organizationId: org,
+    });
+    return { ...ctx, doc, detail };
+  }
+
+  it("plans the document instead of creating another", async () => {
+    const { service, agent, docs, doc, detail } = await bound();
+    expect(detail.documentId).toBe(doc.id);
+    expect(detail.phase).toBe("grilling");
+    agent.enqueue(generate);
+    const sent = await service.sendMessage(user, detail.id, {
+      text: "Build incident search.",
+    });
+    expect(docs.calls.filter((call) => call === "create")).toHaveLength(1);
+    expect(sent.conversation.documentId).toBe(doc.id);
+    expect(sent.conversation.workingDocument?.content).toBe(
+      "# Context\n\nFirst text.",
+    );
+    expect(sent.conversation.changes.at(-1)?.source?.mode).toBe("generated");
+  });
+
+  it("returns the same conversation when asked again", async () => {
+    const { service, doc, detail } = await bound();
+    const again = await service.createConversation(user, {
+      projectName: "Doc",
+      documentId: doc.id,
+      organizationId: org,
+    });
+    expect(again.id).toBe(detail.id);
+  });
+
+  it("starts in the generated phase when the document already has text", async () => {
+    const ctx = setup();
+    const doc = await ctx.docs.create(actor, "project", draft("Doc", "# Text"));
+    const detail = await ctx.service.createConversation(user, {
+      projectName: "Doc",
+      documentId: doc.id,
+      organizationId: org,
+    });
+    expect(detail.phase).toBe("generated");
+  });
+
+  it("refuses a document in another organization", async () => {
+    const { service, doc } = await bound();
+    await expect(
+      service.createConversation(user, {
+        projectName: "Doc",
+        documentId: doc.id,
+        organizationId: "org-elsewhere",
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("acts as the document's organization on later calls", async () => {
+    const { service, detail } = await bound();
+    const loaded = await service.getConversation(user, detail.id);
+    expect(loaded.id).toBe(detail.id);
+    await expect(
+      service.getConversation("someone-else", detail.id),
+    ).rejects.toMatchObject({ status: 404 });
   });
 });

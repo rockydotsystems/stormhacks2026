@@ -74,13 +74,17 @@ export class PlanningSessionController {
   async create(request: Request) {
     const user = await this.dependencies.authService.requireUser();
     assertSameOrigin(request);
-    const body = createConversationSchema
-      .partial()
-      .safeParse(await readOptionalJson(request));
-    if (!body.success) throw new ApiError(400, "Project name is invalid.");
-    const detail = await this.service.createConversation(user.id, {
-      projectName: body.data.projectName ?? DEFAULT_PROJECT_NAME,
-    });
+    const raw = await readOptionalJson(request);
+    const fields: Record<string, unknown> =
+      raw && typeof raw === "object" ? { ...raw } : {};
+    // An organization only means something next to the document it holds.
+    if (!fields.documentId) delete fields.organizationId;
+    if (typeof fields.projectName !== "string") {
+      fields.projectName = DEFAULT_PROJECT_NAME;
+    }
+    const body = createConversationSchema.safeParse(fields);
+    if (!body.success) throw new ApiError(400, "Conversation is invalid.");
+    const detail = await this.service.createConversation(user.id, body.data);
     return json(detail, 201);
   }
 

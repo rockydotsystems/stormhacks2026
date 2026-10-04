@@ -99,15 +99,28 @@ export type CommitRevertResult = {
 // All reads and writes the session service needs. The Drizzle implementation is the real one.
 // Tests use an in-memory implementation, so service rules run without a database.
 export interface PlanningSessionStore {
+  // A conversation bound to an existing doc starts with that doc and, when the doc already has
+  // text, in the generated phase.
   createConversation(input: {
     userId: string;
     organizationId: string;
     title: string;
+    docId?: string | null;
+    phase?: Phase;
   }): Promise<ConversationRow>;
   findConversation(
     userId: string,
     organizationId: string,
     id: string,
+  ): Promise<ConversationRow | null>;
+  // By owner only. The conversation's own organization decides what the user acts as.
+  findOwnedConversation(
+    userId: string,
+    id: string,
+  ): Promise<ConversationRow | null>;
+  findConversationByDoc(
+    userId: string,
+    docId: string,
   ): Promise<ConversationRow | null>;
   listConversations(
     userId: string,

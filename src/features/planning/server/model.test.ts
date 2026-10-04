@@ -133,8 +133,9 @@ describe("streamObject", () => {
     });
     const stream = model.streamObject({ messages: [], schema });
     const replies: string[] = [];
-    for await (const partial of stream.partials) {
-      const reply = (partial as { reply?: string }).reply;
+    for await (const event of stream.events) {
+      if (event.type !== "partial") continue;
+      const reply = (event.value as { reply?: string }).reply;
       if (reply !== undefined && reply !== replies.at(-1)) replies.push(reply);
     }
     expect(replies).toEqual(["hello", "hello worl", "hello world"]);
@@ -147,7 +148,7 @@ describe("streamObject", () => {
   it("FakeModel rejects the result with invalid-output when the object is invalid", async () => {
     const model = new FakeModel({ object: { reply: 1 } });
     const stream = model.streamObject({ messages: [], schema });
-    for await (const partial of stream.partials) void partial;
+    for await (const event of stream.events) void event;
     await expect(stream.result).rejects.toMatchObject({
       kind: "invalid-output",
     });
@@ -179,8 +180,9 @@ describe("streamObject", () => {
       schema,
     });
     const replies: string[] = [];
-    for await (const partial of stream.partials) {
-      const reply = (partial as { reply?: string }).reply;
+    for await (const event of stream.events) {
+      if (event.type !== "partial") continue;
+      const reply = (event.value as { reply?: string }).reply;
       if (reply !== undefined) replies.push(reply);
     }
     expect(replies.length).toBeGreaterThan(1);

@@ -50,7 +50,7 @@ function checklist(
 function analysis(overrides: Partial<TurnAnalysis> = {}): TurnAnalysis {
   return {
     reply: "Who uses it?",
-    questions: [{ text: "Who uses it?", suggestion: null }],
+    questions: [{ text: "Who uses it?", suggestions: [] }],
     checklist: checklist("missing"),
     userSignal: "continue",
     ...overrides,
@@ -529,5 +529,96 @@ describe("prompt", () => {
     expect(messages[2].content).toMatch(
       /^=====WORKING DOCUMENT[\s\S]*=====USER MESSAGE=====\nadd a risk$/,
     );
+  });
+});
+
+describe("interview gate", () => {
+  function partialExceptRequired(): ChecklistEntry[] {
+    return CORE_CHECKLIST_IDS.map((id) => ({
+      id,
+      status: ["pain", "users", "goals", "scope", "requirements"].includes(id)
+        ? "covered"
+        : "partial",
+      evidence: "open decision",
+    }));
+  }
+
+  it("keeps grilling while a required item is only partial", async () => {
+    const { service } = setup({
+      analysis: analysis({
+        checklist: checklist("partial", "vaguely mentioned"),
+      }),
+    });
+    const response = await service.runTurn(input());
+    expect(response.phase).toBe("grilling");
+  });
+
+  it("asks to confirm once required items are covered and the rest are at least partial", async () => {
+    const { service } = setup({
+      analysis: analysis({ checklist: partialExceptRequired() }),
+    });
+    const response = await service.runTurn(input());
+    expect(response.phase).toBe("awaiting-confirmation");
+  });
+
+  it("keeps grilling when any item is missing", async () => {
+    const entries = partialExceptRequired();
+    entries[entries.length - 1] = {
+      id: "openChoices",
+      status: "missing",
+      evidence: null,
+    };
+    const { service } = setup({ analysis: analysis({ checklist: entries }) });
+    const response = await service.runTurn(input());
+    expect(response.phase).toBe("grilling");
+  });
+
+  it("caps and cleans the questions of a round", async () => {
+    const { service } = setup({
+      analysis: analysis({
+        questions: [
+          { text: " One? ", suggestions: ["a", "a", " b ", "c", "d", "e"] },
+          { text: "Two?", suggestions: [] },
+          { text: "Three?", suggestions: ["x"] },
+          { text: "Four?", suggestions: ["y"] },
+          { text: "  ", suggestions: ["z"] },
+        ],
+      }),
+    });
+    const response = await service.runTurn(input());
+    expect(response.questions).toEqual([
+      { text: "One?", suggestions: ["a", "b", "c", "d"] },
+      { text: "Two?", suggestions: [] },
+      { text: "Three?", suggestions: ["x"] },
+    ]);
+  });
+});
+
+describe("reasoning", () => {
+  it("streams reasoning before the reply and asks the model to reason", async () => {
+    const model = new FakeModel({
+      object: analysis(),
+      reasoning: "Checking what is missing.",
+    });
+    const service = new PlanningService({ model });
+    const events = await collect(service.streamTurn(input()));
+    const kinds = events.map((event) => event.type);
+    expect(kinds[0]).toBe("reasoning");
+    expect(kinds.at(-1)).toBe("final");
+    expect(
+      events
+        .flatMap((event) => (event.type === "reasoning" ? event.text : ""))
+        .join(""),
+    ).toBe("Checking what is missing.");
+    expect(model.requests[0].reasoning).toBe("medium");
+  });
+});
+
+describe("generation prompt", () => {
+  it("shows the model one complete MADR example as format only", () => {
+    const prompt = buildGenerationPrompt({ checklist: [] });
+    expect(prompt).toContain("=====EXAMPLE DOCUMENT (format only)=====");
+    for (const heading of MADR_HEADINGS) expect(prompt).toContain(heading);
+    expect(prompt).not.toContain(EM_DASH);
   });
 });

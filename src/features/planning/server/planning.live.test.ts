@@ -90,7 +90,7 @@ async function turn(
       result.questions
         .map(
           (q) =>
-            `- Q: ${q.text}${q.suggestion ? ` (suggestion: ${q.suggestion})` : ""}`,
+            `- Q: ${q.text}${q.suggestions.length ? ` (suggestions: ${q.suggestions.join(" / ")})` : ""}`,
         )
         .join("\n"),
     );

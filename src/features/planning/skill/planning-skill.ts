@@ -4,7 +4,7 @@ import { CORE_CHECKLIST_IDS } from "@/features/planning/contracts";
 // It is versioned. Every run records SKILL_VERSION so a draft traces to the checklist that produced it.
 // Bump the version on any change to items, descriptions, criteria or triggers.
 
-export const SKILL_VERSION = "2026-10-03.2";
+export const SKILL_VERSION = "2026-10-03.3";
 
 export type SkillItem = {
   id: string;
@@ -119,6 +119,19 @@ export const SKILL_ITEMS: SkillItem[] = [...CORE_ITEMS, ...EXTRA_ITEMS];
 
 export const CORE_IDS: readonly string[] = CORE_CHECKLIST_IDS;
 export const EXTRA_IDS: readonly string[] = EXTRA_ITEMS.map((item) => item.id);
+
+/**
+ * Items the interview cannot end without. They must be fully covered, because the document
+ * has nothing to say about the project without them. The other core items may stay partial
+ * with a named open decision.
+ */
+export const MUST_COVER_IDS: readonly string[] = [
+  "pain",
+  "users",
+  "goals",
+  "scope",
+  "requirements",
+];
 
 /** Ids the agent may report. Anything else is dropped by the server. */
 export const ALLOWED_IDS: ReadonlySet<string> = new Set(

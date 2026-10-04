@@ -11,9 +11,17 @@ import {
 // change by its display number, because draft deletion renumbers history. Use its id.
 // Terms: the working document is the latest change. The published document is the newest version.
 
-export const createConversationSchema = z.object({
-  projectName: z.string().trim().min(1).max(200),
-});
+export const createConversationSchema = z
+  .object({
+    projectName: z.string().trim().min(1).max(200),
+    // Plans an existing document instead of creating one. The organization names the one the
+    // document lives in. Both are given together.
+    documentId: z.string().uuid().optional(),
+    organizationId: z.string().trim().min(1).max(200).optional(),
+  })
+  .refine((value) => !value.documentId || Boolean(value.organizationId), {
+    message: "A document needs its organization.",
+  });
 export type CreateConversationInput = z.input<typeof createConversationSchema>;
 
 export const sendMessageSchema = z.object({
@@ -100,6 +108,8 @@ export const conversationListItemSchema = z.object({
   title: z.string(),
   phase: phaseSchema,
   hasDocument: z.boolean(),
+  // The document this conversation plans. Null until the first draft creates one.
+  documentId: z.string().uuid().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -154,6 +164,8 @@ const eventBase = z.object({
 });
 
 export const sessionEventSchema = z.discriminatedUnion("type", [
+  // The model's reasoning while it works out the reply. Shown live and never stored.
+  eventBase.extend({ type: z.literal("reasoning.delta"), text: z.string() }),
   eventBase.extend({ type: z.literal("message.delta"), text: z.string() }),
   eventBase.extend({
     type: z.literal("document.changed"),

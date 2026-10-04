@@ -145,7 +145,7 @@ describe("chatItems", () => {
 
 describe("prompts and typing", () => {
   const withQuestions = message("2", "assistant", "Two things", [
-    { text: "Who searches?", suggestion: "On-call engineers" },
+    { text: "Who searches?", suggestions: ["On-call engineers"] },
   ]);
 
   it("offers suggestions only for the latest assistant message when idle", () => {

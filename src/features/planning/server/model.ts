@@ -7,11 +7,15 @@ export type ChatMessage = {
   content: string;
 };
 
+// How hard the model thinks before it answers. Models without reasoning ignore it.
+export type ReasoningLevel = "none" | "low" | "medium" | "high";
+
 export type ModelRequest = {
   system?: string;
   messages: ChatMessage[];
   temperature?: number;
   signal?: AbortSignal;
+  reasoning?: ReasoningLevel;
 };
 
 export type ObjectRequest<T> = ModelRequest & {
@@ -20,9 +24,14 @@ export type ObjectRequest<T> = ModelRequest & {
   schemaDescription?: string;
 };
 
+export type ObjectStreamEvent =
+  | { type: "reasoning"; text: string }
+  /** A growing, unvalidated object. Each one extends the previous one. */
+  | { type: "partial"; value: unknown };
+
 export type ObjectStream<T> = {
-  /** Growing, unvalidated partial objects. Each one extends the previous one. */
-  partials: AsyncIterable<unknown>;
+  /** Reasoning deltas and partial objects, in the order they arrive. */
+  events: AsyncIterable<ObjectStreamEvent>;
   /** The final object, validated against the schema. Rejects with ModelError on failure. */
   result: Promise<T>;
 };

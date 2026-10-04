@@ -1,7 +1,8 @@
 import {
   generateObject,
   generateText,
-  streamObject,
+  Output,
+  parsePartialJson,
   streamText,
   type LanguageModel,
 } from "ai";
@@ -12,12 +13,22 @@ import {
   type ModelRequest,
   type ObjectRequest,
   type ObjectStream,
+  type ObjectStreamEvent,
+  type ReasoningLevel,
 } from "@/features/planning/server/model";
 
 // The only file that touches the AI SDK. Another provider means another createXModel function.
 
+// Providers read reasoning from their own model settings, so a reasoning level is a model
+// instance. A plain model ignores the level.
+export type ModelResolver = (reasoning?: ReasoningLevel) => LanguageModel;
+
 export class AiSdkModel implements ModelPort {
-  constructor(private readonly model: LanguageModel) {}
+  private readonly resolve: ModelResolver;
+
+  constructor(model: LanguageModel | ModelResolver) {
+    this.resolve = typeof model === "function" ? model : () => model;
+  }
 
   async generateText(request: ModelRequest): Promise<string> {
     try {
@@ -59,33 +70,51 @@ export class AiSdkModel implements ModelPort {
   }
 
   streamObject<T>(request: ObjectRequest<T>): ObjectStream<T> {
-    const run = streamObject({
+    let failure: unknown;
+    const run = streamText({
       ...this.options(request),
-      schema: request.schema,
-      schemaName: request.schemaName,
-      schemaDescription: request.schemaDescription,
+      output: Output.object({
+        schema: request.schema,
+        name: request.schemaName,
+        description: request.schemaDescription,
+      }),
+      onError: ({ error }) => {
+        failure = error;
+      },
     });
-    const partials = (async function* () {
+    const events = (async function* (): AsyncGenerator<ObjectStreamEvent> {
+      let json = "";
       try {
-        for await (const partial of run.partialObjectStream) yield partial;
+        for await (const part of run.stream) {
+          if (part.type === "reasoning-delta") {
+            if (part.text) yield { type: "reasoning", text: part.text };
+          } else if (part.type === "text-delta") {
+            json += part.text;
+            const parsed = await parsePartialJson(json);
+            if (parsed.value !== undefined && parsed.value !== null) {
+              yield { type: "partial", value: parsed.value };
+            }
+          }
+        }
       } catch (error) {
         throw toModelError(error);
       }
+      if (failure) throw toModelError(failure);
     })();
-    const result = run.object.then(
+    const result = Promise.resolve(run.output).then(
       (object) => object as T,
       (error: unknown) => {
-        throw toModelError(error);
+        throw toModelError(failure ?? error);
       },
     );
-    // A consumer may stop reading after the partials fail. Avoid an unhandled rejection.
+    // A consumer may stop reading after the events fail. Avoid an unhandled rejection.
     result.catch(() => undefined);
-    return { partials, result };
+    return { events, result };
   }
 
   private options(request: ModelRequest) {
     return {
-      model: this.model,
+      model: this.resolve(request.reasoning),
       system: request.system,
       messages: request.messages,
       temperature: request.temperature,
@@ -99,15 +128,20 @@ export function createOpenRouterModel(options: {
   model: string;
 }): ModelPort {
   const openrouter = createOpenRouter({ apiKey: options.apiKey });
-  return new AiSdkModel(openrouter(options.model));
+  return new AiSdkModel((reasoning) =>
+    reasoning
+      ? openrouter(options.model, { reasoning: { effort: reasoning } })
+      : openrouter(options.model),
+  );
 }
 
 function toModelError(error: unknown): ModelError {
   if (error instanceof ModelError) return error;
   const name = error instanceof Error ? error.name : "";
-  const kind = /NoObjectGenerated|TypeValidation|JSONParse/i.test(name)
-    ? "invalid-output"
-    : "provider";
+  const kind =
+    /NoObjectGenerated|NoOutputGenerated|TypeValidation|JSONParse/i.test(name)
+      ? "invalid-output"
+      : "provider";
   const message = error instanceof Error ? error.message : "Model call failed.";
   return new ModelError(kind, message, { cause: error });
 }

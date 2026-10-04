@@ -136,6 +136,7 @@ type EventOf<T extends SessionEvent["type"]> = Extract<
 >;
 
 export type StreamHandlers = {
+  onReasoning?: (text: string) => void;
   onDelta?: (text: string) => void;
   onDocumentChanged?: (event: EventOf<"document.changed">) => void;
   signal?: AbortSignal;
@@ -203,6 +204,9 @@ export async function streamMessage(
     if (seen.has(event.id)) return;
     seen.add(event.id);
     switch (event.type) {
+      case "reasoning.delta":
+        handlers.onReasoning?.(event.text);
+        break;
       case "message.delta":
         handlers.onDelta?.(event.text);
         break;

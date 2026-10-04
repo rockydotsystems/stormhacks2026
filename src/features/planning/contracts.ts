@@ -49,12 +49,48 @@ export const userSignalSchema = z.enum([
 ]);
 export type UserSignal = z.infer<typeof userSignalSchema>;
 
+// Limits for one round of staged questions. The prompt tells the model these and the server
+// enforces them, because JSON-schema bounds are not reliable across providers.
+export const MAX_QUESTIONS_PER_ROUND = 3;
+export const MAX_SUGGESTIONS_PER_QUESTION = 4;
+
 export const questionSchema = z.object({
   text: z.string(),
-  // The agent may suggest an answer. The user accepts it or answers differently.
-  suggestion: z.string().nullable(),
+  // Answers the agent suggests, best first. The user picks one, types their own, or skips.
+  suggestions: z.array(z.string()),
 });
 export type Question = z.infer<typeof questionSchema>;
+
+// Trims, dedupes and caps questions. Also reads rows stored before suggestions became a list,
+// which carry `suggestion: string | null`.
+export function normalizeQuestions(stored: unknown): Question[] {
+  if (!Array.isArray(stored)) return [];
+  return stored
+    .flatMap((raw): Question[] => {
+      if (raw === null || typeof raw !== "object") return [];
+      const { text, suggestions, suggestion } = raw as Record<string, unknown>;
+      if (typeof text !== "string" || !text.trim()) return [];
+      const list = Array.isArray(suggestions)
+        ? suggestions
+        : typeof suggestion === "string"
+          ? [suggestion]
+          : [];
+      const cleaned = list
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean);
+      return [
+        {
+          text: text.trim(),
+          suggestions: [...new Set(cleaned)].slice(
+            0,
+            MAX_SUGGESTIONS_PER_QUESTION,
+          ),
+        },
+      ];
+    })
+    .slice(0, MAX_QUESTIONS_PER_ROUND);
+}
 
 // Model output for one grilling turn.
 export const turnAnalysisSchema = z.object({

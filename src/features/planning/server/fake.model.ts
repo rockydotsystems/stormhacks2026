@@ -4,6 +4,7 @@ import {
   type ModelRequest,
   type ObjectRequest,
   type ObjectStream,
+  type ObjectStreamEvent,
 } from "@/features/planning/server/model";
 
 // Deterministic adapter for tests and offline development. It records every request.
@@ -17,6 +18,8 @@ export class FakeModel implements ModelPort {
       /** One value, or a function of the request (use a counter for multi-step scripts). */
       object?: unknown | ((request: ModelRequest) => unknown);
       chunkSize?: number;
+      /** Reasoning text streamed before the object when a request asks for reasoning. */
+      reasoning?: string;
     } = {},
   ) {}
 
@@ -36,7 +39,8 @@ export class FakeModel implements ModelPort {
     const size = this.script.chunkSize ?? 4;
     const result = Promise.resolve().then(() => this.validate(request, raw));
     result.catch(() => undefined);
-    return { partials: partialsOf(raw, size, request.signal), result };
+    const reasoning = request.reasoning ? this.script.reasoning : undefined;
+    return { events: eventsOf(raw, size, reasoning, request.signal), result };
   }
 
   async *streamText(request: ModelRequest): AsyncIterable<string> {
@@ -67,6 +71,23 @@ export class FakeModel implements ModelPort {
   private textFor(request: ModelRequest): string {
     const { text } = this.script;
     return typeof text === "function" ? text(request) : (text ?? "");
+  }
+}
+
+async function* eventsOf(
+  raw: unknown,
+  size: number,
+  reasoning: string | undefined,
+  signal?: AbortSignal,
+): AsyncIterable<ObjectStreamEvent> {
+  if (reasoning) {
+    for (let i = 0; i < reasoning.length; i += size) {
+      if (signal?.aborted) return;
+      yield { type: "reasoning", text: reasoning.slice(i, i + size) };
+    }
+  }
+  for await (const value of partialsOf(raw, size, signal)) {
+    yield { type: "partial", value };
   }
 }
 

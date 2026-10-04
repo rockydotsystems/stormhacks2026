@@ -238,12 +238,16 @@ export class InMemoryStore implements PlanningSessionStore {
     userId: string;
     organizationId: string;
     title: string;
+    docId?: string | null;
+    phase?: ConversationRow["phase"];
   }) {
     const row: ConversationRow = {
       id: randomUUID(),
-      ...input,
-      docId: null,
-      phase: "grilling",
+      userId: input.userId,
+      organizationId: input.organizationId,
+      title: input.title,
+      docId: input.docId ?? null,
+      phase: input.phase ?? "grilling",
       checklist: [],
       skillVersion: null,
       createdAt: new Date(),
@@ -251,6 +255,18 @@ export class InMemoryStore implements PlanningSessionStore {
     };
     this.conversations.set(row.id, row);
     return { ...row };
+  }
+
+  async findOwnedConversation(userId: string, id: string) {
+    const row = this.conversations.get(id);
+    return row && row.userId === userId ? { ...row } : null;
+  }
+
+  async findConversationByDoc(userId: string, docId: string) {
+    const row = [...this.conversations.values()].find(
+      (item) => item.userId === userId && item.docId === docId,
+    );
+    return row ? { ...row } : null;
   }
 
   async findConversation(userId: string, organizationId: string, id: string) {
