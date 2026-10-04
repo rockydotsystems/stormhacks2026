@@ -1,18 +1,15 @@
 "use client";
 
 import { File, MultiFileDiff } from "@pierre/diffs/react";
+import { useTheme } from "@/features/account/components/theme-provider";
 
 // The document is markdown, and the file name is how the viewer picks its highlighting.
 const NAME = "document.md";
 
-// Follows the app's theme switch when it is set, and the system setting otherwise.
-function themeType() {
-  const theme = document.documentElement.dataset.theme;
-  return theme === "dark" || theme === "light" ? theme : "system";
-}
-
 /** The change from `before` to `after`, with the unchanged lines around it. */
 export function DiffView({ before, after }: { before: string; after: string }) {
+  // The app's own light or dark choice, so the viewer matches it rather than the system setting.
+  const { resolvedTheme } = useTheme();
   return (
     <div className="history-code">
       <MultiFileDiff
@@ -23,7 +20,7 @@ export function DiffView({ before, after }: { before: string; after: string }) {
           disableFileHeader: true,
           expandUnchanged: true,
           overflow: "wrap",
-          themeType: themeType(),
+          themeType: resolvedTheme,
         }}
       />
     </div>
@@ -32,6 +29,7 @@ export function DiffView({ before, after }: { before: string; after: string }) {
 
 /** The document text on its own, with line numbers. */
 export function RawView({ content }: { content: string }) {
+  const { resolvedTheme } = useTheme();
   return (
     <div className="history-code">
       <File
@@ -39,7 +37,7 @@ export function RawView({ content }: { content: string }) {
         options={{
           disableFileHeader: true,
           overflow: "wrap",
-          themeType: themeType(),
+          themeType: resolvedTheme,
         }}
       />
     </div>

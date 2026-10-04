@@ -2254,3 +2254,22 @@ a {
   border-radius: 10px;
   overflow: hidden;
 }
+
+/* The viewer's light green is faint. These custom properties reach inside its shadow DOM. */
+:root:not(.dark) .history-code {
+  --diffs-bg-addition-override: color-mix(
+    in srgb,
+    var(--success) 24%,
+    transparent
+  );
+  --diffs-bg-addition-number-override: color-mix(
+    in srgb,
+    var(--success) 32%,
+    transparent
+  );
+  --diffs-bg-addition-emphasis-override: color-mix(
+    in srgb,
+    var(--success) 42%,
+    transparent
+  );
+}
