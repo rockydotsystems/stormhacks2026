@@ -138,7 +138,7 @@ Transfers of installations between local organizations are not implemented.
 ## Published ADR reviews
 
 PR `opened`, `reopened`, `synchronize`, `ready_for_review`, and `edited` events
-transactionally enqueue `github_review_jobs` alongside delivery deduplication.
+transactionally enqueue `github_review_jobs` alongside delivery deduplication. Once a new eligible review is committed, the webhook immediately posts a PR comment listing the frozen published ADR versions and confirming that the review is queued. This acknowledgement does not wait for the cron or model. Equivalent events and repeated deliveries do not post another acknowledgement; skipped reviews do not claim to be queued. If GitHub rejects the acknowledgement, the review stays queued and the Worker logs `GitHub ADR review acknowledgement failed` with its job ID.
 The repository's existing project links determine scope: every non-deleted linked
 project contributes the latest published version of each non-deleted document.
 Documents without a publication never enter the review. If a repository belongs
@@ -171,7 +171,7 @@ than posted. Missing or incomplete textual diffs become explicit limitations.
 The bot submits one GitHub `COMMENT` review containing a version/commit summary
 and inline findings. It never approves, requests changes, or creates a merge
 gate. Publication citations link to authenticated
-`GET /api/github/decisions/:versionId`, which returns the frozen snapshot and
+`/documents/:documentId?version=:versionId`, which opens the published snapshot in the document viewer. The authenticated `GET /api/github/decisions/:versionId` endpoint also returns the frozen snapshot and
 checks WorkOS membership. Readers need access to the workspace to open it.
 
 Repository access and PR commit/description/draft state are rechecked before

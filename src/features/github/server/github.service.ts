@@ -28,6 +28,7 @@ import {
   reviewPullRequestSchema,
 } from "@stormhacks/data/github-review/contracts";
 import { enqueueReview } from "./github-review.service";
+import { formatReviewAcknowledgement } from "./review";
 
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 const remoteId = z
@@ -507,7 +508,7 @@ export class GitHubService {
   async webhook(deliveryId: string, event: string, payload: WebhookPayload) {
     const installationId = payload.installation?.id;
     if (!installationId) return;
-    await this.dependencies.db.transaction(async (tx) => {
+    const queued = await this.dependencies.db.transaction(async (tx) => {
       const [installation] = await tx
         .select()
         .from(githubInstallations)
@@ -566,7 +567,7 @@ export class GitHubService {
         reviewActions.has(payload.action || "") &&
         payload.pull_request
       ) {
-        await enqueueReview(
+        return enqueueReview(
           tx,
           deliveryId,
           {
@@ -612,5 +613,25 @@ export class GitHubService {
         }
       }
     });
+    if (queued && payload.repository) {
+      try {
+        const token = await this.github.installationToken(
+          installationId,
+          Number(payload.repository.id),
+        );
+        await this.github.createPullRequestComment(
+          token,
+          queued.input.owner,
+          queued.input.repository,
+          queued.input.pullRequest.number,
+          formatReviewAcknowledgement(queued.input, appOrigin()),
+        );
+      } catch {
+        // The review is already durable; a failed acknowledgement must not discard it.
+        console.error("GitHub ADR review acknowledgement failed", {
+          jobId: queued.id,
+        });
+      }
+    }
   }
 }

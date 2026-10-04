@@ -83,7 +83,7 @@ export async function enqueueReview(
       }),
     )
     .digest("hex");
-  await tx
+  const [job] = await tx
     .insert(githubReviewJobs)
     .values({
       deliveryId,
@@ -94,7 +94,9 @@ export async function enqueueReview(
       status: reason ? "skipped" : "pending",
       reason,
     })
-    .onConflictDoNothing();
+    .onConflictDoNothing()
+    .returning({ id: githubReviewJobs.id });
+  return job && !reason ? { id: job.id, input } : undefined;
 }
 
 export class GitHubReviewService {

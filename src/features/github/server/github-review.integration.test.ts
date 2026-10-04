@@ -50,6 +50,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
     let pr: ReviewPullRequest;
     const generateObject = vi.fn();
     const fetcher = vi.fn<typeof fetch>();
+    let acknowledgements: string[];
     let posted: {
       id: number;
       body: string;
@@ -131,6 +132,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         base: { sha: "b".repeat(40) },
       };
       posted = [];
+      acknowledgements = [];
       fetcher.mockReset();
       generateObject.mockReset();
       generateObject.mockImplementation(async (request) => {
@@ -173,6 +175,15 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               patch: "@@ -0,0 +1 @@\n+retry(() => createTodo());",
             },
           ]);
+        if (parsed.pathname === "/repos/team/todo/issues/1/comments") {
+          expect(init?.method).toBe("POST");
+          // The queue transaction must have committed before an external write.
+          expect(
+            await client`SELECT id FROM github_review_jobs WHERE status = 'pending'`,
+          ).not.toHaveLength(0);
+          acknowledgements.push(JSON.parse(init!.body as string).body);
+          return Response.json({ id: acknowledgements.length });
+        }
         if (parsed.pathname.endsWith("/reviews")) {
           if (init?.method === "POST") {
             const payload = JSON.parse(init.body as string);
@@ -267,6 +278,17 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       const [job] = await jobs();
       expect((await jobs()).length).toBe(1);
       expect(job.input.decisions).toHaveLength(2);
+      expect(acknowledgements).toHaveLength(1);
+      expect(acknowledgements[0]).toContain("queued a review");
+      expect(acknowledgements[0]).toContain(
+        `/documents/${documentId}?version=${versionId}`,
+      );
+      expect(acknowledgements[0]).toContain("UI · v1");
+      expect(acknowledgements[0]).not.toMatch(
+        /DRAFT ONLY|UNPUBLISHED ONLY|UNRELATED ONLY/,
+      );
+      expect(generateObject).not.toHaveBeenCalled();
+
       expect(JSON.stringify(job.input)).not.toMatch(
         /DRAFT ONLY|UNPUBLISHED ONLY|UNRELATED ONLY/,
       );
@@ -287,7 +309,9 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       await Promise.all([reviewer.processNext(), reviewer.processNext()]);
       expect(generateObject).toHaveBeenCalledTimes(1);
       expect(posted).toHaveLength(1);
-      expect(posted[0].body).toContain(`/api/github/decisions/${versionId}`);
+      expect(posted[0].body).toContain(
+        `/documents/${documentId}?version=${versionId}`,
+      );
       expect(JSON.stringify(generateObject.mock.calls)).not.toContain(
         "Retries are allowed in v2.",
       );
@@ -400,6 +424,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       await enqueue();
       await enqueue();
       expect(await jobs()).toHaveLength(1);
+      expect(acknowledgements).toHaveLength(1);
       const change = await docs.addChange(actor, documentId, {
         title: "Amended",
         content: "Retries are allowed.",
@@ -417,6 +442,27 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         status: "skipped",
         reason: "No published ADRs in a linked project.",
       });
+      expect(acknowledgements).toHaveLength(2);
+    });
+
+    it("keeps the queued review when the immediate acknowledgement fails", async () => {
+      const normal = fetcher.getMockImplementation()!;
+      fetcher.mockImplementation(async (url, init) => {
+        if (String(url).endsWith("/comments"))
+          throw new Error("private-provider-details");
+        return normal(url, init);
+      });
+      const log = vi.spyOn(console, "error").mockImplementation(() => {});
+      await enqueue();
+      expect((await jobs())[0].status).toBe("pending");
+      expect(JSON.stringify(log.mock.calls)).toContain(
+        "acknowledgement failed",
+      );
+      expect(JSON.stringify(log.mock.calls)).not.toContain(
+        "private-provider-details",
+      );
+      await reviewer.processNext();
+      expect((await jobs())[0].status).toBe("completed");
     });
 
     it("recovers expired leases and serves frozen publication citations only to members", async () => {

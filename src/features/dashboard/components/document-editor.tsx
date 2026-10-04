@@ -135,11 +135,14 @@ export function DocumentWorkspace({
   const documentPaneId = useId();
   const searchParams = useSearchParams();
   const linkedChangeId = searchParams.get("change");
-  const [pane, setPane] = useState("conversation");
+  const linkedVersionId = searchParams.get("version");
+  const [pane, setPane] = useState(
+    linkedVersionId ? "document" : "conversation",
+  );
   const [reviewers, setReviewers] = useState<TeamData["members"]>([]);
   const [publishOpen, setPublishOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(Boolean(linkedChangeId));
-  const [versionId, setVersionId] = useState("draft");
+  const [versionId, setVersionId] = useState(linkedVersionId || "draft");
   const version = data.versions.find((item) => item.id === versionId);
   const frozen = data.changes.find((item) => item.id === version?.changeId);
   const displayed = frozen || latest;

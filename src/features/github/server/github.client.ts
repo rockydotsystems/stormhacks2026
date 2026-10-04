@@ -322,6 +322,21 @@ export class GitHubClient {
     );
   }
 
+  createPullRequestComment(
+    token: string,
+    owner: string,
+    repo: string,
+    number: number,
+    body: string,
+  ) {
+    return this.request(
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${number}/comments`,
+      token,
+      z.object({ id }),
+      { method: "POST", body: JSON.stringify({ body }) },
+    );
+  }
+
   createReview(
     token: string,
     owner: string,

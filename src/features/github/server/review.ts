@@ -130,6 +130,20 @@ const quote = (value: string) =>
 export const reviewMarker = (jobId: string) =>
   `<!-- published-adr-review:${jobId} -->`;
 
+export function formatReviewAcknowledgement(
+  input: ReviewInput,
+  origin: string,
+) {
+  return [
+    "This repository is linked to a project with published ADRs. I've queued a review of these changes against the following published versions:",
+    ...input.decisions.map(
+      (decision) =>
+        `- [${markdown(decision.title)} · v${decision.number}](${origin}/documents/${decision.documentId}?version=${decision.versionId})`,
+    ),
+    `Commit: \`${input.pullRequest.head.sha}\`. The review runs in the background and will appear separately. Unpublished draft changes are excluded.`,
+  ].join("\n\n");
+}
+
 export function formatReview(
   jobId: string,
   input: ReviewInput,
@@ -138,7 +152,7 @@ export function formatReview(
 ) {
   const citation = (versionId: string) => {
     const decision = input.decisions.find((d) => d.versionId === versionId)!;
-    return `[${markdown(decision.title)} · v${decision.number}](${origin}/api/github/decisions/${decision.versionId})`;
+    return `[${markdown(decision.title)} · v${decision.number}](${origin}/documents/${decision.documentId}?version=${decision.versionId})`;
   };
   return {
     commit_id: input.pullRequest.head.sha,

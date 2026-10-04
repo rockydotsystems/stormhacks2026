@@ -145,7 +145,9 @@ describe("published decision evidence", () => {
       "https://app.test",
     );
     expect(formatted.commit_id).toBe(input.pullRequest.head.sha);
-    expect(formatted.body).toContain(`/api/github/decisions/${versionId}`);
+    expect(formatted.body).toContain(
+      `/documents/${input.decisions[0].documentId}?version=${versionId}`,
+    );
     expect(formatted.body).not.toContain("@someone");
     expect(formatted.body).not.toContain("<img>");
     expect(formatted.comments[0]).toMatchObject({
