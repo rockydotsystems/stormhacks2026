@@ -176,6 +176,8 @@ export function PlanningSession({
     (item) => item.role === "assistant",
   )?.key;
   const thinking = busy && showTyping(ui);
+  // The generate message starts the first draft, which takes much longer than a normal reply.
+  const drafting = busy && ui.pending?.text === GENERATE_TEXT;
 
   return (
     <section className="planning-session" aria-label="Planning session">
@@ -291,7 +293,21 @@ export function PlanningSession({
         {busy ? (
           <div className="planning-message planning-message-assistant">
             <ReasoningBlock text={ui.reasoningText} live={thinking} />
-            {thinking && !ui.reasoningText ? (
+            {drafting ? (
+              <div
+                className="planning-drafting"
+                role="status"
+                aria-label="Writing the document"
+              >
+                <Spinner className="size-3.5" />
+                <span>
+                  <strong>Writing your document…</strong>
+                  <small>
+                    This can take a minute. It opens here when it is ready.
+                  </small>
+                </span>
+              </div>
+            ) : thinking && !ui.reasoningText ? (
               <div
                 className="planning-activity"
                 role="status"
@@ -314,17 +330,6 @@ export function PlanningSession({
             onDismiss={() => dispatch({ type: "dismiss" })}
           />
         ) : null}
-        {popupOpen && lastAssistant ? (
-          <QuestionPrompt
-            key={lastAssistant.id}
-            questions={questions}
-            onSubmit={submitAnswers}
-            onDismiss={() => {
-              setClosedFor(lastAssistant.id);
-              composer.current?.focus();
-            }}
-          />
-        ) : null}
         {conversation && phase !== "generated" && items.length > 0 ? (
           <ChecklistStrip checklist={conversation.checklist}>
             <Button
@@ -337,6 +342,17 @@ export function PlanningSession({
               <SparkleIcon aria-hidden="true" /> Skip ahead &amp; draft
             </Button>
           </ChecklistStrip>
+        ) : null}
+        {popupOpen && lastAssistant ? (
+          <QuestionPrompt
+            key={lastAssistant.id}
+            questions={questions}
+            onSubmit={submitAnswers}
+            onDismiss={() => {
+              setClosedFor(lastAssistant.id);
+              composer.current?.focus();
+            }}
+          />
         ) : null}
         <form className="planning-composer" onSubmit={submit}>
           <Textarea

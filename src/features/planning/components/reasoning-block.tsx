@@ -2,7 +2,20 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CaretRightIcon } from "@phosphor-icons/react";
-import { Spinner } from "@/components/ui/spinner";
+
+// One, two, then three dots, over and over. The width is fixed so the label does not shift.
+function Ellipsis() {
+  const [dots, setDots] = useState(1);
+  useEffect(() => {
+    const timer = setInterval(() => setDots((n) => (n % 3) + 1), 400);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <span aria-hidden="true" className="inline-block w-[1.5em] text-left">
+      {".".repeat(dots)}
+    </span>
+  );
+}
 
 /**
  * What the model reasoned before it answered. Open while the model is still thinking, then it
@@ -41,7 +54,8 @@ export function ReasoningBlock({
         />
         {live ? (
           <>
-            Thinking <Spinner className="size-3" />
+            Thinking
+            <Ellipsis />
           </>
         ) : (
           "Thought process"

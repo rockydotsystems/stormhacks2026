@@ -53,6 +53,7 @@ export function ChecklistStrip({
     >
       <Tooltip>
         <TooltipTrigger
+          delay={100}
           render={
             <button
               type="button"

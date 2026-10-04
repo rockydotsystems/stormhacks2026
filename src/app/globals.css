@@ -460,6 +460,20 @@ a {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 18px;
 }
+.project-card-wrap {
+  position: relative;
+  min-width: 0;
+  display: flex;
+}
+.project-card-wrap > .project-card {
+  flex: 1;
+}
+.project-card-menu {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+}
 .project-card {
   display: flex;
   flex-direction: column;
@@ -651,7 +665,7 @@ a {
 .document-row,
 .document-table-heading {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 105px 100px 86px 63px;
+  grid-template-columns: minmax(0, 1fr) 105px 100px 86px 63px 28px;
   gap: 16px;
   align-items: center;
 }
@@ -838,7 +852,7 @@ a {
   }
   .document-row,
   .document-table-heading {
-    grid-template-columns: minmax(0, 1fr) 93px 83px 68px 53px;
+    grid-template-columns: minmax(0, 1fr) 93px 83px 68px 53px 28px;
     gap: 10px;
   }
 }
@@ -856,7 +870,7 @@ a {
   }
   .document-row,
   .document-table-heading {
-    grid-template-columns: minmax(0, 1fr) 90px 75px 65px 52px;
+    grid-template-columns: minmax(0, 1fr) 90px 75px 65px 52px 28px;
   }
   .project-grid {
     gap: 10px;
@@ -1139,6 +1153,15 @@ a {
 .dashboard-topbar > nav {
   min-width: 0;
 }
+.dashboard-topbar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+.document-actions-cell {
+  display: flex;
+  justify-content: flex-end;
+}
 .dashboard-breadcrumb {
   display: flex;
   align-items: center;
@@ -1223,6 +1246,13 @@ a {
 .project-repository-label svg {
   width: 14px;
   height: 14px;
+}
+/* The empty message lines up with the "Repositories" label, the same height as a pill. */
+.project-repositories > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  color: var(--muted-foreground);
 }
 .project-repositories a {
   max-width: 100%;
@@ -1520,6 +1550,26 @@ a {
   font-size: 11px;
   margin-top: 24px;
 }
+.planning-drafting {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--muted);
+  color: var(--foreground);
+  font-size: 13px;
+}
+.planning-drafting > span {
+  display: grid;
+  gap: 2px;
+}
+.planning-drafting small {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
 .planning-stopped,
 .planning-read-only {
   font-size: 11px;
@@ -1612,14 +1662,16 @@ a {
 }
 .planning-answers span {
   font-size: 11px;
+  line-height: 1.5;
   color: var(--muted-foreground);
 }
 .planning-answers strong {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
 }
 .planning-answers strong[data-skipped] {
-  font-weight: 400;
   color: var(--muted-foreground);
 }
 .planning-reasoning {
