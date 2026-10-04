@@ -10,7 +10,7 @@ import {
 } from "./contracts";
 import { requireProject } from "./access";
 import { githubRepositories, projectRepositories, projects } from "./schema";
-import type { Database } from "../db";
+import type { Database, Page } from "../db";
 import { ApiError } from "../errors";
 
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -31,13 +31,16 @@ export class ProjectsService {
     return { ...row, createdAt: row.createdAt.toISOString() };
   }
 
-  async list(actor: OrganizationActor): Promise<Project[]> {
+  async list(actor: OrganizationActor, page?: Page): Promise<Project[]> {
     await requireOrganizationMember(this.dependencies.db, actor);
-    const rows = await this.dependencies.db
+    const query = this.dependencies.db
       .select()
       .from(projects)
       .where(eq(projects.organizationId, actor.organizationId))
       .orderBy(asc(projects.createdAt), asc(projects.id));
+    const rows = await (page
+      ? query.limit(page.limit).offset(page.offset)
+      : query);
     return rows.map((row) => ({
       ...row,
       createdAt: row.createdAt.toISOString(),
@@ -129,9 +132,13 @@ export class ProjectsService {
     });
   }
 
-  async listProjectRepositories(actor: OrganizationActor, projectId: string) {
+  async listProjectRepositories(
+    actor: OrganizationActor,
+    projectId: string,
+    page?: Page,
+  ) {
     await requireProject(this.dependencies.db, actor, projectId);
-    return this.dependencies.db
+    const query = this.dependencies.db
       .select({
         id: githubRepositories.id,
         organizationId: githubRepositories.organizationId,
@@ -145,5 +152,6 @@ export class ProjectsService {
       )
       .where(eq(projectRepositories.projectId, projectId))
       .orderBy(asc(githubRepositories.owner), asc(githubRepositories.name));
+    return page ? query.limit(page.limit).offset(page.offset) : query;
   }
 }

@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   bigint,
+  boolean,
   check,
   foreignKey,
   index,
@@ -49,6 +50,7 @@ export const docChanges = pgTable(
       .references(() => docs.id),
     title: text("title").notNull(),
     content: text("content").notNull(),
+    proposed: boolean("proposed").default(false).notNull(),
     createdBy: text("created_by")
       .notNull()
       .references(() => users.id),

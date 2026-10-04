@@ -10,7 +10,7 @@ import { docChanges, docs, docVersions } from "./schema";
 import type { OrganizationActor } from "../organizations/contracts";
 import { requireOrganizationMember } from "../organizations/membership";
 import { requireProject } from "../projects/access";
-import type { Database } from "../db";
+import type { Database, Page } from "../db";
 import { ApiError } from "../errors";
 
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -60,9 +60,9 @@ export class DocsService {
     });
   }
 
-  async list(actor: OrganizationActor, projectId: string) {
+  async list(actor: OrganizationActor, projectId: string, page?: Page) {
     await requireProject(this.dependencies.db, actor, projectId);
-    const rows = await this.dependencies.db
+    const query = this.dependencies.db
       .select()
       .from(docs)
       .where(
@@ -72,6 +72,9 @@ export class DocsService {
         ),
       )
       .orderBy(asc(docs.createdAt), asc(docs.id));
+    const rows = await (page
+      ? query.limit(page.limit).offset(page.offset)
+      : query);
     return rows.map((row) => ({
       ...row,
       createdAt: row.createdAt.toISOString(),
@@ -79,12 +82,29 @@ export class DocsService {
   }
 
   async addChange(actor: OrganizationActor, docId: string, input: Snapshot) {
+    return this.appendChange(actor, docId, input, false);
+  }
+
+  async proposeChange(
+    actor: OrganizationActor,
+    docId: string,
+    input: Snapshot,
+  ) {
+    return this.appendChange(actor, docId, input, true);
+  }
+
+  private async appendChange(
+    actor: OrganizationActor,
+    docId: string,
+    input: Snapshot,
+    proposed: boolean,
+  ) {
     const snapshot = snapshotSchema.parse(input);
     return this.dependencies.db.transaction(async (tx) => {
       await this.requireDoc(tx, actor, docId, true);
       const [row] = await tx
         .insert(docChanges)
-        .values({ docId, ...snapshot, createdBy: actor.userId })
+        .values({ docId, ...snapshot, proposed, createdBy: actor.userId })
         .returning();
       return {
         ...row,
@@ -102,17 +122,8 @@ export class DocsService {
     // One statement observes both history and its published boundary consistently.
     const rows = await this.dependencies.db
       .select({
-        id: docChanges.id,
-        docId: docChanges.docId,
-        title: docChanges.title,
+        ...this.changeSummaryFields(),
         content: docChanges.content,
-        createdBy: docChanges.createdBy,
-        createdAt: docChanges.createdAt,
-        number:
-          sql<number>`row_number() over (order by ${docChanges.id})`.mapWith(
-            Number,
-          ),
-        immutable: sql<boolean>`${docChanges.id} <= coalesce((select max(change_id) from doc_versions where doc_id = ${docChanges.docId}), 0)`,
       })
       .from(docChanges)
       .where(eq(docChanges.docId, docId))
@@ -122,6 +133,122 @@ export class DocsService {
       id: row.id.toString(),
       createdAt: row.createdAt.toISOString(),
     }));
+  }
+
+  private changeSummaryFields() {
+    return {
+      id: docChanges.id,
+      docId: docChanges.docId,
+      title: docChanges.title,
+      proposed: docChanges.proposed,
+      createdBy: docChanges.createdBy,
+      createdAt: docChanges.createdAt,
+      number: sql<number>`row_number() over (order by ${docChanges.id})`
+        .mapWith(Number)
+        .as("number"),
+      immutable:
+        sql<boolean>`${docChanges.id} <= coalesce((select max(change_id) from doc_versions where doc_id = doc_changes.doc_id), 0)`.as(
+          "immutable",
+        ),
+    };
+  }
+
+  private changeSummaryQuery(docId: string) {
+    return this.dependencies.db
+      .select(this.changeSummaryFields())
+      .from(docChanges)
+      .where(eq(docChanges.docId, docId));
+  }
+
+  async listChangeSummaries(
+    actor: OrganizationActor,
+    docId: string,
+    page?: Page,
+  ) {
+    await this.requireDoc(this.dependencies.db, actor, docId);
+    const query = this.changeSummaryQuery(docId).orderBy(asc(docChanges.id));
+    const rows = await (page
+      ? query.limit(page.limit).offset(page.offset)
+      : query);
+    return rows.map((row) => ({
+      ...row,
+      id: row.id.toString(),
+      createdAt: row.createdAt.toISOString(),
+    }));
+  }
+
+  async getChange(actor: OrganizationActor, docId: string, changeId: string) {
+    const id = BigInt(changeIdSchema.parse(changeId));
+    await this.requireDoc(this.dependencies.db, actor, docId);
+    const history = this.changeSummaryQuery(docId).as("history");
+    const [row] = await this.dependencies.db
+      .select({
+        id: history.id,
+        docId: history.docId,
+        title: history.title,
+        proposed: history.proposed,
+        createdBy: history.createdBy,
+        createdAt: history.createdAt,
+        number: history.number,
+        immutable: history.immutable,
+        content: docChanges.content,
+      })
+      .from(history)
+      .innerJoin(docChanges, eq(docChanges.id, history.id))
+      .where(eq(history.id, id));
+    if (!row) throw new ApiError(404, "Change not found.");
+    return {
+      ...row,
+      id: row.id.toString(),
+      createdAt: row.createdAt.toISOString(),
+    };
+  }
+
+  async getMetadata(actor: OrganizationActor, docId: string) {
+    await requireOrganizationMember(this.dependencies.db, actor);
+    // Correlated summaries share one statement's snapshot; no content bodies loaded.
+    const [row] = await this.dependencies.db
+      .select({
+        id: docs.id,
+        organizationId: docs.organizationId,
+        projectId: docs.projectId,
+        createdAt: docs.createdAt,
+        latestTitle: sql<
+          string | null
+        >`(select title from doc_changes where doc_id = docs.id order by id desc limit 1)`,
+        latestChangeId: sql<
+          string | null
+        >`(select id::text from doc_changes where doc_id = docs.id order by id desc limit 1)`,
+        lastChangedAt: sql<
+          string | null
+        >`(select created_at::text from doc_changes where doc_id = docs.id order by id desc limit 1)`,
+        changeCount:
+          sql<number>`(select count(*) from doc_changes where doc_id = docs.id)`.mapWith(
+            Number,
+          ),
+        versionCount:
+          sql<number>`(select count(*) from doc_versions where doc_id = docs.id)`.mapWith(
+            Number,
+          ),
+        latestVersionNumber: sql<
+          number | null
+        >`(select max(number) from doc_versions where doc_id = docs.id)`,
+        hasUnpublishedChanges: sql<boolean>`exists(select 1 from doc_changes where doc_id = docs.id and id > coalesce((select max(change_id) from doc_versions where doc_id = docs.id), 0))`,
+      })
+      .from(docs)
+      .where(
+        and(eq(docs.id, docId), eq(docs.organizationId, actor.organizationId)),
+      );
+    if (!row) throw new ApiError(404, "Doc not found.");
+    return {
+      ...row,
+      createdAt: row.createdAt.toISOString(),
+      lastChangedAt: row.lastChangedAt
+        ? new Date(row.lastChangedAt).toISOString()
+        : null,
+      latestVersion:
+        row.latestVersionNumber === null ? null : `v${row.latestVersionNumber}`,
+    };
   }
 
   async deleteChange(
@@ -181,13 +308,17 @@ export class DocsService {
   async listVersions(
     actor: OrganizationActor,
     docId: string,
+    page?: Page,
   ): Promise<DocVersion[]> {
     await this.requireDoc(this.dependencies.db, actor, docId);
-    const rows = await this.dependencies.db
+    const query = this.dependencies.db
       .select()
       .from(docVersions)
       .where(eq(docVersions.docId, docId))
       .orderBy(asc(docVersions.number));
+    const rows = await (page
+      ? query.limit(page.limit).offset(page.offset)
+      : query);
     return rows.map(versionDto);
   }
 

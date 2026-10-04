@@ -55,6 +55,61 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       return { actor, doc, project };
     }
 
+    it("keeps computed metadata and immutability scoped to each doc", async () => {
+      const { actor, doc } = await fixture();
+      const first = (await docs.listChanges(actor, doc.id))[0];
+      const proposal = await docs.proposeChange(actor, doc.id, {
+        title: "Proposed title",
+        content: "Full proposed body",
+      });
+      const unrelated = await fixture();
+      const unrelatedChange = (
+        await docs.listChanges(unrelated.actor, unrelated.doc.id)
+      )[0];
+      await docs.publish(unrelated.actor, unrelated.doc.id, unrelatedChange.id);
+      expect(await docs.listChanges(actor, doc.id)).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: first.id,
+            immutable: false,
+            proposed: false,
+          }),
+          expect.objectContaining({
+            id: proposal.id,
+            immutable: false,
+            proposed: true,
+          }),
+        ]),
+      );
+      expect(await docs.getChange(actor, doc.id, proposal.id)).toMatchObject({
+        content: "Full proposed body",
+        number: 2,
+        immutable: false,
+        proposed: true,
+      });
+      expect(await docs.getMetadata(actor, doc.id)).toMatchObject({
+        latestTitle: "Proposed title",
+        latestChangeId: proposal.id,
+        changeCount: 2,
+        versionCount: 0,
+        latestVersion: null,
+        hasUnpublishedChanges: true,
+      });
+      await docs.deleteChange(actor, doc.id, first.id);
+      expect(await docs.getChange(actor, doc.id, proposal.id)).toMatchObject({
+        number: 1,
+      });
+      await docs.deleteChange(actor, doc.id, proposal.id);
+      expect(await docs.getMetadata(actor, doc.id)).toMatchObject({
+        latestTitle: null,
+        latestChangeId: null,
+        lastChangedAt: null,
+        changeCount: 0,
+        latestVersion: null,
+        hasUnpublishedChanges: false,
+      });
+    });
+
     it("supports multiple projects and docs with membership and project-scoped access", async () => {
       const { actor, doc, project } = await fixture();
       const other = await fixture();

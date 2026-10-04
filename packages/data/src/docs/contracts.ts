@@ -30,6 +30,7 @@ export type DocChange = Snapshot & {
   docId: string;
   number: number;
   immutable: boolean;
+  proposed: boolean;
   createdBy: string;
   createdAt: string;
 };

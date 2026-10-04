@@ -92,7 +92,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       await migrate(db, { migrationsFolder: "./drizzle" });
       await migrate(db, { migrationsFolder: "./drizzle" });
       expect(await client`SELECT * FROM doc_changes ORDER BY id`).toEqual(
-        beforeChanges,
+        beforeChanges.map((row) => ({ ...row, proposed: false })),
       );
       expect(await client`SELECT * FROM doc_versions ORDER BY id`).toEqual(
         beforeVersions,

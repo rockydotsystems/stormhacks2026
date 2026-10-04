@@ -29,6 +29,13 @@
       "when": 1791077324067,
       "tag": "0003_quiet_randall_flagg",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791079101663,
+      "tag": "0004_proposed_snapshots",
+      "breakpoints": true
     }
   ]
 }
