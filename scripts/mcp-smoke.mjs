@@ -4,6 +4,7 @@ import { unstable_dev } from "wrangler";
 // Uses the real local Worker runtime; no remote auth or database is accessed.
 const worker = await unstable_dev("apps/mcp/src/index.ts", {
   config: "apps/mcp/wrangler.jsonc",
+  routes: [],
   vars: {
     AUTHKIT_ISSUER: "https://auth.example.com",
     MCP_RESOURCE_URL: "http://localhost:3001/mcp",

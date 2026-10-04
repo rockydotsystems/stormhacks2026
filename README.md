@@ -161,9 +161,9 @@ disposable staging account.
 app's MCP server. Choose Claude Code, OpenCode (V2), or Codex, copy the setup
 command, and complete the client's browser sign-in. Commands configure the agent
 for all projects on the user's device without collecting API keys or editing JSON.
-Set `MCP_RESOURCE_URL` in the web Worker's runtime environment to the registered
-MCP endpoint. If it is missing or invalid, the page shows command previews with
-copying disabled. A hosted MCP endpoint is not deployed yet; local setup uses
+The web and MCP Worker configurations use the registered hosted endpoint
+`https://mcp.whydidwechoosethis.tech/mcp`. If `MCP_RESOURCE_URL` is missing or
+invalid, the page shows command previews with copying disabled. Local setup uses
 `http://localhost:3001/mcp` and requires the separate MCP Worker to be running.
 See [MCP server](docs/mcp-server.md) for server setup and authorization requirements.
 
