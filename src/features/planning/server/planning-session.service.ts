@@ -826,6 +826,7 @@ export class PlanningSessionService {
       mode,
       revertedToChangeId: revertedTo,
       applyDocument: apply,
+      endStandby: false,
     });
     await this.announce(
       conversation.id,

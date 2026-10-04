@@ -296,6 +296,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           skillVersion: "x",
           mode: "generated",
           revertedToChangeId: null,
+          endStandby: false,
           applyDocument: async (txDocs) => {
             await txDocs.create(actor, id, {
               title: "Doomed",

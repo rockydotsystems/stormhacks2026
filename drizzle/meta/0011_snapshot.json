@@ -1,5 +1,5 @@
 {
-  "id": "e87cf8bc-8136-403d-acf7-8db45d8a2d5e",
+  "id": "1b04be8e-604d-4687-9542-598f8328319c",
   "prevId": "7096db29-7389-43a4-9e51-ead3a5428eca",
   "version": "7",
   "dialect": "postgresql",
@@ -1570,13 +1570,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "agreement_streak": {
-          "name": "agreement_streak",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
         "turn_locked_at": {
           "name": "turn_locked_at",
           "type": "timestamp with time zone",
@@ -1733,6 +1726,13 @@
           "primaryKey": false,
           "notNull": true
         },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'chat'"
+        },
         "via": {
           "name": "via",
           "type": "text",
@@ -1831,6 +1831,10 @@
         "planning_messages_author_check": {
           "name": "planning_messages_author_check",
           "value": "(\"planning_messages\".\"role\" = 'assistant') = (\"planning_messages\".\"author_user_id\" is null)"
+        },
+        "planning_messages_kind_check": {
+          "name": "planning_messages_kind_check",
+          "value": "\"planning_messages\".\"kind\" in ('chat', 'standby-start', 'standby-end')"
         },
         "planning_messages_via_check": {
           "name": "planning_messages_via_check",

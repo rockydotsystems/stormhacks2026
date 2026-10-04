@@ -28,13 +28,14 @@ export type ConversationRow = {
   checklist: ChecklistEntry[];
   skillVersion: string | null;
   // Standby: people are discussing, so the agent stays quiet. The discussion is every message
-  // after standbySinceMessageId. The streak counts consecutive agreement checks that passed.
+  // after standbySinceMessageId, which is the standby announcement.
   mode: "active" | "standby";
   standbySinceMessageId: string | null;
-  agreementStreak: number;
   createdAt: Date;
   updatedAt: Date;
 };
+
+export type MessageKind = "chat" | "standby-start" | "standby-end";
 
 export type ParticipantRow = {
   userId: string;
@@ -49,6 +50,8 @@ export type MessageRow = {
   // The human who wrote a user message. Null for the agent.
   authorUserId: string | null;
   content: string;
+  // The standby kinds are fixed notices written by the server.
+  kind: MessageKind;
   via: "text" | "voice";
   questions: Question[] | null;
   clientMessageId: string | null;
@@ -86,6 +89,8 @@ export type CommitTurnInput = {
   mode: ChangeMode;
   revertedToChangeId: string | null;
   applyDocument: ApplyDocument | null;
+  // Leaves standby in the same transaction, so the change and the mode move together.
+  endStandby: boolean;
 };
 
 export type CommitTurnResult = {
@@ -149,6 +154,22 @@ export interface PlanningSessionStore {
     userId: string,
     organizationId: string,
   ): Promise<ConversationRow[]>;
+  // Goes quiet: sets standby, writes the announcement and points standby at it. Null when the
+  // conversation is already in standby, so concurrent callers announce once.
+  enterStandby(
+    conversationId: string,
+    announcement: string,
+  ): Promise<{ conversation: ConversationRow; message: MessageRow } | null>;
+  // Listens again without applying anything. Null when the conversation is not in standby.
+  exitStandby(
+    conversationId: string,
+    notice: string,
+  ): Promise<{ conversation: ConversationRow; message: MessageRow } | null>;
+  // Ascending. Everything after a message, such as the discussion since standby began.
+  listMessagesAfter(
+    conversationId: string,
+    messageId: string,
+  ): Promise<MessageRow[]>;
   // Takes the turn lease. False when another turn holds an unexpired lease.
   claimTurn(conversationId: string, leaseSeconds: number): Promise<boolean>;
   releaseTurn(conversationId: string): Promise<void>;

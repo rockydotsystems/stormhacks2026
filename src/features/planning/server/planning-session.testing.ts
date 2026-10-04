@@ -223,6 +223,7 @@ export class InMemoryStore implements PlanningSessionStore {
       MessageRow,
       | "role"
       | "authorUserId"
+      | "kind"
       | "content"
       | "via"
       | "questions"
@@ -265,7 +266,6 @@ export class InMemoryStore implements PlanningSessionStore {
       skillVersion: null,
       mode: "active",
       standbySinceMessageId: null,
-      agreementStreak: 0,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -340,6 +340,48 @@ export class InMemoryStore implements PlanningSessionStore {
       .map((row) => ({ ...row }));
   }
 
+  async enterStandby(conversationId: string, announcement: string) {
+    const conversation = this.conversations.get(conversationId);
+    if (!conversation || conversation.mode === "standby") return null;
+    const message = this.newMessage(conversationId, {
+      role: "assistant",
+      authorUserId: null,
+      kind: "standby-start",
+      content: announcement,
+      via: "text",
+      questions: [],
+      clientMessageId: null,
+    });
+    conversation.mode = "standby";
+    conversation.standbySinceMessageId = message.id;
+    return { conversation: { ...conversation }, message };
+  }
+
+  async exitStandby(conversationId: string, notice: string) {
+    const conversation = this.conversations.get(conversationId);
+    if (!conversation || conversation.mode !== "standby") return null;
+    const message = this.newMessage(conversationId, {
+      role: "assistant",
+      authorUserId: null,
+      kind: "standby-end",
+      content: notice,
+      via: "text",
+      questions: [],
+      clientMessageId: null,
+    });
+    conversation.mode = "active";
+    conversation.standbySinceMessageId = null;
+    return { conversation: { ...conversation }, message };
+  }
+
+  async listMessagesAfter(conversationId: string, messageId: string) {
+    return this.messages.filter(
+      (row) =>
+        row.conversationId === conversationId &&
+        Number(row.id) > Number(messageId),
+    );
+  }
+
   async claimTurn(conversationId: string) {
     if (this.leases.has(conversationId)) return false;
     this.leases.add(conversationId);
@@ -383,6 +425,7 @@ export class InMemoryStore implements PlanningSessionStore {
     return {
       message: this.newMessage(conversationId, {
         role: "user",
+        kind: "chat",
         questions: null,
         ...input,
       }),
@@ -434,6 +477,7 @@ export class InMemoryStore implements PlanningSessionStore {
     const assistant = this.newMessage(conversation.id, {
       role: "assistant",
       authorUserId: null,
+      kind: "chat",
       content: input.reply,
       via: "text",
       questions: input.questions,
@@ -457,6 +501,7 @@ export class InMemoryStore implements PlanningSessionStore {
     const userMessage = this.newMessage(conversation.id, {
       role: "user",
       authorUserId: input.authorUserId,
+      kind: "chat",
       content: input.requestText,
       via: "text",
       questions: null,
@@ -467,6 +512,7 @@ export class InMemoryStore implements PlanningSessionStore {
     const assistant = this.newMessage(conversation.id, {
       role: "assistant",
       authorUserId: null,
+      kind: "chat",
       content: input.replyText,
       via: "text",
       questions: [],

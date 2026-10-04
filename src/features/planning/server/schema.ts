@@ -4,7 +4,6 @@ import {
   check,
   foreignKey,
   index,
-  integer,
   jsonb,
   pgTable,
   text,
@@ -55,8 +54,8 @@ export const planningConversations = pgTable(
       .notNull(),
     skillVersion: text("skill_version"),
     // Standby is the shared discussion state. While it holds, the agent does not answer messages.
-    // standby_since_message_id is the last message before standby began, so the discussion is
-    // every message after it. The streak counts consecutive agreement checks that passed.
+    // standby_since_message_id is the standby announcement, so the discussion is every message
+    // after it.
     mode: text("mode")
       .$type<"active" | "standby">()
       .default("active")
@@ -64,7 +63,6 @@ export const planningConversations = pgTable(
     standbySinceMessageId: bigint("standby_since_message_id", {
       mode: "bigint",
     }),
-    agreementStreak: integer("agreement_streak").default(0).notNull(),
     // Lease for the turn in flight. An expired lease can be claimed again, so a crash cannot wedge a conversation.
     turnLockedAt: timestamp("turn_locked_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -147,6 +145,12 @@ export const planningMessages = pgTable(
     // The human who wrote a user message. Null for the agent.
     authorUserId: text("author_user_id").references(() => users.id),
     content: text("content").notNull(),
+    // "chat" is an ordinary message. The standby kinds are fixed notices the server writes when
+    // the agent goes quiet or listens again, so the UI can show them as notices.
+    kind: text("kind")
+      .$type<"chat" | "standby-start" | "standby-end">()
+      .default("chat")
+      .notNull(),
     // Voice turns store the transcript only, never the audio.
     via: text("via").$type<"text" | "voice">().default("text").notNull(),
     // The agent's questions with optional suggested answers. Only on assistant messages.
@@ -165,6 +169,10 @@ export const planningMessages = pgTable(
     check(
       "planning_messages_author_check",
       sql`(${table.role} = 'assistant') = (${table.authorUserId} is null)`,
+    ),
+    check(
+      "planning_messages_kind_check",
+      sql`${table.kind} in ('chat', 'standby-start', 'standby-end')`,
     ),
     check(
       "planning_messages_via_check",
