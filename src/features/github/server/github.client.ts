@@ -134,19 +134,46 @@ export class GitHubClient {
         },
       );
     } catch {
+      console.error("GitHub OAuth exchange failed", { reason: "network" });
       throw new ApiError(
         502,
         "GitHub could not be reached. Try connecting again.",
       );
     }
-    const data = z
-      .object({ access_token: z.string().min(1) })
-      .safeParse(await readProviderJson(response));
-    if (!response.ok || !data.success)
+    let value: unknown;
+    try {
+      value = await readProviderJson(response);
+    } catch (error) {
+      console.error("GitHub OAuth exchange failed", {
+        reason: "invalid_response",
+        status: response.status,
+      });
+      throw error;
+    }
+    const data = z.object({ access_token: z.string().min(1) }).safeParse(value);
+    if (!response.ok || !data.success) {
+      const providerError = z
+        .object({
+          error: z.enum([
+            "bad_verification_code",
+            "incorrect_client_credentials",
+            "redirect_uri_mismatch",
+            "access_denied",
+            "unsupported_grant_type",
+          ]),
+        })
+        .safeParse(value);
+      console.error("GitHub OAuth exchange failed", {
+        reason: providerError.success
+          ? providerError.data.error
+          : "provider_rejected",
+        status: response.status,
+      });
       throw new ApiError(
         400,
         "GitHub authorization failed. Try connecting again.",
       );
+    }
     return data.data.access_token;
   }
 

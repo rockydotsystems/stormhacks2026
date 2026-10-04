@@ -2,9 +2,66 @@ import { generateKeyPairSync, verify } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GitHubClient } from "./github.client";
 
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
 
 describe("GitHub API adapter", () => {
+  it("logs only allowlisted OAuth diagnostics, never codes or provider details", async () => {
+    for (const key of [
+      "GITHUB_APP_ID",
+      "GITHUB_APP_SLUG",
+      "GITHUB_CLIENT_ID",
+      "GITHUB_CLIENT_SECRET",
+      "GITHUB_PRIVATE_KEY",
+      "GITHUB_WEBHOOK_SECRET",
+    ])
+      vi.stubEnv(key, "private-config-value");
+    const logger = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fetcher = vi.fn().mockResolvedValue(
+      Response.json(
+        {
+          error: "bad_verification_code",
+          error_description: "private-provider-details",
+          access_token: "private-token",
+        },
+        { status: 400 },
+      ),
+    );
+    await expect(
+      new GitHubClient(fetcher).exchangeCode(
+        "private-code",
+        "private-verifier",
+        "https://app.test/callback",
+      ),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(logger).toHaveBeenLastCalledWith("GitHub OAuth exchange failed", {
+      reason: "bad_verification_code",
+      status: 400,
+    });
+    fetcher.mockResolvedValue(
+      Response.json(
+        {
+          error: "private-arbitrary-error",
+          error_description: "private-provider-details",
+        },
+        { status: 400 },
+      ),
+    );
+    await expect(
+      new GitHubClient(fetcher).exchangeCode(
+        "private-code",
+        "private-verifier",
+        "https://app.test/callback",
+      ),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(logger).toHaveBeenLastCalledWith("GitHub OAuth exchange failed", {
+      reason: "provider_rejected",
+      status: 400,
+    });
+    expect(JSON.stringify(logger.mock.calls)).not.toContain("private-");
+  });
   it("uses bounded pagination and validates provider identities", async () => {
     const fetcher = vi
       .fn()

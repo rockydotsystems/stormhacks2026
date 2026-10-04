@@ -116,25 +116,38 @@ export class GitHubService {
   }
 
   async complete(userId: string, state: string, code: string) {
-    const context = await this.consumeState(userId, state);
-    const actor = { userId, organizationId: context.organizationId };
-    const token = await this.github.exchangeCode(
-      code,
-      context.verifier,
-      context.redirectUri,
-    );
-    const selection = randomState();
-    const hash = hashState(selection);
-    await this.dependencies.db.insert(githubSelections).values({
-      hash,
-      ...actor,
-      encryptedToken: sealToken(
+    let stage = "consume_state";
+    try {
+      const context = await this.consumeState(userId, state);
+      const actor = { userId, organizationId: context.organizationId };
+      stage = "exchange_code";
+      const token = await this.github.exchangeCode(
+        code,
+        context.verifier,
+        context.redirectUri,
+      );
+      const selection = randomState();
+      const hash = hashState(selection);
+      stage = "encrypt_selection";
+      const encryptedToken = sealToken(
         token,
         `${hash}:${userId}:${actor.organizationId}`,
-      ),
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-    });
-    return { organizationId: actor.organizationId, selection };
+      );
+      stage = "save_selection";
+      await this.dependencies.db.insert(githubSelections).values({
+        hash,
+        ...actor,
+        encryptedToken,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      });
+      return { organizationId: actor.organizationId, selection };
+    } catch (error) {
+      console.error("GitHub OAuth callback failed", {
+        stage,
+        status: error instanceof ApiError ? error.status : 500,
+      });
+      throw error;
+    }
   }
 
   private async pending(actor: OrganizationActor, selection: string) {
