@@ -96,7 +96,23 @@ export async function enqueueReview(
     })
     .onConflictDoNothing()
     .returning({ id: githubReviewJobs.id });
-  return job && !reason ? { id: job.id, input } : undefined;
+  if (!job || reason) return;
+  // The caller holds the installation row lock, serializing concurrent PR events.
+  // Only the first eligible job gets an acknowledgement, even after later edits or pushes.
+  const [previous] = await tx
+    .select({ id: githubReviewJobs.id })
+    .from(githubReviewJobs)
+    .where(
+      and(
+        eq(githubReviewJobs.repositoryId, context.repositoryId),
+        eq(githubReviewJobs.pullNumber, pullRequest.number),
+        sql`${githubReviewJobs.id} <> ${job.id}`,
+        // Admission skips never attempted a review; processing skips already got an acknowledgement.
+        sql`(${githubReviewJobs.status} <> 'skipped' or ${githubReviewJobs.attempts} > 0)`,
+      ),
+    )
+    .limit(1);
+  return previous ? undefined : { id: job.id, input };
 }
 
 export class GitHubReviewService {

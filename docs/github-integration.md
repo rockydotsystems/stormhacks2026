@@ -138,7 +138,7 @@ Transfers of installations between local organizations are not implemented.
 ## Published ADR reviews
 
 PR `opened`, `reopened`, `synchronize`, `ready_for_review`, and `edited` events
-transactionally enqueue `github_review_jobs` alongside delivery deduplication. Once a new eligible review is committed, the webhook immediately posts a PR comment listing the frozen published ADR versions and confirming that the review is queued. This acknowledgement does not wait for the cron or model. Equivalent events and repeated deliveries do not post another acknowledgement; skipped reviews do not claim to be queued. If GitHub rejects the acknowledgement, the review stays queued and the Worker logs `GitHub ADR review acknowledgement failed` with its job ID.
+transactionally enqueue `github_review_jobs` alongside delivery deduplication. Once the first eligible review for a PR is committed, the webhook immediately posts a PR comment listing the frozen published ADR versions and confirming that the review is queued. This acknowledgement does not wait for the cron or model. Later edits (including bot description updates), pushes, reopening, and repeated deliveries do not post another acknowledgement for that PR; fresh review inputs are still queued. Admission skips do not consume the acknowledgement. If GitHub rejects the acknowledgement, the review stays queued and the Worker logs `GitHub ADR review acknowledgement failed` with its job ID.
 The repository's existing project links determine scope: every non-deleted linked
 project contributes the latest published version of each non-deleted document.
 Documents without a publication never enter the review. If a repository belongs

@@ -175,7 +175,9 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               patch: "@@ -0,0 +1 @@\n+retry(() => createTodo());",
             },
           ]);
-        if (parsed.pathname === "/repos/team/todo/issues/1/comments") {
+        if (
+          /^\/repos\/team\/todo\/issues\/\d+\/comments$/.test(parsed.pathname)
+        ) {
           expect(init?.method).toBe("POST");
           // The queue transaction must have committed before an external write.
           expect(
@@ -442,7 +444,53 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         status: "skipped",
         reason: "No published ADRs in a linked project.",
       });
+      expect(acknowledgements).toHaveLength(1);
+    });
+
+    it("acknowledges once across concurrent bot description edits, pushes, and reopening", async () => {
+      const opened = payload();
+      const edited = {
+        ...payload(),
+        action: "edited",
+        pull_request: { ...pr, body: `${pr.body}\nCode review bot summary.` },
+      };
+      await Promise.all([
+        service.webhook(randomUUID(), "pull_request", opened),
+        service.webhook(randomUUID(), "pull_request", edited),
+      ]);
+      expect(await jobs()).toHaveLength(2);
+      expect(acknowledgements).toHaveLength(1);
+      // A completed or superseded review must not cause another acknowledgement.
+      await client`UPDATE github_review_jobs SET status = 'skipped', attempts = 1`;
+      pr = { ...pr, head: { sha: "c".repeat(40) } };
+      await service.webhook(randomUUID(), "pull_request", {
+        ...payload(),
+        action: "synchronize",
+      });
+      await service.webhook(randomUUID(), "pull_request", {
+        ...payload(),
+        action: "reopened",
+        pull_request: { ...pr, title: "Reopened PR" },
+      });
+      expect(await jobs()).toHaveLength(4);
+      expect(acknowledgements).toHaveLength(1);
+      pr = { ...pr, number: 2 };
+      await enqueue();
+      expect(await jobs()).toHaveLength(5);
       expect(acknowledgements).toHaveLength(2);
+    });
+
+    it("acknowledges the first eligible review after draft and no-publication skips", async () => {
+      pr = { ...pr, draft: true };
+      await enqueue();
+      pr = { ...pr, draft: false };
+      await projects.unlinkRepository(actor, projectId, repositoryId);
+      await enqueue();
+      expect(acknowledgements).toHaveLength(0);
+      await projects.linkRepository(actor, projectId, repositoryId);
+      await enqueue();
+      expect(acknowledgements).toHaveLength(1);
+      expect((await jobs())[2].status).toBe("pending");
     });
 
     it("keeps the queued review when the immediate acknowledgement fails", async () => {
