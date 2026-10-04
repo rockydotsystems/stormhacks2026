@@ -4,7 +4,6 @@ import Link from "next/link";
 import {
   CaretUpDownIcon,
   UserIcon,
-  UsersIcon,
   SignOutIcon,
   PlugsConnectedIcon,
 } from "@phosphor-icons/react";
@@ -97,10 +96,6 @@ export function AccountMenu() {
         <MenuLinkItem render={<Link href="/settings/mcp" />}>
           <PlugsConnectedIcon aria-hidden="true" />
           MCP configuration
-        </MenuLinkItem>
-        <MenuLinkItem render={<Link href="/settings/team" />}>
-          <UsersIcon aria-hidden="true" />
-          Team settings
         </MenuLinkItem>
         <MenuSeparator />
         <MenuLinkItem render={<Link href="/settings/github" />}>

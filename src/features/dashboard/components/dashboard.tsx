@@ -557,19 +557,6 @@ export function Dashboard({
                 <span className="sidebar-label">{label}</span>
               </Button>
             ))}
-            {settingsSection === "team" && (
-              <Button
-                variant="ghost"
-                className="sidebar-item sidebar-item-active"
-                render={<Link href="/settings/team" />}
-                aria-current="page"
-                aria-label="Team settings"
-                title="Team settings"
-              >
-                <UsersIcon aria-hidden="true" />
-                <span className="sidebar-label">Team settings</span>
-              </Button>
-            )}
           </nav>
         </>
       ) : (

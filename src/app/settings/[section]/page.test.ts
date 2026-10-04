@@ -7,6 +7,17 @@ vi.mock("@/features/dashboard/components/dashboard", () => ({
 
 afterEach(() => vi.unstubAllEnvs());
 
+it("temporarily redirects team settings to profile", async () => {
+  await expect(
+    SettingsPage({
+      params: Promise.resolve({ section: "team" }),
+      searchParams: Promise.resolve({}),
+    }),
+  ).rejects.toMatchObject({
+    digest: "NEXT_REDIRECT;replace;/settings/profile;307;",
+  });
+});
+
 describe("personal MCP setup endpoint", () => {
   async function page() {
     return SettingsPage({

@@ -138,8 +138,9 @@ vinext runs `src/proxy.ts` for AuthKit session handling. Controllers explicitly 
 The account menu reads WorkOS names, email, and profile images from the session.
 `/settings/profile` and `/settings/security` use WorkOS UserProfile, UserSecurity,
 and UserSessions widgets with AuthKit's refreshable access token.
-`/settings/team` uses UsersManagement for the authenticated organization; it
-requires the `widgets:users-table:manage` permission. The dashboard organization
+Team settings is temporarily hidden from navigation, and `/settings/team`
+redirects to `/settings/profile`. Its UsersManagement implementation is retained
+for later use and requires the `widgets:users-table:manage` permission. The dashboard organization
 switcher lists active WorkOS memberships and refreshes the AuthKit session when
 switching. Projects, documents, and UsersManagement all use the selected WorkOS
 organization. New organization creators receive the role configured as the WorkOS

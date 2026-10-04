@@ -103,8 +103,8 @@ user and organization.
 
 The organization switcher lists active WorkOS memberships. Creating an organization
 creates it in WorkOS and adds the authenticated creator with the WorkOS default role.
-Switching refreshes the AuthKit session and reloads the current page; Team settings
-therefore uses the same selected organization as project and document data. SSO/MFA
+Switching refreshes the AuthKit session and reloads the current page. The retained
+team management implementation uses the same selected organization as project and document data. SSO/MFA
 requirements return the user to hosted sign-in. All data operations verify active
 WorkOS membership, so revoked or pending memberships cannot use stale local grants.
 
@@ -116,7 +116,8 @@ they are never adopted by matching names or automatically granted to WorkOS user
 The local development database had no legacy organization records at migration time.
 
 The account menu uses real WorkOS identity and links to `/settings/profile`,
-`/settings/security`, `/settings/preferences`, and `/settings/team`. Configure the
+`/settings/security`, and `/settings/preferences`. Team settings is temporarily
+hidden; direct visits to `/settings/team` redirect to `/settings/profile`. Configure the
 `widgets:users-table:manage` permission on the appropriate administrator role in WorkOS.
 
 Verify project creation with multiple repositories, its empty state, creating a
