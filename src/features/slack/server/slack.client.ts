@@ -64,6 +64,23 @@ export class SlackClient {
     );
   }
 
+  private async read(
+    method: string,
+    token: string,
+    parameters: Record<string, string>,
+  ) {
+    const url = new URL(`https://slack.com/api/${method}`);
+    url.search = new URLSearchParams(parameters).toString();
+    return providerJson(
+      await this.fetcher(url.href, {
+        method: "GET",
+        redirect: "manual",
+        signal: AbortSignal.timeout(15000),
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    );
+  }
+
   async authorize(actor: OrganizationActor) {
     const result = z.object({ url: z.url() }).parse(
       await this.request(
@@ -133,16 +150,12 @@ export class SlackClient {
             .optional(),
         })
         .parse(
-          await this.request(
-            "https://slack.com/api/conversations.list",
-            token,
-            {
-              types: "public_channel,private_channel",
-              exclude_archived: true,
-              limit: 200,
-              cursor,
-            },
-          ),
+          await this.read("conversations.list", token, {
+            types: "public_channel,private_channel",
+            exclude_archived: "true",
+            limit: "200",
+            cursor,
+          }),
         );
       channels.push(...result.channels.filter(shareableChannel));
       cursor = result.response_metadata?.next_cursor || "";
@@ -153,7 +166,7 @@ export class SlackClient {
 
   async channel(token: string, channel: string) {
     return z.object({ ok: z.literal(true), channel: channelSchema }).parse(
-      await this.request("https://slack.com/api/conversations.info", token, {
+      await this.read("conversations.info", token, {
         channel,
       }),
     ).channel;
@@ -171,9 +184,7 @@ export class SlackClient {
           profile: z.object({ email: z.email().optional() }),
         }),
       })
-      .parse(
-        await this.request("https://slack.com/api/users.info", token, { user }),
-      ).user;
+      .parse(await this.read("users.info", token, { user })).user;
   }
 
   async botToken(actor: OrganizationActor, teamId: string) {

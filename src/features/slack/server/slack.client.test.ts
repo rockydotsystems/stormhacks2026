@@ -5,6 +5,81 @@ import { shareableChannel } from "./slack.client";
 const actor = { organizationId: "org_123", userId: "user_123" };
 afterEach(() => vi.unstubAllEnvs());
 describe("Slack bot credentials and replies", () => {
+  it("sends channel lookup parameters in the query string, not a JSON body", async () => {
+    const channel = { id: "C123", name: "demo", is_member: true };
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async (input, init) => {
+        const url = new URL(String(input));
+        if (
+          init?.method !== "GET" ||
+          url.searchParams.get("channel") !== channel.id
+        )
+          return Response.json({ ok: false, error: "invalid_arguments" });
+        expect(url.origin + url.pathname).toBe(
+          "https://slack.com/api/conversations.info",
+        );
+        expect(init.body).toBeUndefined();
+        expect(new Headers(init.headers).get("Authorization")).toBe(
+          "Bearer test-token",
+        );
+        expect(init.redirect).toBe("manual");
+        return Response.json({ ok: true, channel });
+      });
+    await expect(
+      new SlackClient(fetcher).channel("test-token", channel.id),
+    ).resolves.toEqual(channel);
+  });
+  it("sends user lookup parameters in the query string", async () => {
+    const user = {
+      id: "U123",
+      team_id: "T123",
+      profile: { email: "test@example.com" },
+    };
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async (input, init) => {
+        const url = new URL(String(input));
+        if (init?.method !== "GET" || url.searchParams.get("user") !== user.id)
+          return Response.json({ ok: false, error: "invalid_arguments" });
+        expect(url.pathname).toBe("/api/users.info");
+        expect(init.body).toBeUndefined();
+        return Response.json({ ok: true, user });
+      });
+    await expect(
+      new SlackClient(fetcher).user("test-token", user.id),
+    ).resolves.toEqual(user);
+  });
+  it("preserves channel filters and pagination in query parameters", async () => {
+    const channel = { id: "C123", name: "demo", is_member: true };
+    const cursor = "next+page/=&";
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async (input, init) => {
+        const url = new URL(String(input));
+        if (
+          init?.method !== "GET" ||
+          url.searchParams.get("types") !== "public_channel,private_channel"
+        )
+          return Response.json({ ok: false, error: "invalid_arguments" });
+        expect(url.pathname).toBe("/api/conversations.list");
+        expect(url.searchParams.get("exclude_archived")).toBe("true");
+        expect(url.searchParams.get("limit")).toBe("200");
+        expect(init.body).toBeUndefined();
+        const nextPage = url.searchParams.get("cursor") === cursor;
+        return Response.json({
+          ok: true,
+          channels: nextPage
+            ? [channel, { ...channel, id: "C999", is_shared: true }]
+            : [],
+          response_metadata: { next_cursor: nextPage ? "" : cursor },
+        });
+      });
+    await expect(
+      new SlackClient(fetcher).channels("test-token"),
+    ).resolves.toEqual([channel]);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
   it("reports provider status and safe error codes without exposing the response body", async () => {
     const client = new SlackClient(
       vi.fn<typeof fetch>().mockResolvedValue(
@@ -160,6 +235,10 @@ describe("Slack bot credentials and replies", () => {
       ],
     );
     const body = JSON.parse(String(fetcher.mock.calls[0][1]?.body));
+    expect(fetcher.mock.calls[0][1]?.method).toBe("POST");
+    expect(
+      new Headers(fetcher.mock.calls[0][1]?.headers).get("Content-Type"),
+    ).toBe("application/json");
     expect(body.thread_ts).toBe("111.222");
     expect(body.blocks[0].text.type).toBe("plain_text");
     expect(body.text).not.toContain("<!channel>");
